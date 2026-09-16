@@ -2,72 +2,62 @@
 /**
  * Dependency vulnerability gate (D-039).
  *
- * Blocks HIGH and CRITICAL advisories. Moderate and below are reported, not
- * blocking, because a gate that cries wolf gets bypassed.
+ * Blocks HIGH and CRITICAL advisories. Moderate and below are reported, not blocking,
+ * because a gate that cries wolf gets bypassed.
  *
- * Honest about its boundary: `pnpm audit` queries the npm advisory registry, so it
- * needs network access. If it cannot reach the registry the gate FAILS rather than
- * passing on missing data - a vulnerability check that silently checked nothing is
- * worse than no check at all.
+ * Fails closed on anything that is not a completed audit: a registry error envelope, an
+ * incomplete report, unparseable output, a terminated process, or a non-zero exit the
+ * completed report does not explain. `pnpm audit` needs the advisory registry, so an
+ * offline machine fails this gate - a vulnerability check that silently checked nothing
+ * is worse than no check at all. The rules live in audit-report.mjs.
  */
-import { execFileSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
+import { interpretAudit } from './audit-report.mjs';
 
-const BLOCKING = new Set(['high', 'critical']);
+const run = spawnSync('pnpm', ['audit', '--json'], {
+  encoding: 'utf8',
+  maxBuffer: 64 * 1024 * 1024,
+  stdio: ['ignore', 'pipe', 'pipe'],
+});
 
-function runAudit() {
-  try {
-    const raw = execFileSync('pnpm', ['audit', '--json'], {
-      encoding: 'utf8',
-      maxBuffer: 64 * 1024 * 1024,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    return { raw, offline: false };
-  } catch (error) {
-    // pnpm audit exits non-zero when advisories exist; that is a normal result.
-    const raw = error?.stdout?.toString?.() ?? '';
-    const stderr = error?.stderr?.toString?.() ?? '';
-    if (raw.trim().startsWith('{')) {
-      return { raw, offline: false };
-    }
-    return { raw: '', offline: true, stderr: stderr || error?.message || String(error) };
-  }
+if (run.error) {
+  console.error(`audit-check: FAILED — could not run pnpm audit: ${run.error.message}`);
+  process.exit(1);
 }
 
-const { raw, offline, stderr } = runAudit();
+const result = interpretAudit({
+  status: run.status,
+  signal: run.signal,
+  stdout: run.stdout,
+  stderr: run.stderr,
+});
 
-if (offline) {
-  console.error('audit-check: FAILED — could not reach the advisory registry.');
-  console.error(stderr?.split('\n').slice(0, 10).join('\n'));
+if (!result.ok) {
+  console.error(`audit-check: FAILED — no completed audit (${result.reason}).`);
+  console.error(result.detail);
   console.error(
-    '\nThis gate fails closed. A dependency audit that checked nothing must not report success.',
+    '\nThis gate fails closed. A dependency audit that did not complete must not report success.',
   );
   process.exit(1);
 }
 
-let report;
-try {
-  report = JSON.parse(raw);
-} catch {
-  console.error('audit-check: FAILED — could not parse `pnpm audit --json` output.');
-  process.exit(1);
-}
-
-const counts = report.metadata?.vulnerabilities ?? {};
-const advisories = Object.values(report.advisories ?? {});
-
-const blocking = advisories.filter((advisory) => BLOCKING.has(advisory.severity));
-
-const summary = ['critical', 'high', 'moderate', 'low', 'info']
-  .map((level) => `${level}=${counts[level] ?? 0}`)
+const summary = Object.entries(result.counts)
+  .reverse()
+  .map(([level, count]) => `${level}=${count}`)
   .join(' ');
 
-if (blocking.length === 0) {
-  console.log(`audit-check: OK — no high or critical advisories. (${summary})`);
+if (result.blocking.length === 0) {
+  console.log(
+    `audit-check: OK — completed audit of ${result.totalDependencies} dependencies, ` +
+      `no high or critical advisories. (${summary})`,
+  );
   process.exit(0);
 }
 
-console.error(`audit-check: FAILED — ${blocking.length} high/critical advisories. (${summary})`);
-for (const advisory of blocking.slice(0, 30)) {
+console.error(
+  `audit-check: FAILED — ${result.blocking.length} high/critical advisories. (${summary})`,
+);
+for (const advisory of result.blocking.slice(0, 30)) {
   const paths = (advisory.findings ?? []).flatMap((finding) => finding.paths ?? []).slice(0, 2);
   console.error(`  [${advisory.severity}] ${advisory.module_name} — ${advisory.title}`);
   console.error(`      ${advisory.url ?? ''}`);
