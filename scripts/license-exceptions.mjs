@@ -64,6 +64,28 @@ export function endOfCalendarDay(value) {
 }
 
 /**
+ * The single rule for whether a review date is currently in force.
+ *
+ * A `YYYY-MM-DD` review date is valid THROUGH that whole day in UTC: it expires at the
+ * first instant of the following day, not at midnight at the start of its own. It must
+ * also be no more than twelve months ahead of `now`.
+ *
+ * Every check of a review date - the gate and the tests - goes through this function, so
+ * the boundary cannot be re-implemented differently in two places again.
+ *
+ * @param {string} reviewBy
+ * @param {Date} now
+ * @returns {'valid' | 'expired' | 'review_too_far' | 'invalid'}
+ */
+export function reviewDateStatus(reviewBy, now) {
+  const end = endOfCalendarDay(reviewBy);
+  if (end === undefined) return 'invalid';
+  if (now.getTime() > end) return 'expired';
+  if (end > now.getTime() + TWELVE_MONTHS_MS) return 'review_too_far';
+  return 'valid';
+}
+
+/**
  * @param {Record<string, unknown>} exception
  * @param {Date} today
  * @returns {{status: 'approved' | 'incomplete' | 'expired' | 'review_too_far' | 'pending_owner',
@@ -78,15 +100,12 @@ export function evaluateException(exception, today) {
     return { status: 'incomplete', missing };
   }
 
-  const reviewByEnd = endOfCalendarDay(String(exception.reviewBy));
-  if (reviewByEnd === undefined) {
+  const dateStatus = reviewDateStatus(String(exception.reviewBy), today);
+  if (dateStatus === 'invalid') {
     return { status: 'incomplete', missing: ['reviewBy'] };
   }
-  if (today.getTime() > reviewByEnd) {
-    return { status: 'expired' };
-  }
-  if (reviewByEnd > today.getTime() + TWELVE_MONTHS_MS) {
-    return { status: 'review_too_far' };
+  if (dateStatus !== 'valid') {
+    return { status: dateStatus };
   }
 
   if (NON_APPROVERS.has(String(exception.approver).trim().toLowerCase())) {
