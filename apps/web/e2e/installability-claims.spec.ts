@@ -68,3 +68,62 @@ test('the offline page does not promise durable offline logging', () => {
   const text = read('apps/web/app/offline/page.tsx');
   expect(text).toContain('not implemented');
 });
+
+/**
+ * Rendered-document guard.
+ *
+ * The manifest was guarded, but the page itself still declared the app installable:
+ * `appleWebApp.capable` in the root layout renders `mobile-web-app-capable`, plus an
+ * Apple title and status-bar style. Those tags tell a phone to launch the site as a
+ * standalone app, which is an installability claim, and the status-bar style is a
+ * visual decision. Neither belongs in the shell while the design system is undecided.
+ *
+ * The check reads what is actually rendered - the server HTML and the live DOM - not the
+ * source, so any route or metadata API that reintroduces these tags fails it.
+ */
+const INSTALLABILITY_SELECTORS = [
+  'meta[name="mobile-web-app-capable"]',
+  'meta[name="apple-mobile-web-app-capable"]',
+  'meta[name="apple-mobile-web-app-title"]',
+  'meta[name="apple-mobile-web-app-status-bar-style"]',
+  'meta[name="theme-color"]',
+  'link[rel="apple-touch-icon"]',
+  'link[rel="apple-touch-icon-precomposed"]',
+  'link[rel="apple-touch-startup-image"]',
+  'link[rel~="icon"]',
+];
+
+const SHELL_ROUTES = ['/', '/offline'];
+
+for (const route of SHELL_ROUTES) {
+  test(`${route} renders no installability or visual-identity metadata`, async ({
+    page,
+    request,
+  }) => {
+    if (designSystemAccepted()) return;
+
+    const html = await (await request.get(route)).text();
+    const inServerHtml = INSTALLABILITY_SELECTORS.filter((selector) => {
+      const [, tag, attribute, value] = /^(\w+)\[(\w+)~?="([^"]+)"\]$/.exec(selector) ?? [];
+      const pattern = new RegExp(`<${tag}\\b[^>]*\\b${attribute}="[^"]*\\b${value}\\b[^"]*"`, 'i');
+      return pattern.test(html);
+    });
+
+    await page.goto(route);
+    const inLiveDom = await page.evaluate(
+      (selectors) => selectors.filter((selector) => document.head.querySelector(selector) !== null),
+      INSTALLABILITY_SELECTORS,
+    );
+
+    expect(
+      { inServerHtml, inLiveDom },
+      'Installability or visual-identity metadata is rendered while DESIGN_SYSTEM.md is NOT ' +
+        'DECIDED (ADR-0007, gate G-10).',
+    ).toEqual({ inServerHtml: [], inLiveDom: [] });
+  });
+}
+
+test('the manifest link is still rendered, because it is plumbing', async ({ page }) => {
+  await page.goto('/');
+  expect(await page.locator('head link[rel="manifest"]').count()).toBe(1);
+});
