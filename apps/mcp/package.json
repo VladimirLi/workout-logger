@@ -1,0 +1,29 @@
+{
+  "name": "@workout/mcp",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "description": "Remote MCP transport adapter. Read tools and proposal tools only; never a direct mutation.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "workout-mcp": "./dist/server.js"
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "catalog:",
+    "@workout/application": "workspace:*",
+    "@workout/contracts": "workspace:*",
+    "@workout/domain": "workspace:*",
+    "@workout/observability": "workspace:*",
+    "@workout/adapters-supabase": "workspace:*",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:"
+  }
+}
