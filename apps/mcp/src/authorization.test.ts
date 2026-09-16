@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   type AuthorizationContext,
   authorizeInvocation,
+  ISSUED_AT_CLOCK_SKEW_MS,
   MAX_ACCESS_TOKEN_LIFETIME_MS,
 } from './authorization.js';
 
@@ -160,5 +161,83 @@ describe('declared token lifetime is enforced, not merely declared', () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.failure.kind).toBe('lifetime_too_long');
+  });
+});
+
+describe('a token is not valid before it was issued', () => {
+  /**
+   * The validity window was checked for shape (expiry after issuance) and length (at most
+   * fifteen minutes), and then only its END was compared with the clock. A token whose
+   * window is correctly ordered and exactly fifteen minutes long, but starts years in
+   * the future, was never expired and so was authorized today.
+   *
+   * No clock skew is allowed. A tolerance would be a window in which a token is accepted
+   * before it exists; if one is ever needed it must be explicit and tightly bounded, not
+   * implied by a missing check.
+   */
+
+  const window = (issuedAt: Date, minutes = 15) =>
+    context({ issuedAt, expiresAt: new Date(issuedAt.getTime() + minutes * 60_000) });
+
+  it('rejects a well-formed fifteen-minute window that starts years in the future', () => {
+    const result = authorize(
+      'workout.scheduled_sessions',
+      window(new Date('2031-01-01T00:00:00.000Z')),
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure).toEqual({
+      kind: 'token_not_yet_valid',
+      issuedAt: new Date('2031-01-01T00:00:00.000Z'),
+    });
+  });
+
+  it('rejects a token issued one millisecond after now, with zero skew', () => {
+    const result = authorize('workout.scheduled_sessions', window(new Date(NOW.getTime() + 1)));
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.kind).toBe('token_not_yet_valid');
+  });
+
+  it('accepts a token issued exactly now', () => {
+    expect(authorize('workout.scheduled_sessions', window(NOW)).ok).toBe(true);
+  });
+
+  it('accepts a token issued in the past that has not expired', () => {
+    expect(
+      authorize('workout.scheduled_sessions', window(new Date(NOW.getTime() - 60_000))).ok,
+    ).toBe(true);
+  });
+
+  it('declares zero clock skew explicitly', () => {
+    expect(ISSUED_AT_CLOCK_SKEW_MS).toBe(0);
+  });
+
+  it('rejects a future token before looking at expiry', () => {
+    // A future window is by construction not expired, so ordering matters: the answer must
+    // name the real problem.
+    const result = authorize(
+      'workout.scheduled_sessions',
+      window(new Date('2031-01-01T00:00:00.000Z')),
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.kind).not.toBe('token_expired');
+  });
+
+  it('rejects a future token before looking at audience or scope', () => {
+    const issuedAt = new Date('2031-01-01T00:00:00.000Z');
+    const result = authorize(
+      'proposal.replace_plan',
+      context({
+        issuedAt,
+        expiresAt: new Date(issuedAt.getTime() + 15 * 60_000),
+        audience: 'https://elsewhere.example',
+        scopes: [],
+      }),
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.kind).toBe('token_not_yet_valid');
   });
 });
