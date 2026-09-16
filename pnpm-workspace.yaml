@@ -44,10 +44,19 @@ ignoredOptionalDependencies:
   - sharp
   - '@img/*'
 
-# pnpm 10+ blocks lifecycle scripts by default. Only these are allowed to run,
-# and the list is a guardrail file: adding an entry is a supply-chain decision.
-onlyBuiltDependencies:
-  - '@biomejs/biome'
-  - esbuild
-  - sharp
-  - unrs-resolver
+# Dependency lifecycle scripts (preinstall/install/postinstall), in the form pnpm 11
+# applies. pnpm 11 ignores the pnpm 10 `onlyBuiltDependencies` list this replaces, so that
+# list was an allowlist in name only.
+#
+# strictDepBuilds makes any build script that is not decided here FAIL the install, rather
+# than being skipped with a warning. allowBuilds is the decision map: `name: true` lets a
+# package run its scripts, `name: false` records that it must not.
+#
+# The map is deliberately empty. No installed dependency has a lifecycle script: esbuild
+# and unrs-resolver are not in the tree, @biomejs/biome ships none, and sharp is excluded
+# above. Granting permission to packages that are not here would be a standing licence for
+# some future version of them to run code at install time unreviewed.
+# scripts/build-permissions.test.ts checks this against pnpm's effective configuration and
+# the installed tree. Adding an entry is a supply-chain decision and a guardrail change.
+strictDepBuilds: true
+allowBuilds: {}
