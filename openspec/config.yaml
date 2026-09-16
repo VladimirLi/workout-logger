@@ -1,0 +1,56 @@
+schema: spec-driven
+
+context: |
+  Single-user gym workout logger: an installable phone-first PWA plus a remote MCP
+  server for an authorized external AI agent. Normative intent lives in VISION.md,
+  ROADMAP.md, SECURITY.md, OBSERVABILITY.md, ENGINEERING.md, DESIGN_SYSTEM.md, and
+  docs/adr/. Discovery evidence is preserved in docs/discovery/decision-record.md.
+
+  Stack: TypeScript end to end, pnpm monorepo, Next.js App Router PWA (apps/web),
+  separate MCP entry point (apps/mcp). Shared packages: domain, contracts,
+  application, adapters-supabase, observability, test-support.
+
+  Dependency direction is machine-enforced: apps -> adapters -> application -> domain,
+  with contracts alongside. packages/domain depends on no framework and no IO.
+  Cross-package deep imports are forbidden.
+
+  Non-negotiable product rules:
+  - Synchronized completed-session facts are immutable; corrections are audited revisions.
+  - External agents never mutate authoritative data. Every MCP write creates a proposal
+    carrying a base revision, a structured diff, and a rationale. A moved base revision
+    is rejected as STALE and must be regenerated - never silently rebased.
+  - Core logging works offline via a transactional outbox with client-generated
+    idempotency keys; a queued workout mutation is never discarded automatically.
+  - Every quantity is a typed value with a unit. Measurement profiles are discriminated
+    and schema-versioned. RIR is authoritative for strength; RPE is derived and read-only.
+  - Operational telemetry carries allowlisted metadata only - never workout content or
+    agent rationale.
+
+  Conventional commits with a scope from: domain, application, contracts, observability,
+  adapters-supabase, test-support, web, mcp, spec, guardrail, deps, release, repo.
+
+rules:
+  proposal:
+    - State which accepted discovery decision IDs (D-nnn / R-nnn) the change serves.
+    - Name the affected workspace packages and confirm the dependency direction holds.
+    - If the change implements substantive UI, declare the DESIGN_SYSTEM.md dependency
+      explicitly and do not mark it ready while that document is NOT DECIDED.
+  specs:
+    - Requirements use SHALL or MUST and are observable from outside the system.
+    - Every scenario is concrete enough to become a test without further interpretation.
+    - Include offline, empty, loading, and error states wherever a user can reach them.
+  tasks:
+    - Every task is verifiable by a command or a test, not by inspection.
+    - Never include a task that weakens a gate. Guardrail changes are separate changes.
+  design:
+    - Record what was rejected and why, not only what was chosen.
+
+operations:
+  apply:
+    guidance:
+      - Run `pnpm verify` before marking any task complete.
+      - Do not mark a task complete because code exists; mark it complete when a gate proves it.
+  archive:
+    guidance:
+      - Refuse to archive while any task is incomplete; `openspec archive` does not enforce this.
+      - Confirm the change's evidence is recorded before archiving.
