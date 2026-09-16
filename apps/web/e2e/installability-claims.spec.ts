@@ -82,6 +82,9 @@ test('the offline page does not promise durable offline logging', () => {
  * source, so any route or metadata API that reintroduces these tags fails it.
  */
 const INSTALLABILITY_SELECTORS = [
+  // application-name is the installed app's display name on platforms that pin sites;
+  // naming an installed app is part of the installability and identity decision.
+  'meta[name="application-name"]',
   'meta[name="mobile-web-app-capable"]',
   'meta[name="apple-mobile-web-app-capable"]',
   'meta[name="apple-mobile-web-app-title"]',
