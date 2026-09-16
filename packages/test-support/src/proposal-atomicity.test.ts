@@ -300,3 +300,194 @@ describe('the stale marker survives a second revision move', () => {
     expect(await ports.proposals.currentRevision(SYNTHETIC_USER_ID)).toBe(6);
   });
 });
+
+/**
+ * Registers a hook on BOTH decision-write paths. The race then happens whichever path
+ * a rejection takes, so these tests fail on a regression that routes rejection back
+ * through the revision compare-and-set, rather than passing because a hook never fired.
+ */
+function inCommitWindow(ports: ReturnType<typeof createTestPorts>, hook: () => void) {
+  let fired = false;
+  const once = () => {
+    if (fired) return;
+    fired = true;
+    hook();
+  };
+  ports.proposals.onBeforeReject(once);
+  ports.proposals.onBeforeCommit(once);
+}
+
+describe('explicit rejection is independent of the plan revision', () => {
+  /**
+   * A user who rejects a proposal has made a decision about its CONTENT. Routing that
+   * decision through the revision compare-and-set meant a plan change landing inside
+   * the commit window silently converted "the user rejected this" into "this went
+   * stale" - a different terminal status, and a record of a decision nobody made.
+   *
+   * Rejection is therefore a status-only compare-and-set: pending to rejected, or
+   * nothing. It keeps the status check, so it can never overwrite a decision that was
+   * already made.
+   */
+
+  it('records the rejection even when the revision moves inside the commit window', async () => {
+    const ports = createTestPorts();
+    const proposal = aProposal({ baseRevision: aRevision(5) });
+    ports.proposals.setRevision(SYNTHETIC_USER_ID, aRevision(5));
+    ports.proposals.seed(SYNTHETIC_USER_ID, proposal);
+
+    inCommitWindow(ports, () => {
+      ports.proposals.setRevision(SYNTHETIC_USER_ID, aRevision(6));
+    });
+
+    const result = await reviewProposal(ports, {
+      userId: SYNTHETIC_USER_ID,
+      proposalId: proposal.id,
+      decision: 'reject',
+    });
+
+    expect(result.ok).toBe(true);
+    expect((await ports.proposals.findById(SYNTHETIC_USER_ID, proposal.id))?.status).toBe(
+      'rejected',
+    );
+  });
+
+  it('records the rejection when the revision moves repeatedly around it', async () => {
+    const ports = createTestPorts();
+    const proposal = aProposal({ baseRevision: aRevision(5) });
+    ports.proposals.setRevision(SYNTHETIC_USER_ID, aRevision(6));
+    ports.proposals.seed(SYNTHETIC_USER_ID, proposal);
+    inCommitWindow(ports, () => {
+      ports.proposals.setRevision(SYNTHETIC_USER_ID, aRevision(9));
+    });
+
+    const result = await reviewProposal(ports, {
+      userId: SYNTHETIC_USER_ID,
+      proposalId: proposal.id,
+      decision: 'reject',
+    });
+
+    expect(result.ok).toBe(true);
+    expect((await ports.proposals.findById(SYNTHETIC_USER_ID, proposal.id))?.status).toBe(
+      'rejected',
+    );
+    // Rejecting never advances the plan; the moves above are someone else's.
+    expect(await ports.proposals.currentRevision(SYNTHETIC_USER_ID)).toBe(9);
+  });
+
+  it('does not read the plan revision at all when rejecting', async () => {
+    const ports = createTestPorts();
+    const proposal = aProposal({ baseRevision: aRevision(5) });
+    ports.proposals.seed(SYNTHETIC_USER_ID, proposal);
+    ports.proposals.currentRevision = () =>
+      Promise.reject(new Error('rejection must not depend on the plan revision'));
+
+    const result = await reviewProposal(ports, {
+      userId: SYNTHETIC_USER_ID,
+      proposalId: proposal.id,
+      decision: 'reject',
+    });
+
+    expect(result.ok).toBe(true);
+  });
+
+  it('keeps the status compare-and-set: a proposal decided first is never overwritten', async () => {
+    const ports = createTestPorts();
+    const proposal = aProposal({ baseRevision: aRevision(5) });
+    ports.proposals.setRevision(SYNTHETIC_USER_ID, aRevision(5));
+    ports.proposals.seed(SYNTHETIC_USER_ID, proposal);
+
+    // Someone accepts it inside the rejection's window.
+    inCommitWindow(ports, () => {
+      ports.proposals.seed(SYNTHETIC_USER_ID, { ...proposal, status: 'accepted' });
+    });
+
+    const result = await reviewProposal(ports, {
+      userId: SYNTHETIC_USER_ID,
+      proposalId: proposal.id,
+      decision: 'reject',
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toEqual({ kind: 'already_decided', status: 'accepted' });
+    expect((await ports.proposals.findById(SYNTHETIC_USER_ID, proposal.id))?.status).toBe(
+      'accepted',
+    );
+  });
+
+  it('lets exactly one of a concurrent accept and reject win, consistently', async () => {
+    const ports = createTestPorts();
+    const proposal = aProposal({ baseRevision: aRevision(5) });
+    ports.proposals.setRevision(SYNTHETIC_USER_ID, aRevision(5));
+    ports.proposals.seed(SYNTHETIC_USER_ID, proposal);
+
+    const [accepted, rejected] = await Promise.all([
+      reviewProposal(ports, {
+        userId: SYNTHETIC_USER_ID,
+        proposalId: proposal.id,
+        decision: 'accept',
+      }),
+      reviewProposal(ports, {
+        userId: SYNTHETIC_USER_ID,
+        proposalId: proposal.id,
+        decision: 'reject',
+      }),
+    ]);
+
+    expect([accepted.ok, rejected.ok].filter(Boolean)).toHaveLength(1);
+    const stored = await ports.proposals.findById(SYNTHETIC_USER_ID, proposal.id);
+    const revision = await ports.proposals.currentRevision(SYNTHETIC_USER_ID);
+
+    if (accepted.ok) {
+      expect(stored?.status).toBe('accepted');
+      expect(revision).toBe(6);
+    } else {
+      expect(stored?.status).toBe('rejected');
+      expect(revision).toBe(5);
+    }
+  });
+
+  it('lets exactly one of a stale marking and a rejection win, and never leaves it pending', async () => {
+    const ports = createTestPorts();
+    const proposal = aProposal({ baseRevision: aRevision(5) });
+    ports.proposals.setRevision(SYNTHETIC_USER_ID, aRevision(6));
+    ports.proposals.seed(SYNTHETIC_USER_ID, proposal);
+
+    const [staleAttempt, rejection] = await Promise.all([
+      reviewProposal(ports, {
+        userId: SYNTHETIC_USER_ID,
+        proposalId: proposal.id,
+        decision: 'accept',
+      }),
+      reviewProposal(ports, {
+        userId: SYNTHETIC_USER_ID,
+        proposalId: proposal.id,
+        decision: 'reject',
+      }),
+    ]);
+
+    expect(staleAttempt.ok).toBe(false);
+    const status = (await ports.proposals.findById(SYNTHETIC_USER_ID, proposal.id))?.status;
+    expect(['rejected', 'rejected_stale']).toContain(status);
+    expect(rejection.ok).toBe(status === 'rejected');
+  });
+
+  it('still refuses to reject an expired proposal', async () => {
+    const ports = createTestPorts(new Date('2026-09-18T10:00:00.000Z'));
+    const proposal = aProposal({ baseRevision: aRevision(5) });
+    ports.proposals.seed(SYNTHETIC_USER_ID, proposal);
+
+    const result = await reviewProposal(ports, {
+      userId: SYNTHETIC_USER_ID,
+      proposalId: proposal.id,
+      decision: 'reject',
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.kind).toBe('expired');
+    expect((await ports.proposals.findById(SYNTHETIC_USER_ID, proposal.id))?.status).toBe(
+      'pending',
+    );
+  });
+});

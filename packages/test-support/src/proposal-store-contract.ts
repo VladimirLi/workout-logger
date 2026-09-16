@@ -207,6 +207,72 @@ export function proposalStoreContract(
       );
     });
 
+    it('rejects a pending proposal without reference to the revision', async () => {
+      const harness = await createHarness();
+      const proposal = aProposal({ baseRevision: aRevision(5) });
+      await harness.seed(SYNTHETIC_USER_ID, proposal, aRevision(42));
+
+      const outcome = await harness.store.rejectIfPending(SYNTHETIC_USER_ID, proposal.id);
+
+      expect(outcome.kind).toBe('rejected');
+      if (outcome.kind !== 'rejected') return;
+      expect(outcome.proposal.status).toBe('rejected');
+      expect((await harness.store.findById(SYNTHETIC_USER_ID, proposal.id))?.status).toBe(
+        'rejected',
+      );
+      expect(await harness.store.currentRevision(SYNTHETIC_USER_ID)).toBe(42);
+    });
+
+    it.each(['accepted', 'rejected', 'rejected_stale', 'expired'] as const)(
+      'refuses to reject a proposal whose status is already %s',
+      async (status) => {
+        const harness = await createHarness();
+        const proposal = aProposal({ baseRevision: aRevision(5), status });
+        await harness.seed(SYNTHETIC_USER_ID, proposal, aRevision(5));
+
+        expect(await harness.store.rejectIfPending(SYNTHETIC_USER_ID, proposal.id)).toEqual({
+          kind: 'not_pending',
+          status,
+        });
+        expect((await harness.store.findById(SYNTHETIC_USER_ID, proposal.id))?.status).toBe(status);
+      },
+    );
+
+    it('reports not_found when rejecting an unknown proposal', async () => {
+      const harness = await createHarness();
+      expect(await harness.store.rejectIfPending(SYNTHETIC_USER_ID, 'missing')).toEqual({
+        kind: 'not_found',
+      });
+    });
+
+    it('isolates rejection by user', async () => {
+      const harness = await createHarness();
+      const proposal = aProposal();
+      await harness.seed(SYNTHETIC_USER_ID, proposal, aRevision(1));
+
+      expect(await harness.store.rejectIfPending('some-other-user', proposal.id)).toEqual({
+        kind: 'not_found',
+      });
+      expect((await harness.store.findById(SYNTHETIC_USER_ID, proposal.id))?.status).toBe(
+        'pending',
+      );
+    });
+
+    it('lets exactly one of a rejection and a stale marking win', async () => {
+      const harness = await createHarness();
+      const proposal = aProposal({ baseRevision: aRevision(5) });
+      await harness.seed(SYNTHETIC_USER_ID, proposal, aRevision(6));
+
+      const [rejection, stale] = await Promise.all([
+        harness.store.rejectIfPending(SYNTHETIC_USER_ID, proposal.id),
+        harness.store.markStaleIfPending(SYNTHETIC_USER_ID, proposal.id),
+      ]);
+
+      const status = (await harness.store.findById(SYNTHETIC_USER_ID, proposal.id))?.status;
+      expect([rejection.kind === 'rejected', stale === 'marked'].filter(Boolean)).toHaveLength(1);
+      expect(status).toBe(rejection.kind === 'rejected' ? 'rejected' : 'rejected_stale');
+    });
+
     it('permits only one of two commits racing on the same expected revision', async () => {
       const harness = await createHarness();
       const first = aProposal({ id: 'prop_a', baseRevision: aRevision(5) });

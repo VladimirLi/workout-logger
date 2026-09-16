@@ -5,6 +5,7 @@ import type {
   MarkStaleOutcome,
   Ports,
   ProposalStore,
+  RejectOutcome,
 } from '@workout/application';
 import { markStale, nextRevision, type Proposal, type Revision } from '@workout/domain';
 import { aRevision } from './builders.js';
@@ -22,6 +23,7 @@ export class InMemoryProposalStore implements ProposalStore {
   readonly #revisions = new Map<string, Revision>();
   #beforeCommit: (() => void) | undefined;
   #beforeMarkStale: (() => void) | undefined;
+  #beforeReject: (() => void) | undefined;
 
   #key(userId: string, proposalId: string): string {
     return `${userId}::${proposalId}`;
@@ -48,6 +50,14 @@ export class InMemoryProposalStore implements ProposalStore {
    * Fires once, immediately before the status-only stale transition, so a test can
    * move the revision again at the exact moment that used to defeat it.
    */
+  /**
+   * Fires once, immediately before the status-only rejection, so a test can move the
+   * revision - or decide the proposal some other way - at exactly that moment.
+   */
+  onBeforeReject(hook: () => void): void {
+    this.#beforeReject = hook;
+  }
+
   onBeforeMarkStale(hook: () => void): void {
     this.#beforeMarkStale = hook;
   }
@@ -80,6 +90,29 @@ export class InMemoryProposalStore implements ProposalStore {
 
     this.#proposals.set(key, markStale(stored));
     return Promise.resolve('marked');
+  }
+
+  /**
+   * Status-only compare-and-set from pending to rejected. Never looks at the revision.
+   */
+  rejectIfPending(userId: string, proposalId: string): Promise<RejectOutcome> {
+    const hook = this.#beforeReject;
+    if (hook) {
+      this.#beforeReject = undefined;
+      hook();
+    }
+
+    const key = this.#key(userId, proposalId);
+    const stored = this.#proposals.get(key);
+
+    if (!stored) return Promise.resolve({ kind: 'not_found' });
+    if (stored.status !== 'pending') {
+      return Promise.resolve({ kind: 'not_pending', status: stored.status });
+    }
+
+    const rejected: Proposal = { ...stored, status: 'rejected' };
+    this.#proposals.set(key, rejected);
+    return Promise.resolve({ kind: 'rejected', proposal: rejected });
   }
 
   /**

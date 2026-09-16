@@ -120,7 +120,9 @@ export function acceptProposal(
  */
 export function rejectProposal(
   proposal: Proposal,
-  context: ReviewContext,
+  // Only the decision time. Rejection does not depend on the plan revision, and the
+  // signature says so rather than accepting a revision it would ignore.
+  context: Pick<ReviewContext, 'decidedAt'>,
 ): Result<Proposal, ProposalRejection> {
   if (proposal.status !== 'pending') {
     return err({ kind: 'already_decided', status: proposal.status });

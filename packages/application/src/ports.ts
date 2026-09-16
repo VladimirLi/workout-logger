@@ -64,6 +64,12 @@ export type CommitDecisionOutcome =
  */
 export type MarkStaleOutcome = 'marked' | 'not_pending' | 'not_found';
 
+/** Outcome of the status-only rejection transition. */
+export type RejectOutcome =
+  | { readonly kind: 'rejected'; readonly proposal: Proposal }
+  | { readonly kind: 'not_pending'; readonly status: ProposalStatus }
+  | { readonly kind: 'not_found' };
+
 export interface ProposalStore {
   /** The current authoritative revision of the active plan. */
   currentRevision(userId: string): Promise<Revision>;
@@ -88,6 +94,20 @@ export interface ProposalStore {
    * Idempotent, and never overwrites a decision already made.
    */
   markStaleIfPending(userId: string, proposalId: string): Promise<MarkStaleOutcome>;
+
+  /**
+   * Atomically moves a PENDING proposal to `rejected`, and does nothing otherwise.
+   *
+   * A user's rejection is a decision about the proposal's CONTENT, so it MUST NOT
+   * compare, read, or advance the plan revision. Routing it through the revision
+   * compare-and-set let a plan change inside the commit window turn "the user
+   * rejected this" into "this went stale" - a different terminal status recording a
+   * decision nobody made.
+   *
+   * It keeps the STATUS compare-and-set: a proposal already accepted, rejected, or
+   * marked stale is reported as `not_pending` and never overwritten.
+   */
+  rejectIfPending(userId: string, proposalId: string): Promise<RejectOutcome>;
 }
 
 export interface Ports {

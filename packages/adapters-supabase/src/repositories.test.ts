@@ -47,6 +47,12 @@ describe('supabase adapter skeleton', () => {
     ).rejects.toThrow(/not provisioned/i);
   });
 
+  it('rejects status-only rejection', async () => {
+    await expect(new SupabaseProposalStore(config).rejectIfPending('u', 'p')).rejects.toThrow(
+      /not provisioned/i,
+    );
+  });
+
   it('still carries its configuration, so wiring can be tested before the gate closes', () => {
     expect(new SupabaseProposalStore(config).projectUrl).toBe('https://abcdefgh.supabase.co');
   });
