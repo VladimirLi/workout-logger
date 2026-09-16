@@ -142,6 +142,31 @@ and lasts at least as long as the entry. The ledger MUST describe the dependency
 - **THEN** the exception remains valid through the end of that date in UTC and fails from the
   next instant
 
+### Requirement: SPDX WITH expressions are validated
+A licence expression of the form `A WITH B` SHALL be classified by licence A only when B is a
+recognised, current SPDX exception identifier and the pairing of A with B is a reviewed
+combination. Unrecognised, deprecated, case-variant, or malformed exceptions, and invalid
+pairings, MUST be treated as unknown. The recognised exception identifiers MUST come from an
+authoritative source verified against the installed package.
+
+#### Scenario: An unrecognised exception identifier
+- **WHEN** a package is licensed `Apache-2.0 WITH Totally-Made-Up-exception`
+- **THEN** its licence is unknown and the gate fails
+
+#### Scenario: A real exception on the wrong licence
+- **WHEN** a package is licensed `MIT WITH Classpath-exception-2.0`
+- **THEN** its licence is unknown, because a permissive base licence must not launder an
+  exception it does not accept
+
+#### Scenario: A valid pairing
+- **WHEN** a package is licensed `Apache-2.0 WITH LLVM-exception`
+- **THEN** it is classified by `Apache-2.0`
+
+#### Scenario: The pinned exception list drifts from its source
+- **WHEN** the project's recognised exception list differs from the installed
+  `spdx-exceptions` data
+- **THEN** the verification fails
+
 ### Requirement: Licence approval conditions fail closed
 While any licence exception relies on an approval, the gate SHALL fail if the repository shows
 a distribution vector or a modification of an excepted dependency, because every exception's

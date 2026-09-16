@@ -10,8 +10,18 @@ Applies to distributed runtime dependencies.
 `MIT`, `ISC`, `BSD-2-Clause`, `BSD-3-Clause`, `Apache-2.0`, `0BSD`, `Zlib`,
 `BlueOak-1.0.0`, `Python-2.0`, `Unlicense`
 
-Also allowed as SPDX combinations when every disjunct or conjunct is itself allowed,
-e.g. `(MIT OR Apache-2.0)`, `Apache-2.0 WITH LLVM-exception`, `MIT AND ISC`.
+Also allowed as SPDX combinations: a disjunction when any disjunct is allowed, a
+conjunction when every conjunct is allowed, e.g. `(MIT OR Apache-2.0)`, `MIT AND ISC`.
+
+`A WITH B` is classified by licence `A` **only** when `B` is a recognised, current SPDX
+exception identifier **and** the pairing `A`+`B` is listed in `scripts/spdx-exceptions.json`,
+e.g. `Apache-2.0 WITH LLVM-exception`. An exception changes the terms of the licence it is
+attached to, so an unrecognised exception (`Apache-2.0 WITH Totally-Made-Up-exception`), a
+real exception on a licence it does not modify (`MIT WITH Classpath-exception-2.0`), a
+deprecated identifier, a case variant, or a malformed expression is **unknown**, which fails
+closed. The recognised list is a verbatim copy of `spdx-exceptions@2.5.0`, verified
+byte-for-byte against the frozen install; the pairing table is project-owned, and adding a
+pairing is a guardrail change.
 
 ## Rejected
 

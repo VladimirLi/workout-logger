@@ -17,7 +17,7 @@ import { classifySpdx } from './spdx.mjs';
 const POLICY = {
   allowed: ['MIT', 'ISC', 'Apache-2.0', 'BSD-3-Clause'],
   rejected: ['AGPL-3.0-only', 'SSPL-1.0'],
-  reviewRequired: ['MPL-2.0', 'GPL-3.0-only', 'LGPL-3.0-or-later'],
+  reviewRequired: ['MPL-2.0', 'GPL-2.0-only', 'GPL-3.0-only', 'LGPL-3.0-or-later'],
 };
 
 const classify = (expression: string | undefined) => classifySpdx(expression, POLICY);
@@ -113,7 +113,7 @@ describe('redundant outer parentheses', () => {
 describe('WITH exceptions', () => {
   it('classifies by the licence, not the exception', () => {
     expect(classify('Apache-2.0 WITH LLVM-exception')).toBe('allowed');
-    expect(classify('GPL-3.0-only WITH Classpath-exception-2.0')).toBe('review');
+    expect(classify('GPL-2.0-only WITH Classpath-exception-2.0')).toBe('review');
   });
 
   it('works inside a disjunction', () => {
