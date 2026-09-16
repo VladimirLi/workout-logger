@@ -1,0 +1,53 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+
+# Single source of truth for dependency versions across the workspace.
+# A package references `catalog:` instead of a literal range, so versions
+# cannot drift between packages. See ENGINEERING.md.
+catalog:
+  '@axe-core/playwright': 4.13.0
+  '@modelcontextprotocol/sdk': 1.30.0
+  '@playwright/test': 1.63.0
+  '@types/node': 22.20.3
+  '@types/react': 19.3.0
+  '@types/react-dom': 19.3.0
+  '@vitest/coverage-v8': 5.0.1
+  happy-dom: 20.14.5
+  next: 16.3.5
+  react: 19.3.0
+  react-dom: 19.3.0
+  typescript: 6.0.3
+  vitest: 5.0.1
+  zod: 4.6.5
+
+# pnpm 11 quarantines freshly published versions. Strict mode makes it PROMPT rather
+# than silently appending to minimumReleaseAgeExclude during an install, which would
+# otherwise rewrite this file (a guardrail file) on a developer machine and in CI.
+minimumReleaseAgeStrict: true
+
+# Versions accepted explicitly despite being inside the quarantine window. Each entry
+# is a decision to trust a recently published version.
+minimumReleaseAgeExclude:
+  - '@types/node@22.20.3'
+  - '@vitest/coverage-v8@5.0.1'
+  - '@vitest/mocker@5.0.1'
+  - '@vitest/spy@5.0.1'
+  - vitest@5.0.1
+
+# sharp is an optionalDependency of Next.js, used only for image optimization.
+# The product ships no images, and sharp pulls a prebuilt libvips binary licensed
+# LGPL-3.0-or-later into the RUNTIME dependency graph. Dropping it removes the only
+# copyleft component from the shipped tree; `images.unoptimized` in
+# apps/web/next.config.ts makes the consequence explicit.
+ignoredOptionalDependencies:
+  - sharp
+  - '@img/*'
+
+# pnpm 10+ blocks lifecycle scripts by default. Only these are allowed to run,
+# and the list is a guardrail file: adding an entry is a supply-chain decision.
+onlyBuiltDependencies:
+  - '@biomejs/biome'
+  - esbuild
+  - sharp
+  - unrs-resolver

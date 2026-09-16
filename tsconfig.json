@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "files": [],
+  "references": [
+    { "path": "packages/domain" },
+    { "path": "packages/contracts" },
+    { "path": "packages/application" },
+    { "path": "packages/observability" },
+    { "path": "packages/adapters-supabase" },
+    { "path": "packages/test-support" },
+    { "path": "apps/mcp" },
+    { "path": "apps/web" }
+  ]
+}
