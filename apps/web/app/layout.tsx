@@ -15,10 +15,11 @@ export const metadata: Metadata = {
   title: 'Workout Logger',
   description:
     'Single-user workout logger. Structural shell; the design system is not decided yet.',
-  applicationName: 'Workout Logger',
-  // No appleWebApp. It renders mobile-web-app-capable plus an Apple title and status-bar
-  // style, which tell a phone to launch the site as a standalone app - an installability
-  // claim - and choose part of its look. Both wait on DESIGN_SYSTEM.md (ADR-0007, G-10).
+  // No appleWebApp and no applicationName. appleWebApp renders mobile-web-app-capable plus
+  // an Apple title and status-bar style, telling a phone to launch the site as a standalone
+  // app; applicationName renders application-name, the name an installed or pinned app
+  // shows. Both are installability and identity decisions that wait on DESIGN_SYSTEM.md
+  // (ADR-0007, G-10).
   formatDetection: { telephone: false },
   robots: { index: false, follow: false },
 };
