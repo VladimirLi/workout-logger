@@ -52,6 +52,20 @@ describe('exception completeness', () => {
     expect(evaluateException(incomplete, TODAY).status).toBe('incomplete');
   });
 
+  it('treats a date-only review date as valid through the end of that day', () => {
+    const lastDay = { ...COMPLETE, reviewBy: '2026-09-16' };
+    expect(evaluateException(lastDay, new Date('2026-09-16T23:59:59.999Z')).status).toBe(
+      'approved',
+    );
+    expect(evaluateException(lastDay, new Date('2026-09-17T00:00:00Z')).status).toBe('expired');
+  });
+
+  it('rejects a review date that is not a plain calendar date', () => {
+    expect(evaluateException({ ...COMPLETE, reviewBy: '2027-09-16T12:00:00Z' }, TODAY).status).toBe(
+      'incomplete',
+    );
+  });
+
   it('rejects an expired review date', () => {
     expect(evaluateException({ ...COMPLETE, reviewBy: '2020-01-01' }, TODAY).status).toBe(
       'expired',

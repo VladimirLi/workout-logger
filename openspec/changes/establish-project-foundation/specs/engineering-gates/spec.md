@@ -105,9 +105,69 @@ obligations, an approver, and a review date no more than 12 months out.
 - **WHEN** a license exception omits its linkage analysis
 - **THEN** the license gate fails, because a bare entry is a bypass rather than an exception
 
-#### Scenario: An exception awaiting a named approver is reported every run
+#### Scenario: An exception awaiting a named approver blocks
 - **WHEN** an exception's approver is still pending
-- **THEN** the gate reports it on every run so the outstanding sign-off cannot be forgotten
+- **THEN** the license gate fails closed with a distinct owner-approval exit code and prints
+  the decision ledger, rather than honouring the exception and reminding
+
+### Requirement: Approved licence exceptions are pinned to what was approved
+An approved licence exception SHALL cover only its exact component and version, in its
+recorded scope, under its recorded licence expression. A named approver MUST count only when
+a recorded owner decision by that approver lists the exact component, records its conditions,
+and lasts at least as long as the entry. The ledger MUST describe the dependency tree exactly.
+
+#### Scenario: A later version of an approved component
+- **WHEN** an approved component is upgraded to a different version
+- **THEN** the gate fails, because the approval does not extend to the new version
+
+#### Scenario: A dev-approved component reaches the runtime tree
+- **WHEN** a component approved in dev scope appears among runtime dependencies
+- **THEN** the gate fails and reports the recorded and actual scope
+
+#### Scenario: The installed licence expression changes
+- **WHEN** an approved component's installed licence expression differs from the ledger
+- **THEN** the gate fails
+
+#### Scenario: An approved component is removed or no longer needs an exception
+- **WHEN** a ledger entry's component is absent from the tree, or its licence is now allowed
+- **THEN** the gate fails as a material dependency change requiring new review
+
+#### Scenario: An approver name without a recorded decision
+- **WHEN** an exception names an approver but no recorded decision by that approver lists
+  the exact component
+- **THEN** the gate fails rather than accepting the name
+
+#### Scenario: The approval period ends
+- **WHEN** the review date is a calendar date
+- **THEN** the exception remains valid through the end of that date in UTC and fails from the
+  next instant
+
+### Requirement: Licence approval conditions fail closed
+While any licence exception relies on an approval, the gate SHALL fail if the repository shows
+a distribution vector or a modification of an excepted dependency, because every exception's
+analysis assumes the product is privately hosted and its dependencies are unmodified.
+
+#### Scenario: A workspace package becomes publishable
+- **WHEN** a workspace manifest is not marked private, or declares publish configuration
+- **THEN** the gate fails and names the manifest
+
+#### Scenario: A publish command or step is added
+- **WHEN** a package script or workflow runs a package publish command or configures a
+  publish step
+- **THEN** the gate fails
+
+#### Scenario: A binary or desktop build is introduced
+- **WHEN** a manifest depends on a binary or desktop bundler, or a script builds a standalone
+  executable
+- **THEN** the gate fails
+
+#### Scenario: An excepted dependency is patched or overridden
+- **WHEN** a patch, override, resolution, or pnpmfile targets an excepted component
+- **THEN** the gate fails
+
+#### Scenario: Prose mentioning publishing
+- **WHEN** a workflow comment states that it does not publish
+- **THEN** the gate does not fail on that comment
 
 ### Requirement: Secret scanning covers dotfiles
 Secret scanning SHALL cover dotfiles and dot-directories, because environment files are the

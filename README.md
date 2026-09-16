@@ -30,7 +30,7 @@ checkout with no undeclared global tools.
 | Working agreement | [AGENTS.md](AGENTS.md), [ENGINEERING.md](ENGINEERING.md) |
 | Controls | [SECURITY.md](SECURITY.md), [OBSERVABILITY.md](OBSERVABILITY.md) |
 | Blocking gate | [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) — the visual design system is **not decided** |
-| Open gates | [docs/external-gates.md](docs/external-gates.md) — eleven, none provisioned |
+| External gates | [docs/external-gates.md](docs/external-gates.md) — ten open, none provisioned; G-11 (licence sign-off) closed conditionally |
 | Specs | [openspec/](openspec/) — three changes, all validating |
 | Discovery evidence | [docs/discovery/decision-record.md](docs/discovery/decision-record.md) |
 

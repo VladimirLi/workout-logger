@@ -100,9 +100,11 @@ binary, LGPL-3.0-or-later, unmodified and dynamically linked server-side). The r
 tooling.
 
 R-029 requires a **named approver**, and an agent's licence analysis is not a substitute for
-a human's. Every exception reads `pending-owner-approval`; the gate honours them so the build
-is not blocked on a signature, and prints the full pending list on every run. Tracked as gate
-G-11.
+a human's. The gate therefore fails closed on an unapproved entry (exit 3) rather than
+honouring it. The owner approved all twelve on 2026-09-16, conditionally, through
+2027-09-16 (gate G-11), and the gate now enforces the conditions: exact version, scope and
+licence per entry, no distribution vector, no modification of an excepted dependency, and an
+approver name counting only when a recorded decision lists the exact component.
 
 ### `vitest` is a peer dependency of `test-support`
 
@@ -152,8 +154,9 @@ real behaviour is added without a threshold.
 
 ## Open Questions
 
-- Who approves the 13 license exceptions, and does the non-distribution assumption hold for
-  the intended hosting model? (G-11, G-4)
+- ~~Who approves the license exceptions?~~ Resolved 2026-09-16: the owner approved all
+  twelve conditionally through 2027-09-16 (G-11). Whether the non-distribution assumption
+  holds for the eventual hosting model is still open (G-4).
 - Does Supabase still satisfy the first slice, per the setup-time check D-025 requires? (G-2)
 - Does the WebAuthn relying-party ID bind to `gym.vladimirli.com` or to the apex? One-way
   door before any passkey enrollment. (G-3)
