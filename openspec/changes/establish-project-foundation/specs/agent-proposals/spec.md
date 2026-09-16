@@ -230,11 +230,17 @@ evaluated before scope.
   yet expired
 - **THEN** the invocation is authorized
 
+#### Scenario: A token whose validity window has not started is refused
+- **WHEN** a tool is invoked with a token whose issuance time is later than now, even if its
+  window is correctly ordered, no longer than the maximum, and not expired
+- **THEN** the invocation is refused as not yet valid, with no clock-skew tolerance unless one
+  is declared explicitly and tightly bounded
+
 #### Scenario: A malformed validity window is refused
 - **WHEN** a token's expiry is not after its issuance, or either timestamp is unparseable
 - **THEN** the invocation is refused
 
-#### Scenario: The validity window is checked before scope
+#### Scenario: The validity window is checked before expiry, audience and scope
 - **WHEN** a token has both an over-long lifetime and insufficient scope
 - **THEN** the refusal names the lifetime, because a token we will not accept is not one
   whose scopes we reason about

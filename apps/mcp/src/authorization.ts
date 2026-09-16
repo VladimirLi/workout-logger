@@ -29,6 +29,15 @@ export interface AuthorizationContext {
 
 export const MAX_ACCESS_TOKEN_LIFETIME_MS = 15 * 60 * 1000;
 
+/**
+ * Tolerance for a token whose issuance time is slightly ahead of this server's clock.
+ *
+ * Zero on purpose. Any tolerance is a window in which a token is accepted before it
+ * exists. If distributed clocks ever require one, it must be raised here explicitly and
+ * kept to seconds - never introduced implicitly by leaving the check out.
+ */
+export const ISSUED_AT_CLOCK_SKEW_MS = 0;
+
 export type AuthorizationFailure =
   | { readonly kind: 'unknown_tool'; readonly tool: string }
   /** issuedAt or expiresAt is unparseable, or expiry is not after issuance. */
@@ -39,6 +48,8 @@ export type AuthorizationFailure =
       readonly lifetimeMs: number;
       readonly maximumMs: number;
     }
+  /** The token's validity window has not started yet. */
+  | { readonly kind: 'token_not_yet_valid'; readonly issuedAt: Date }
   | { readonly kind: 'token_expired'; readonly expiresAt: Date }
   | { readonly kind: 'audience_mismatch'; readonly expected: string; readonly received: string }
   | { readonly kind: 'missing_scope'; readonly required: Scope };
@@ -87,6 +98,13 @@ export function authorizeInvocation(
         maximumMs: MAX_ACCESS_TOKEN_LIFETIME_MS,
       },
     };
+  }
+
+  // Before expiry, audience and scope. A window that starts in the future is by
+  // construction not expired, so checking only its end - as this function used to - let a
+  // correctly ordered, fifteen-minute token minted for some later date authorize today.
+  if (issuedAt > now.getTime() + ISSUED_AT_CLOCK_SKEW_MS) {
+    return { ok: false, failure: { kind: 'token_not_yet_valid', issuedAt: context.issuedAt } };
   }
 
   if (now.getTime() >= expiresAt) {
