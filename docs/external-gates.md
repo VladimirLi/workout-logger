@@ -218,39 +218,37 @@ an ADR is written, and visual-regression baselines exist.
 
 ## G-11 — License exception sign-off
 
-**Status:** analysis complete, owner approval outstanding. **This gate is BLOCKING.**
-**Needs no credentials — it needs a decision.**
+**Status: CLOSED 2026-09-16, conditionally, through 2027-09-16.**
 
-**Required (R-029).** Every licence exception records component/version, SPDX expression,
-scope, use, linkage and distribution assessment, absence of an alternative, obligations, the
-cost of removing it, an **approver**, and a review date no more than 12 months out.
+**Decision** (LIC-2026-09-16), recorded verbatim from the owner, Vladimir:
 
-**What ships now.** Twelve exceptions in [license-policy.md](license-policy.md) and
-`scripts/license-policy.json`, each with a full analysis and a named cost of removal. A
-thirteenth — `@img/sharp-libvips-darwin-arm64`, LGPL-3.0-or-later, the only copyleft
-component in the shipped tree — was **eliminated** rather than approved, by excluding
-Next.js's optional `sharp` dependency.
+> Approve all 12 with the stated conditions through 2027-09-16.
 
-**Behaviour.** `pnpm test:licenses` exits **3** and prints `BLOCKED: owner approval
-required` together with the decision ledger. `pnpm verify` reports it as `BLOCK`, not
-`FAIL`, runs every other gate to completion, and exits 3. Every engineering gate passes
-independently; this one waits on a human.
+All twelve exact `component@version` entries in [license-policy.md](license-policy.md) now
+name **Vladimir** as approver, backed by that decision record in
+`scripts/license-policy.json`. No allowlist was widened and no future version was approved.
+A thirteenth candidate — `@img/sharp-libvips-darwin-arm64`, LGPL-3.0-or-later — had already
+been eliminated rather than approved.
 
-Earlier this gate honoured pending exceptions and merely printed them. That was wrong: a
-reminder is not a gate, and it turned "nobody has approved these" into a line of output that
-scrolls past.
+**Conditions accepted by the owner:**
 
-**Of the twelve, one is runtime scope** (`caniuse-lite`, CC-BY-4.0, build-time browser data
-behind Next.js). The other eleven are dev tooling for three gates D-037 requires:
-accessibility (`axe-core`, MPL-2.0), secret scanning (the `secretlint` chain — eight
-entries, Artistic-2.0 / WTFPL / CC-BY-3.0 / CC0-1.0), and unit testing (`lightningcss`,
-MPL-2.0, a hard dependency of vite). Removing any of them removes an accepted gate.
+1. product remains privately hosted
+2. no npm package, binary, desktop bundle, or redistributable build is published
+3. dependencies remain unmodified
+4. CI verifies exact package versions and scopes against the ledger
+5. any distribution plan, material dependency change, or expired review date blocks release and requires new review
 
-**The load-bearing assumption.** Every analysis rests on the product **not being
-distributed**: privately hosted, single-user, no published package, no redistributable
-build. Publishing a package, shipping a binary, or onboarding an external user invalidates
-these exceptions and requires re-analysis before release.
+**What reopens this gate.** Any of the following makes `pnpm test:licenses` fail and requires
+new owner review before release:
 
-**Done when.** The owner reviews each entry, replaces `pending-owner-approval` with their
-name in `scripts/license-policy.json`, and confirms the non-distribution assumption.
-`pnpm test:licenses` then exits 0.
+- a workspace package becoming publishable, a publish command or step, a binary or desktop
+  bundler, or a standalone-executable build;
+- a patch, override, resolution, or pnpmfile touching an excepted component;
+- an excepted component changing version, scope, or licence expression, disappearing, or
+  becoming unnecessary;
+- a new non-allowed licence anywhere in the tree;
+- the end of 2027-09-16 UTC.
+
+**Unverified boundary.** A distribution plan that leaves no trace in the repository cannot be
+detected mechanically. The condition is binding regardless, and is recorded in
+license-policy.md for that reason.
