@@ -1,0 +1,2 @@
+# Conventional commits (D-010). Local only — CI is authoritative (D-032).
+pnpm exec commitlint --edit "$1"

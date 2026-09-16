@@ -1,0 +1,4 @@
+# Fast feedback only. This is deliberately NOT the gate suite: a hook that takes a
+# minute gets bypassed with --no-verify, and a bypassable gate is not a gate (D-032).
+# The real check is `pnpm verify`, run by CI.
+pnpm exec lint-staged

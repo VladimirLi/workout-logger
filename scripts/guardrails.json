@@ -1,0 +1,23 @@
+{
+  "$comment": "Files whose change is a guardrail change (D-035, D-036). GUARDRAIL FILE ITSELF. generatedPaths are produced by a build tool and count as neither guardrail nor product code. packages/observability/ is guardrail in full: the attribute allowlist is the telemetry privacy control and the rest of the package is what enforces it, so protecting one without the other protects neither.",
+  "guardrailPaths": [
+    ".github/workflows/",
+    ".dependency-cruiser.cjs",
+    "biome.json",
+    "tsconfig.base.json",
+    "vitest.config.ts",
+    "playwright.config.ts",
+    ".secretlintrc.json",
+    "commitlint.config.js",
+    "scripts/",
+    "pnpm-workspace.yaml",
+    ".husky/",
+    "SECURITY.md",
+    "OBSERVABILITY.md",
+    "ENGINEERING.md",
+    "docs/license-policy.md",
+    "packages/observability/"
+  ],
+  "productPathPatterns": ["^apps/", "^packages/(?!observability/)"],
+  "generatedPaths": ["apps/web/next-env.d.ts"]
+}
