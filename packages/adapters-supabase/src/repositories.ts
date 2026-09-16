@@ -3,6 +3,7 @@ import type {
   CommitDecisionRequest,
   MarkStaleOutcome,
   ProposalStore,
+  RejectOutcome,
 } from '@workout/application';
 import type { Proposal, Revision } from '@workout/domain';
 import type { ServerSupabaseConfig } from './config.js';
@@ -66,6 +67,15 @@ export class SupabaseProposalStore implements ProposalStore {
    */
   markStaleIfPending(_userId: string, _proposalId: string): Promise<MarkStaleOutcome> {
     return Promise.reject(new NotProvisionedError('ProposalStore.markStaleIfPending'));
+  }
+
+  /**
+   * MUST be a single conditional update - `UPDATE proposals SET status = 'rejected'
+   * WHERE id = $1 AND user_id = $2 AND status = 'pending' RETURNING *` - and MUST NOT
+   * reference the plan revision.
+   */
+  rejectIfPending(_userId: string, _proposalId: string): Promise<RejectOutcome> {
+    return Promise.reject(new NotProvisionedError('ProposalStore.rejectIfPending'));
   }
 }
 

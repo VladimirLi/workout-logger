@@ -123,6 +123,35 @@ commit inside that window.
 - **WHEN** the same proposal is decided twice concurrently
 - **THEN** exactly one decision succeeds and the other is refused
 
+### Requirement: Rejection is an atomic status transition independent of the plan revision
+A user's explicit rejection SHALL move a pending proposal to `rejected` in a single atomic
+status-only compare-and-set. It MUST NOT read, compare, or advance the plan revision, and it
+MUST NOT overwrite a proposal that is no longer pending.
+
+#### Scenario: The plan revision moves while the user rejects
+- **WHEN** the plan revision changes, once or repeatedly, while a rejection is being
+  committed
+- **THEN** the proposal's status is `rejected`, not `rejected_stale`, and the plan revision
+  is not advanced by the rejection
+
+#### Scenario: Rejection without access to the plan revision
+- **WHEN** the plan revision cannot be read at all
+- **THEN** a rejection of a pending, unexpired proposal still succeeds
+
+#### Scenario: The proposal is decided first by someone else
+- **WHEN** a proposal is accepted, rejected, or marked stale between the user opening it and
+  the rejection committing
+- **THEN** the rejection reports that the proposal was already decided and the earlier
+  decision is kept
+
+#### Scenario: Concurrent accept and reject
+- **WHEN** the same proposal is accepted and rejected concurrently
+- **THEN** exactly one succeeds, and the plan revision advances only if the acceptance won
+
+#### Scenario: Concurrent rejection and stale marking
+- **WHEN** a rejection and a stale marking of the same proposal happen concurrently
+- **THEN** exactly one terminal status is recorded and the proposal is never left pending
+
 ### Requirement: Stale proposals reach a terminal status
 When a proposal is rejected as stale, the system SHALL persist a terminal stale status so
 the proposal is not offered for review again and the agent can observe that it must
