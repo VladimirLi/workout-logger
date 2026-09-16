@@ -67,33 +67,41 @@ const { violations, pendingOwner, inspected } = evaluateLicenses({
   conditionBreaches,
 });
 
-const SECTIONS = [
-  [
-    'conditionBreach',
+/**
+ * Headings for each violation category. Output iterates the categories the evaluation
+ * actually returns, and falls back to the raw category name, so a category added later
+ * can fail the gate but can never fail it SILENTLY.
+ */
+const LABELS = {
+  conditionBreach:
     'APPROVAL CONDITIONS BREACHED — the owner approval no longer holds; new review required',
-  ],
-  ['rejected', 'Prohibited licences'],
-  ['unknown', 'Unresolved or unknown licences (treated as prohibited)'],
-  ['review', 'Licences requiring review with no exception for this exact version'],
-  ['licenseChanged', 'Excepted component whose licence no longer matches the ledger'],
-  ['scopeMismatch', 'Excepted component whose scope no longer matches the ledger'],
-  ['staleEntry', 'Ledger entries that no longer describe the tree (material dependency change)'],
-  ['duplicateEntry', 'Duplicate ledger entries'],
-  [
-    'badException',
-    'Exceptions that are incomplete, expired, unbacked by a recorded decision, or outlast it',
-  ],
-];
+  decisionAltered:
+    'OWNER DECISION ALTERED — the recorded approval no longer matches what the owner decided',
+  decisionUnrecorded: 'Approval records that are not a pinned owner decision',
+  decisionCoverage: 'Components a decision covers that no ledger entry claims',
+  rejected: 'Prohibited licences',
+  unknown: 'Unresolved or unknown licences (treated as prohibited)',
+  review: 'Licences requiring review with no exception for this exact version',
+  licenseChanged: 'Excepted component whose licence no longer matches the ledger',
+  scopeMismatch: 'Excepted component whose scope no longer matches the ledger',
+  staleEntry: 'Ledger entries that no longer describe the tree (material dependency change)',
+  duplicateEntry: 'Duplicate ledger entries',
+  badException: 'Exceptions that are incomplete, expired, or not bound to an exact owner decision',
+};
 
 function describe(record) {
   if (record.condition) return `${record.condition}: ${record.path} — ${record.detail}`;
   const parts = [record.key];
   if (record.expression) parts.push(`[${record.expression}]`);
   if (record.scope) parts.push(`(${record.scope})`);
-  if (record.recorded !== undefined)
+  if (record.recorded !== undefined) {
     parts.push(`recorded=${record.recorded} actual=${record.actual}`);
-  if (record.reason)
+  }
+  if (record.fields) parts.push(`differs in: ${record.fields.join(', ')}`);
+  if (record.decision) parts.push(`decision=${record.decision}`);
+  if (record.reason) {
     parts.push(`[${record.reason}${record.missing ? `: ${record.missing.join(', ')}` : ''}]`);
+  }
   return parts.join('  ');
 }
 
@@ -101,10 +109,14 @@ const violationCount = Object.values(violations).reduce((sum, list) => sum + lis
 
 if (violationCount > 0) {
   console.error('license-check: FAILED — the dependency tree does not match the approved policy');
-  for (const [key, label] of SECTIONS) {
+  const ordered = [
+    ...Object.keys(LABELS).filter((key) => key in violations),
+    ...Object.keys(violations).filter((key) => !(key in LABELS)),
+  ];
+  for (const key of ordered) {
     const records = violations[key];
     if (records.length === 0) continue;
-    console.error(`\n${label} (${records.length}):`);
+    console.error(`\n${LABELS[key] ?? key} (${records.length}):`);
     for (const record of records.slice(0, 50)) console.error(`  ${describe(record)}`);
     if (records.length > 50) console.error(`  ... and ${records.length - 50} more`);
   }

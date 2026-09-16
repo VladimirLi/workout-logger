@@ -16,7 +16,8 @@
  *     exact component, carries its conditions, and lasts at least as long;
  *   - a breach of a distribution or modification condition (distribution.mjs) voids it.
  */
-import { endOfCalendarDay, evaluateException } from './license-exceptions.mjs';
+import { RECORDED_DECISIONS } from './license-decisions.mjs';
+import { evaluateException } from './license-exceptions.mjs';
 import { classifySpdx } from './spdx.mjs';
 
 const SCOPES = new Set(['runtime', 'dev']);
@@ -47,18 +48,82 @@ function collectTree(runtime, dev) {
   return tree;
 }
 
-/** The recorded decision that backs this exception's approver, if there is one. */
-function backingDecision(exception, approvals) {
-  return (approvals ?? []).find(
-    (decision) =>
-      decision.approver === exception.approver &&
-      Array.isArray(decision.components) &&
-      decision.components.includes(exception.component) &&
-      Array.isArray(decision.conditions) &&
-      decision.conditions.length > 0 &&
-      typeof decision.decision === 'string' &&
-      decision.decision.trim() !== '',
+/** A stable serialisation of a decision: fixed key order, components sorted. */
+function canonicalDecision(decision) {
+  const components = Array.isArray(decision.components)
+    ? decision.components
+        .map((tuple) => ({ component: tuple?.component, scope: tuple?.scope, spdx: tuple?.spdx }))
+        .sort((a, b) => String(a.component).localeCompare(String(b.component)))
+    : decision.components;
+  return JSON.stringify({
+    id: decision.id,
+    approver: decision.approver,
+    decidedOn: decision.decidedOn,
+    reviewBy: decision.reviewBy,
+    reviewByInclusive: decision.reviewByInclusive,
+    decision: decision.decision,
+    conditions: decision.conditions,
+    components,
+    // Any field the pinned record does not have is itself a difference.
+    extra: Object.keys(decision)
+      .filter((key) => !DECISION_FIELDS.includes(key))
+      .sort(),
+  });
+}
+
+const DECISION_FIELDS = [
+  'id',
+  'approver',
+  'decidedOn',
+  'reviewBy',
+  'reviewByInclusive',
+  'decision',
+  'conditions',
+  'components',
+];
+
+/**
+ * Keeps only the decision records that equal a pinned owner decision exactly, and reports
+ * every other record. A record that has been reworded, re-dated, re-scoped, or extended is
+ * not the decision the owner made, so it backs nothing.
+ */
+function verifyDecisions(approvals, recordedDecisions, violations) {
+  const verified = new Map();
+  for (const approval of approvals ?? []) {
+    const recorded = recordedDecisions[approval?.id];
+    if (!recorded) {
+      violations.decisionUnrecorded.push({ key: String(approval?.id) });
+      continue;
+    }
+    if (canonicalDecision(approval) !== canonicalDecision(recorded)) {
+      const differing = DECISION_FIELDS.filter(
+        (field) => JSON.stringify(approval[field]) !== JSON.stringify(recorded[field]),
+      );
+      violations.decisionAltered.push({ key: approval.id, fields: differing });
+      continue;
+    }
+    verified.set(approval.id, approval);
+  }
+  return verified;
+}
+
+/** Why this exception is not covered by its decision, or undefined when it is. */
+function bindingFailure(exception, verifiedDecisions) {
+  const decision = verifiedDecisions.get(exception.decision);
+  if (!decision || decision.approver !== exception.approver) return 'no_recorded_decision';
+  if (!Array.isArray(decision.conditions) || decision.conditions.length === 0) {
+    return 'no_recorded_decision';
+  }
+  if (decision.reviewByInclusive !== true) return 'no_recorded_decision';
+  const listed = decision.components.some(
+    (tuple) =>
+      tuple.component === exception.component &&
+      tuple.scope === exception.scope &&
+      tuple.spdx === exception.spdx,
   );
+  if (!listed) return 'no_recorded_decision';
+  if (decision.reviewBy !== exception.reviewBy) return 'review_date_differs_from_decision';
+  return undefined;
 }
 
 function emptyViolations() {
@@ -72,6 +137,9 @@ function emptyViolations() {
     staleEntry: [],
     duplicateEntry: [],
     conditionBreach: [],
+    decisionUnrecorded: [],
+    decisionAltered: [],
+    decisionCoverage: [],
   };
 }
 
@@ -79,7 +147,7 @@ function emptyViolations() {
  * Judges one excepted component against its ledger entry.
  * @returns {{violation: [string, object]} | {pending: object} | {}}
  */
-function judgeException(record, exception, policy, today) {
+function judgeException(record, exception, verifiedDecisions, today) {
   if (exception.spdx !== record.expression) {
     return {
       violation: [
@@ -113,14 +181,9 @@ function judgeException(record, exception, policy, today) {
     return { pending: { ...record, exception } };
   }
 
-  const decision = backingDecision(exception, policy.approvals);
-  if (!decision) {
-    return { violation: ['badException', { ...record, reason: 'no_recorded_decision' }] };
-  }
-  const decisionEnd = endOfCalendarDay(String(decision.reviewBy));
-  const exceptionEnd = endOfCalendarDay(String(exception.reviewBy));
-  if (decisionEnd === undefined || exceptionEnd === undefined || exceptionEnd > decisionEnd) {
-    return { violation: ['badException', { ...record, reason: 'outlasts_decision' }] };
+  const failure = bindingFailure(exception, verifiedDecisions);
+  if (failure) {
+    return { violation: ['badException', { ...record, reason: failure }] };
   }
   return {};
 }
@@ -128,7 +191,7 @@ function judgeException(record, exception, policy, today) {
 const VERDICT_BUCKET = { rejected: 'rejected', review: 'review', unknown: 'unknown' };
 
 /** Judges one component in the tree, with or without a ledger entry. */
-function judgeRecord(record, exception, policy, today) {
+function judgeRecord(record, exception, policy, verifiedDecisions, today) {
   const verdict = classifySpdx(record.expression, policy);
   if (verdict === 'allowed') {
     // An exception for something the policy already allows no longer describes the
@@ -140,7 +203,7 @@ function judgeRecord(record, exception, policy, today) {
   if (!exception) {
     return { violation: [VERDICT_BUCKET[verdict] ?? 'unknown', record] };
   }
-  return judgeException(record, exception, policy, today);
+  return judgeException(record, exception, verifiedDecisions, today);
 }
 
 /** Indexes the ledger by component, reporting any component listed twice. */
@@ -166,14 +229,28 @@ function indexExceptions(entries, violations) {
  *   conditionBreaches?: {condition: string, path: string, detail: string}[],
  * }} input
  */
-export function evaluateLicenses({ policy, runtime, dev, today, conditionBreaches = [] }) {
+export function evaluateLicenses({
+  policy,
+  runtime,
+  dev,
+  today,
+  conditionBreaches = [],
+  recordedDecisions = RECORDED_DECISIONS,
+}) {
   const violations = emptyViolations();
   const pendingOwner = [];
   const exceptions = indexExceptions(policy.exceptions, violations);
+  const verifiedDecisions = verifyDecisions(policy.approvals, recordedDecisions, violations);
   const tree = collectTree(runtime, dev);
 
   for (const record of tree.values()) {
-    const outcome = judgeRecord(record, exceptions.get(record.key), policy, today);
+    const outcome = judgeRecord(
+      record,
+      exceptions.get(record.key),
+      policy,
+      verifiedDecisions,
+      today,
+    );
     if (outcome.violation) violations[outcome.violation[0]].push(outcome.violation[1]);
     if (outcome.pending) pendingOwner.push(outcome.pending);
   }
@@ -183,6 +260,17 @@ export function evaluateLicenses({ policy, runtime, dev, today, conditionBreache
       .filter((key) => !tree.has(key))
       .map((key) => ({ key, reason: 'not present in the dependency tree' })),
   );
+
+  // A decision covers an exact set. A component it names that no ledger entry claims means
+  // the ledger and the decision have come apart, which is a material change.
+  for (const decision of verifiedDecisions.values()) {
+    for (const tuple of decision.components) {
+      const entry = exceptions.get(tuple.component);
+      if (!entry || entry.decision !== decision.id) {
+        violations.decisionCoverage.push({ key: tuple.component, decision: decision.id });
+      }
+    }
+  }
 
   // Condition breaches only matter while something relies on an approval.
   if (policy.exceptions.length > 0) {
