@@ -4,12 +4,13 @@
  * Deliberately unclever. It understands exactly four shapes:
  *
  *   - a bare identifier                    `MIT`
- *   - `A WITH B`                           classified by A
+ *   - `A WITH B`                           classified by A, but only when B is a recognised
+ *                                          SPDX exception and A+B is a reviewed pairing
  *   - a pure disjunction                   `A OR B OR C`
  *   - a pure conjunction                   `A AND B AND C`
  *
- * Anything else - mixed operators, parentheses, free text - is UNKNOWN, which the
- * policy treats as prohibited.
+ * Anything else - mixed operators, parentheses, free text, an unrecognised exception, an
+ * unreviewed pairing - is UNKNOWN, which the policy treats as prohibited.
  *
  * The previous version stripped parentheses, split on both operators, and decided
  * "is this a disjunction?" by testing the whole string for the word OR. That made
@@ -19,6 +20,7 @@
  * Failing closed on an expression we do not fully understand is the only safe
  * default, because the alternative is shipping under obligations nobody read.
  */
+import { readFileSync } from 'node:fs';
 
 /** @typedef {{allowed: string[], rejected: string[], reviewRequired: string[]}} LicensePolicy */
 /** @typedef {'allowed' | 'rejected' | 'review' | 'unknown'} Verdict */
@@ -38,14 +40,45 @@ function unwrapRedundantParentheses(text) {
   return inner;
 }
 
-/** Strips a `WITH <exception>` suffix; the licence decides, not the exception. */
-function baseLicense(term) {
+/** An SPDX short identifier: no spaces, no operators, no parentheses. */
+const SPDX_ID = /^[A-Za-z0-9][A-Za-z0-9.+-]*$/;
+
+const EXCEPTION_DATA = JSON.parse(
+  readFileSync(new URL('./spdx-exceptions.json', import.meta.url), 'utf8'),
+);
+const RECOGNIZED_EXCEPTIONS = new Set(EXCEPTION_DATA.recognized);
+const VALID_PAIRINGS = new Map(
+  Object.entries(EXCEPTION_DATA.combinations).map(([exception, bases]) => [
+    exception,
+    new Set(bases),
+  ]),
+);
+
+/**
+ * Resolves a term to the licence identifier that decides it, or `undefined` when the
+ * term is malformed or names an exception we cannot vouch for.
+ *
+ * `A WITH B` is accepted only when B is a recognised, current SPDX exception AND the
+ * pairing A+B is listed in scripts/spdx-exceptions.json. It used to strip `WITH B` and
+ * classify A, so any text at all could follow WITH - including an exception that does
+ * not exist, or a real one attached to a licence it has nothing to do with.
+ */
+function governingLicense(term) {
   const parts = term.split(/\s+WITH\s+/);
-  return parts.length <= 2 ? parts[0].trim() : undefined;
+  if (parts.length === 1) {
+    return SPDX_ID.test(term) ? term : undefined;
+  }
+  if (parts.length !== 2) return undefined;
+
+  const [license, exception] = parts;
+  if (!SPDX_ID.test(license) || !SPDX_ID.test(exception)) return undefined;
+  if (!RECOGNIZED_EXCEPTIONS.has(exception)) return undefined;
+  if (!VALID_PAIRINGS.get(exception)?.has(license)) return undefined;
+  return license;
 }
 
 function classifyTerm(term, policy) {
-  const id = baseLicense(term);
+  const id = governingLicense(term);
   if (!id) return 'unknown';
   if (policy.rejected.includes(id)) return 'rejected';
   if (policy.allowed.includes(id)) return 'allowed';
