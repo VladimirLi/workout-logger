@@ -1,0 +1,103 @@
+/*
+ * PROVISIONAL, PROVIDER-NEUTRAL BASELINE ONLY.
+ *
+ * This file is not a design system and must not become one. See DESIGN_SYSTEM.md:
+ * tokens, color, typography, spacing, motion, and components are all still
+ * undecided (ADR-0007).
+ *
+ * What is allowed here: a reset, system font stack, respect for the user's colour
+ * scheme and reduced-motion preference, and the 44x44px touch-target floor that
+ * R-007 already requires. Nothing that expresses a visual language: no palette,
+ * no type scale, no spacing scale.
+ */
+
+:root {
+  /* Deliberately system values, not brand values. */
+  --font-stack: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --touch-target-min: 44px;
+  color-scheme: light dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  /* Never suppress user text scaling; 200% zoom is a required check (R-007). */
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-stack);
+  line-height: 1.5;
+  /* Phone-first: usable at 375x667 with no horizontal scrolling (R-004). */
+  min-width: 320px;
+}
+
+/* A visible focus indicator is a baseline accessibility requirement, not styling. */
+:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+/*
+ * R-007: primary in-workout controls meet a 44x44 CSS-pixel target. Applied to
+ * every interactive element here because the shell has no component layer yet.
+ */
+button,
+a[role="button"],
+input[type="button"],
+input[type="submit"] {
+  min-height: var(--touch-target-min);
+  min-inline-size: var(--touch-target-min);
+  font: inherit;
+}
+
+/*
+ * !important is deliberate here and only here. The reduced-motion reset must beat any
+ * author animation, which is the standard accessibility pattern (R-007). biome.json scopes
+ * the noImportantStyles rule off for this file alone; it stays on everywhere else.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Screen-reader-only text. Structural, not decorative. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/*
+ * Skip link. Visible only on focus. Structural accessibility, not decoration.
+ */
+.skip-link {
+  position: absolute;
+  inset-inline-start: 0;
+  inset-block-start: -100%;
+  padding: 0.5rem 1rem;
+  background: Canvas;
+  color: CanvasText;
+  min-height: var(--touch-target-min);
+  display: inline-flex;
+  align-items: center;
+}
+
+.skip-link:focus-visible {
+  inset-block-start: 0;
+  z-index: 1;
+}
