@@ -142,6 +142,31 @@ and lasts at least as long as the entry. The ledger MUST describe the dependency
 - **THEN** the exception remains valid through the end of that date in UTC and fails from the
   next instant
 
+### Requirement: Licence approvals are bound to the exact owner decision
+Each approved licence exception SHALL reference a pinned owner decision, and the decision
+record the gate reads MUST equal that pinned decision exactly: identifier, approver, decision
+date, decision wording, every accepted condition in order, the through-date and its inclusive
+meaning, and the exact set of component, version, scope and licence tuples. A record that
+differs in any of these MUST back no approval.
+
+#### Scenario: The decision wording is replaced
+- **WHEN** the recorded decision text or its conditions are replaced with different text
+- **THEN** the gate fails and names the fields that differ
+
+#### Scenario: The decision is extended
+- **WHEN** the through-date is moved later, made exclusive, or a component is added to the
+  decision
+- **THEN** the gate fails
+
+#### Scenario: A decision is re-issued under a new identifier
+- **WHEN** an approval record with an identifier that is not a pinned owner decision appears,
+  even if every ledger entry is re-pointed at it
+- **THEN** the gate fails
+
+#### Scenario: A decision names a component no ledger entry claims
+- **WHEN** a component in the pinned decision has no ledger entry bound to that decision
+- **THEN** the gate fails as a material change
+
 ### Requirement: SPDX WITH expressions are validated
 A licence expression of the form `A WITH B` SHALL be classified by licence A only when B is a
 recognised, current SPDX exception identifier and the pairing of A with B is a reviewed

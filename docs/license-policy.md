@@ -81,7 +81,7 @@ remedy is new owner review, **not** editing an entry to match the new state.
 | Exact versions and scopes verified against the ledger | Each entry matches only its exact `component@version`; its recorded scope must equal the tree's (runtime wins when both); its recorded SPDX expression must equal the installed one |
 | Material dependency change blocks | An entry no longer present, or no longer needed because the licence became allowed, fails as stale; a duplicate entry fails |
 | Expired review date blocks | Valid through the end of 2027-09-16 UTC; from the next instant the gate fails |
-| No fabricated approval | A named approver counts only if a recorded decision by that approver lists the exact component, records its conditions, and lasts at least as long as the entry |
+| No fabricated or altered approval | The decision is pinned verbatim in `scripts/license-decisions.mjs`, and the record in `scripts/license-policy.json` must equal it exactly: id, approver, decision date, the decision wording, all five conditions in order, the through-date and its inclusive meaning, and the exact set of twelve `component@version` / scope / licence tuples. Rewording, re-dating, extending, re-scoping, adding or removing anything fails. Each ledger entry must name that decision, its approver and its through-date, and appear in its component set |
 
 Mechanical detection has a limit, stated plainly: a distribution plan that leaves no trace in
 the repository cannot be detected. That is why the condition is recorded here as well as

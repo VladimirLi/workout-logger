@@ -33,6 +33,7 @@ function exception(component: string, overrides: Record<string, unknown> = {}) {
     obligations: 'Unmodified, not distributed.',
     replacementCost: 'Lose the accessibility gate.',
     approver: 'Vladimir',
+    decision: 'LIC-TEST',
     reviewBy: '2027-09-16',
     ...overrides,
   };
@@ -47,31 +48,52 @@ function listing(entries: [string, string, string][]) {
   return byLicense;
 }
 
-/** A recorded owner decision covering exactly the given components. */
-function decision(components: string[], overrides: Record<string, unknown> = {}) {
+type Tuple = { component: string; scope: string; spdx: string };
+
+/**
+ * A synthetic decision covering exactly the given components. These tests exercise the
+ * evaluation LOGIC, so they inject their own recorded decisions; the binding to the real
+ * owner decision LIC-2026-09-16 is covered by license-decision-binding.test.ts.
+ */
+function decision(components: (string | Tuple)[], overrides: Record<string, unknown> = {}) {
   return {
-    id: 'LIC-2026-09-16',
+    id: 'LIC-TEST',
     approver: 'Vladimir',
     decidedOn: '2026-09-16',
     reviewBy: '2027-09-16',
+    reviewByInclusive: true,
     decision: 'Approve with the stated conditions.',
     conditions: ['private-hosting-only'],
-    components,
+    components: components.map((entry) =>
+      typeof entry === 'string' ? { component: entry, scope: 'dev', spdx: 'MPL-2.0' } : entry,
+    ),
     ...overrides,
   };
+}
+
+const tuplesOf = (exceptions: ReturnType<typeof exception>[]): Tuple[] =>
+  exceptions.map((entry) => ({
+    component: String(entry.component),
+    scope: String(entry.scope),
+    spdx: String(entry.spdx),
+  }));
+
+function recordedFrom(approvals: ReturnType<typeof decision>[]) {
+  return Object.fromEntries(approvals.map((approval) => [approval.id, approval]));
 }
 
 function evaluate(
   exceptions: ReturnType<typeof exception>[],
   runtime: [string, string, string][],
   dev: [string, string, string][],
-  approvals = [decision(exceptions.map((entry) => entry.component))],
+  approvals = [decision(tuplesOf(exceptions))],
 ) {
   return evaluateLicenses({
     policy: { ...POLICY_BASE, exceptions, approvals },
     runtime: listing(runtime),
     dev: listing(dev),
     today: TODAY,
+    recordedDecisions: recordedFrom(approvals),
   });
 }
 
@@ -203,6 +225,7 @@ describe('approval state', () => {
       runtime: {},
       dev: listing([['MPL-2.0', 'axe-core', '4.13.0']]),
       today: new Date(iso),
+      recordedDecisions: recordedFrom([decision(['axe-core@4.13.0'])]),
     });
 
   it('keeps passing through the whole last day of the approval period', () => {
@@ -253,12 +276,42 @@ describe('an approver name counts only with a recorded decision behind it', () =
     ]);
   });
 
-  it('fails an entry whose review date outlasts the decision that approved it', () => {
+  it('fails an entry whose review date differs from the decision that approved it', () => {
     const result = evaluate([exception('axe-core@4.13.0', { reviewBy: '2027-09-16' })], [], tree, [
       decision(['axe-core@4.13.0'], { reviewBy: '2027-03-01' }),
     ]);
     expect(result.violations.badException.map((record) => record.reason)).toEqual([
-      'outlasts_decision',
+      'review_date_differs_from_decision',
+    ]);
+  });
+
+  it('fails an entry whose scope or licence is not the tuple the decision lists', () => {
+    const result = evaluate([exception('axe-core@4.13.0')], [], tree, [
+      decision([{ component: 'axe-core@4.13.0', scope: 'dev', spdx: 'MIT' }]),
+    ]);
+    expect(result.violations.badException.map((record) => record.reason)).toEqual([
+      'no_recorded_decision',
+    ]);
+  });
+
+  it('fails a decision record that differs from the pinned record', () => {
+    const approvals = [decision(['axe-core@4.13.0'])];
+    const result = evaluateLicenses({
+      policy: {
+        ...POLICY_BASE,
+        exceptions: [exception('axe-core@4.13.0')],
+        approvals: [{ ...approvals[0], decision: 'Something else entirely.' }],
+      },
+      runtime: {},
+      dev: listing(tree),
+      today: TODAY,
+      recordedDecisions: recordedFrom(approvals),
+    });
+    expect(result.violations.decisionAltered.map((record) => record.fields)).toEqual([
+      ['decision'],
+    ]);
+    expect(result.violations.badException.map((record) => record.reason)).toEqual([
+      'no_recorded_decision',
     ]);
   });
 
@@ -283,6 +336,7 @@ describe('approval conditions', () => {
       runtime: {},
       dev: listing([['MPL-2.0', 'axe-core', '4.13.0']]),
       today: TODAY,
+      recordedDecisions: recordedFrom([decision(['axe-core@4.13.0'])]),
       conditionBreaches: [
         { condition: 'no-distribution', path: 'package.json', detail: 'not private' },
       ],

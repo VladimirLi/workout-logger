@@ -57,6 +57,7 @@
       "approver": "Vladimir",
       "decidedOn": "2026-09-16",
       "reviewBy": "2027-09-16",
+      "reviewByInclusive": true,
       "decision": "Approve all 12 with the stated conditions through 2027-09-16.",
       "conditions": [
         "product remains privately hosted",
@@ -66,18 +67,66 @@
         "any distribution plan, material dependency change, or expired review date blocks release and requires new review"
       ],
       "components": [
-        "@axe-core/playwright@4.13.0",
-        "@azu/style-format@1.0.1",
-        "axe-core@4.13.0",
-        "binaryextensions@6.11.0",
-        "caniuse-lite@1.0.30001810",
-        "editions@6.22.0",
-        "istextorbinary@9.5.0",
-        "lightningcss@1.33.0",
-        "spdx-exceptions@2.5.0",
-        "spdx-license-ids@3.0.23",
-        "textextensions@6.11.0",
-        "version-range@4.15.0"
+        {
+          "component": "@axe-core/playwright@4.13.0",
+          "scope": "dev",
+          "spdx": "MPL-2.0"
+        },
+        {
+          "component": "@azu/style-format@1.0.1",
+          "scope": "dev",
+          "spdx": "WTFPL"
+        },
+        {
+          "component": "axe-core@4.13.0",
+          "scope": "dev",
+          "spdx": "MPL-2.0"
+        },
+        {
+          "component": "binaryextensions@6.11.0",
+          "scope": "dev",
+          "spdx": "Artistic-2.0"
+        },
+        {
+          "component": "caniuse-lite@1.0.30001810",
+          "scope": "runtime",
+          "spdx": "CC-BY-4.0"
+        },
+        {
+          "component": "editions@6.22.0",
+          "scope": "dev",
+          "spdx": "Artistic-2.0"
+        },
+        {
+          "component": "istextorbinary@9.5.0",
+          "scope": "dev",
+          "spdx": "Artistic-2.0"
+        },
+        {
+          "component": "lightningcss@1.33.0",
+          "scope": "dev",
+          "spdx": "MPL-2.0"
+        },
+        {
+          "component": "spdx-exceptions@2.5.0",
+          "scope": "dev",
+          "spdx": "CC-BY-3.0"
+        },
+        {
+          "component": "spdx-license-ids@3.0.23",
+          "scope": "dev",
+          "spdx": "CC0-1.0"
+        },
+        {
+          "component": "textextensions@6.11.0",
+          "scope": "dev",
+          "spdx": "Artistic-2.0"
+        },
+        {
+          "component": "version-range@4.15.0",
+          "scope": "dev",
+          "spdx": "Artistic-2.0"
+        }
       ]
     }
   ],
@@ -92,6 +141,7 @@
       "obligations": "MPL-2.0 is file-level copyleft on modification. The files are unmodified and not distributed.",
       "replacementCost": "Lose `pnpm test:a11y`. D-037 and R-007 both require automated accessibility checks.",
       "approver": "Vladimir",
+      "decision": "LIC-2026-09-16",
       "reviewBy": "2027-09-16"
     },
     {
@@ -104,6 +154,7 @@
       "obligations": "WTFPL imposes no conditions. Recorded because it is not on the R-029 allowlist, not because it creates an obligation.",
       "replacementCost": "Lose `pnpm test:secrets`, the only secret gate that runs on every contributor machine. D-037 requires secret scanning.",
       "approver": "Vladimir",
+      "decision": "LIC-2026-09-16",
       "reviewBy": "2027-09-16"
     },
     {
@@ -116,6 +167,7 @@
       "obligations": "Unmodified, not distributed.",
       "replacementCost": "Same as @axe-core/playwright: lose the accessibility gate.",
       "approver": "Vladimir",
+      "decision": "LIC-2026-09-16",
       "reviewBy": "2027-09-16"
     },
     {
@@ -128,6 +180,7 @@
       "obligations": "Artistic-2.0 is OSI-approved and permissive for unmodified use. Unmodified, not distributed.",
       "replacementCost": "Lose `pnpm test:secrets`, the only secret gate that runs on every contributor machine. D-037 requires secret scanning.",
       "approver": "Vladimir",
+      "decision": "LIC-2026-09-16",
       "reviewBy": "2027-09-16"
     },
     {
@@ -140,6 +193,7 @@
       "obligations": "Attribution if the dataset is redistributed. Nothing is redistributed: the product is a privately hosted server application.",
       "replacementCost": "Replacing Next.js. This is the only runtime-scope exception remaining.",
       "approver": "Vladimir",
+      "decision": "LIC-2026-09-16",
       "reviewBy": "2027-09-16"
     },
     {
@@ -152,6 +206,7 @@
       "obligations": "Unmodified, not distributed.",
       "replacementCost": "Lose `pnpm test:secrets`, the only secret gate that runs on every contributor machine. D-037 requires secret scanning.",
       "approver": "Vladimir",
+      "decision": "LIC-2026-09-16",
       "reviewBy": "2027-09-16"
     },
     {
@@ -164,6 +219,7 @@
       "obligations": "Unmodified, not distributed.",
       "replacementCost": "Lose `pnpm test:secrets`, the only secret gate that runs on every contributor machine. D-037 requires secret scanning.",
       "approver": "Vladimir",
+      "decision": "LIC-2026-09-16",
       "reviewBy": "2027-09-16"
     },
     {
@@ -176,6 +232,7 @@
       "obligations": "Unmodified, not distributed.",
       "replacementCost": "Replacing vitest, and with it every unit, domain and integration test.",
       "approver": "Vladimir",
+      "decision": "LIC-2026-09-16",
       "reviewBy": "2027-09-16"
     },
     {
@@ -188,6 +245,7 @@
       "obligations": "Attribution on redistribution of the dataset. Not redistributed.",
       "replacementCost": "Lose `pnpm test:secrets`, the only secret gate that runs on every contributor machine. D-037 requires secret scanning.",
       "approver": "Vladimir",
+      "decision": "LIC-2026-09-16",
       "reviewBy": "2027-09-16"
     },
     {
@@ -200,6 +258,7 @@
       "obligations": "CC0-1.0 is a public-domain dedication and imposes no conditions.",
       "replacementCost": "Lose `pnpm test:secrets`, the only secret gate that runs on every contributor machine. D-037 requires secret scanning.",
       "approver": "Vladimir",
+      "decision": "LIC-2026-09-16",
       "reviewBy": "2027-09-16"
     },
     {
@@ -212,6 +271,7 @@
       "obligations": "Unmodified, not distributed.",
       "replacementCost": "Lose `pnpm test:secrets`, the only secret gate that runs on every contributor machine. D-037 requires secret scanning.",
       "approver": "Vladimir",
+      "decision": "LIC-2026-09-16",
       "reviewBy": "2027-09-16"
     },
     {
@@ -224,6 +284,7 @@
       "obligations": "Unmodified, not distributed.",
       "replacementCost": "Lose `pnpm test:secrets`, the only secret gate that runs on every contributor machine. D-037 requires secret scanning.",
       "approver": "Vladimir",
+      "decision": "LIC-2026-09-16",
       "reviewBy": "2027-09-16"
     }
   ]
