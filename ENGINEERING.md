@@ -67,9 +67,10 @@ inlines its own commands. That is what makes a green local run meaningful.
 
 Three rules, and they are not negotiable:
 
-1. **A gate that cannot run is a failure, not a skip.** `pnpm test:deps` fails if it cannot
-   reach the advisory registry, because an audit that checked nothing must not report
-   success.
+1. **A gate that cannot run is a failure, not a skip.** `pnpm test:deps` passes only on a
+   completed audit. A registry error envelope, an incomplete report, unparseable output, or
+   a non-zero exit its findings do not explain all fail it, because an audit that checked
+   nothing must not report success.
 2. **A gate that is not yet applicable detects that deterministically and says so.**
    `pnpm test:migrations` passes while `supabase/migrations/` does not exist, prints why,
    and starts enforcing the instant the first migration lands. It is not a stub that
