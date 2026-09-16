@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { evaluateException, reviewDateStatus } from './license-exceptions.mjs';
 
 /**
  * The machine-readable policy and the human-readable policy must agree.
@@ -13,7 +14,7 @@ const policy = JSON.parse(readFileSync('scripts/license-policy.json', 'utf8')) a
   allowed: string[];
   rejected: string[];
   reviewRequired: string[];
-  exceptions: { component: string; reviewBy: string }[];
+  exceptions: ({ component: string; reviewBy: string } & Record<string, unknown>)[];
 };
 const document = readFileSync('docs/license-policy.md', 'utf8');
 
@@ -52,16 +53,70 @@ describe('license policy consistency', () => {
   });
 
   it('requires every exception to carry an unexpired review date within 12 months', () => {
-    const now = Date.now();
-    const twelveMonths = now + 366 * 24 * 60 * 60 * 1000;
+    // The production rule, not a re-implementation of it. The previous version parsed
+    // the date as midnight at the START of the day, so it declared the approval expired
+    // for the whole of its valid final day.
+    const now = new Date();
     for (const exception of policy.exceptions) {
-      const reviewBy = new Date(exception.reviewBy).getTime();
-      expect(Number.isNaN(reviewBy), `${exception.component} has no valid reviewBy`).toBe(false);
-      expect(reviewBy, `${exception.component} review date has expired`).toBeGreaterThan(now);
-      expect(reviewBy, `${exception.component} review date is over 12 months out`).toBeLessThan(
-        twelveMonths,
-      );
+      expect(reviewDateStatus(exception.reviewBy, now), exception.component).toBe('valid');
     }
+  });
+
+  describe('the approval is valid through its final day in UTC', () => {
+    const reviewBy = '2027-09-16';
+
+    it('shares one review date across the ledger, so these boundaries cover every entry', () => {
+      expect(new Set(policy.exceptions.map((exception) => exception.reviewBy))).toEqual(
+        new Set([reviewBy]),
+      );
+    });
+
+    it.each([
+      ['when the approval was recorded', '2026-09-16T00:00:00.000Z'],
+      ['the day before expiry', '2027-09-15T12:00:00.000Z'],
+      ['the last instant before the final day', '2027-09-15T23:59:59.999Z'],
+    ])('is valid %s (%s)', (_label, iso) => {
+      expect(reviewDateStatus(reviewBy, new Date(iso))).toBe('valid');
+    });
+
+    it.each([
+      ['at the first instant of the final day', '2027-09-16T00:00:00.000Z'],
+      ['during the final day', '2027-09-16T12:00:00.000Z'],
+      ['at the last instant of the final day', '2027-09-16T23:59:59.999Z'],
+    ])('is still valid %s (%s)', (_label, iso) => {
+      expect(reviewDateStatus(reviewBy, new Date(iso))).toBe('valid');
+    });
+
+    it.each([
+      ['at the first instant after the final day', '2027-09-17T00:00:00.000Z'],
+      ['a day after expiry', '2027-09-18T00:00:00.000Z'],
+    ])('has expired %s (%s)', (_label, iso) => {
+      expect(reviewDateStatus(reviewBy, new Date(iso))).toBe('expired');
+    });
+
+    it('agrees with the full production evaluator at every boundary instant', () => {
+      for (const exception of policy.exceptions) {
+        expect(evaluateException(exception, new Date('2027-09-16T23:59:59.999Z')).status).toBe(
+          'approved',
+        );
+        expect(evaluateException(exception, new Date('2027-09-17T00:00:00.000Z')).status).toBe(
+          'expired',
+        );
+      }
+    });
+
+    it('rejects a review date more than twelve months ahead of the check', () => {
+      expect(reviewDateStatus(reviewBy, new Date('2026-09-14T00:00:00.000Z'))).toBe(
+        'review_too_far',
+      );
+    });
+
+    it.each(['2027-09-16T00:00:00Z', '2027-9-16', '16/09/2027', '2027-02-30', ''])(
+      'refuses the unparseable review date %j rather than guessing',
+      (value) => {
+        expect(reviewDateStatus(value, new Date('2027-01-01T00:00:00.000Z'))).toBe('invalid');
+      },
+    );
   });
 });
 
