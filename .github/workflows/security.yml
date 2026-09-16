@@ -1,0 +1,100 @@
+name: security
+
+# Checks that need GitHub-side state and therefore cannot be verified locally.
+# Each job states honestly what it requires. See docs/external-gates.md, G-6.
+#
+# GUARDRAIL FILE.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Weekly, so a newly published advisory against unchanged code is still found.
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  codeql:
+    name: codeql
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # NOTE: CodeQL is licensed for open-source repositories on GitHub and for
+      # private repositories owned by an ORGANIZATION with GitHub Advanced Security.
+      # A user-owned private repository qualifies for neither, and this job will not
+      # run there. See docs/external-gates.md, G-6. GitHub also recommends CodeQL
+      # default setup over this workflow for JavaScript/TypeScript; if the repository
+      # is eligible, prefer that and delete this job.
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
+        with:
+          languages: javascript-typescript
+          queries: security-and-quality
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
+
+  secret-history:
+    name: secret scan (full history)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # `pnpm test:secrets` covers the working tree. This covers history, which
+          # is where a rotated-but-not-scrubbed credential hides.
+          fetch-depth: 0
+
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # NOTE: gitleaks-action requires GITLEAKS_LICENSE for organization-owned
+          # repositories. It is free for personal accounts and public repositories.
+          # If this job fails with a licence error, the operative secret gate remains
+          # `pnpm test:secrets` in the verify workflow. Recorded in
+          # docs/external-gates.md, G-6.
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+
+  dependency-review:
+    name: dependency review
+    # Pull requests only: the action diffs a base against a head.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Dependency review
+        # NOTE: requires the dependency graph, and on a PRIVATE repository it
+        # additionally requires GitHub Advanced Security. Without GHAS this job
+        # cannot function, and `pnpm test:deps` plus `pnpm test:licenses` remain the
+        # operative controls. This is documented rather than hidden by deleting the
+        # job — see docs/external-gates.md, G-6.
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+          # Mirrors docs/license-policy.md. The authoritative, tested implementation
+          # is scripts/license-check.mjs; this is a second line of defence.
+          deny-licenses: AGPL-3.0-only, AGPL-3.0-or-later, AGPL-1.0-only, AGPL-1.0-or-later, SSPL-1.0, BUSL-1.1, Elastic-2.0
+          comment-summary-in-pr: on-failure

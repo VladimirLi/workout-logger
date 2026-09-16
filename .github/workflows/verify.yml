@@ -1,0 +1,69 @@
+name: verify
+
+# The authoritative gate (ADR-0006). CI invokes the SAME root scripts a developer
+# runs locally, so a green local run means what it says. Nothing is inlined here
+# that is not also a `pnpm` script.
+#
+# GUARDRAIL FILE. An implementing agent may not change this in the same change as
+# the product code it judges (D-035).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Deterministic, non-interactive behaviour for every tool in the suite.
+  CI: 'true'
+  OPENSPEC_TELEMETRY: '0'
+  DO_NOT_TRACK: '1'
+
+jobs:
+  verify:
+    name: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The guardrail gate compares against a merge base, so it needs history.
+          fetch-depth: 0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        # --frozen-lockfile fails if the lockfile and manifests disagree, which is
+        # the point: CI must install exactly what was reviewed.
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browser
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Verify
+        # The aggregate gate. Every required non-deployment check, in one command.
+        run: pnpm verify
+
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore

@@ -1,0 +1,45 @@
+# Code ownership.
+#
+# Ownership here is about who must review, not who may write. Once the branch ruleset
+# in docs/branch-protection.md is applied, a CODEOWNERS entry becomes a required
+# reviewer for the paths it matches.
+#
+# Only one human is involved today, so every path routes to the same owner. The value
+# of the file now is that guardrail and security-sensitive paths are enumerated, so
+# adding a second reviewer later is a one-line change rather than an audit.
+
+# Default owner for everything not matched below.
+*                                   @VladimirLi
+
+# --- Normative product intent (human approval required, D-005) ----------------
+/VISION.md                          @VladimirLi
+/ROADMAP.md                         @VladimirLi
+/AGENTS.md                          @VladimirLi
+/DESIGN_SYSTEM.md                   @VladimirLi
+/docs/adr/                          @VladimirLi
+/docs/discovery/                    @VladimirLi
+/openspec/specs/                    @VladimirLi
+
+# --- Guardrails (separate change, independent review, D-035/D-036) -----------
+/.github/workflows/                 @VladimirLi
+/.dependency-cruiser.cjs            @VladimirLi
+/biome.json                         @VladimirLi
+/tsconfig.base.json                 @VladimirLi
+/vitest.config.ts                   @VladimirLi
+/playwright.config.ts               @VladimirLi
+/.secretlintrc.json                 @VladimirLi
+/commitlint.config.js               @VladimirLi
+/scripts/                           @VladimirLi
+/pnpm-workspace.yaml                @VladimirLi
+/.husky/                            @VladimirLi
+
+# --- Security and privacy controls -------------------------------------------
+/SECURITY.md                        @VladimirLi
+/OBSERVABILITY.md                   @VladimirLi
+/ENGINEERING.md                     @VladimirLi
+/docs/license-policy.md             @VladimirLi
+/docs/external-gates.md             @VladimirLi
+/packages/observability/src/allowlist.ts  @VladimirLi
+
+# --- Lockfile: a silent change here is a supply-chain change ------------------
+/pnpm-lock.yaml                     @VladimirLi
