@@ -1,0 +1,27 @@
+{
+  "name": "@workout/application",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "description": "Use cases and provider-neutral ports. Declares ports; never imports an adapter.",
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc --build"
+  },
+  "dependencies": {
+    "@workout/domain": "workspace:*",
+    "@workout/contracts": "workspace:*"
+  }
+}
