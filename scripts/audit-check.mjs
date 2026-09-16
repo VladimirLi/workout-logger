@@ -12,9 +12,28 @@
  * is worse than no check at all. The rules live in audit-report.mjs.
  */
 import { spawnSync } from 'node:child_process';
-import { interpretAudit } from './audit-report.mjs';
+import { AUDIT_ARGS, auditConfigProblem, interpretAudit } from './audit-report.mjs';
 
-const run = spawnSync('pnpm', ['audit', '--json'], {
+const config = spawnSync('pnpm', ['config', 'get', '--json', 'auditConfig'], { encoding: 'utf8' });
+const configText = (config.stdout ?? '').trim();
+let auditConfig;
+try {
+  auditConfig =
+    configText === '' || configText === 'undefined' ? undefined : JSON.parse(configText);
+} catch {
+  console.error(`audit-check: FAILED — could not read the effective auditConfig: ${configText}`);
+  process.exit(1);
+}
+const configProblem = auditConfigProblem(auditConfig);
+if (config.status !== 0 || configProblem) {
+  console.error(
+    `audit-check: FAILED — ${configProblem ?? 'could not read the effective auditConfig'}.`,
+  );
+  console.error('Silencing an advisory is a guardrail decision (SECURITY.md), not configuration.');
+  process.exit(1);
+}
+
+const run = spawnSync('pnpm', [...AUDIT_ARGS], {
   encoding: 'utf8',
   maxBuffer: 64 * 1024 * 1024,
   stdio: ['ignore', 'pipe', 'pipe'],

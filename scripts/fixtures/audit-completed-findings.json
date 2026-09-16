@@ -1,0 +1,109 @@
+{
+  "advisories": {
+    "910001": {
+      "findings": [
+        {
+          "version": "4.6.5",
+          "paths": [
+            ".>@fission-ai/openspec>zod",
+            "apps__mcp>@modelcontextprotocol/sdk>zod",
+            "apps__mcp>@modelcontextprotocol/sdk>zod-to-json-schema>zod",
+            "apps__mcp>zod",
+            "packages__contracts>zod"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 910001,
+      "title": "Synthetic high advisory",
+      "module_name": "zod",
+      "vulnerable_versions": "<=4.6.5",
+      "patched_versions": ">=4.6.6",
+      "severity": "high",
+      "cwe": "CWE-20",
+      "github_advisory_id": "GHSA-synthetic-high",
+      "url": "https://example.invalid/GHSA-synthetic-high"
+    },
+    "910002": {
+      "findings": [
+        {
+          "version": "16.3.5",
+          "paths": ["apps__web>next"],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 910002,
+      "title": "Synthetic moderate advisory",
+      "module_name": "next",
+      "vulnerable_versions": "<=16.3.5",
+      "patched_versions": ">=16.3.6",
+      "severity": "moderate",
+      "cwe": "CWE-79",
+      "github_advisory_id": "GHSA-synthetic-moderate",
+      "url": "https://example.invalid/GHSA-synthetic-moderate"
+    },
+    "910003": {
+      "findings": [
+        {
+          "version": "19.3.0",
+          "paths": [
+            "apps__web>next>react",
+            "apps__web>next>react-dom>react",
+            "apps__web>next>styled-jsx>react",
+            "apps__web>react",
+            "apps__web>react-dom>react"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 910003,
+      "title": "Synthetic critical advisory",
+      "module_name": "react",
+      "vulnerable_versions": "<=19.3.0",
+      "patched_versions": ">=19.3.1",
+      "severity": "critical",
+      "cwe": "CWE-94",
+      "github_advisory_id": "GHSA-synthetic-critical",
+      "url": "https://example.invalid/GHSA-synthetic-critical"
+    },
+    "910004": {
+      "findings": [
+        {
+          "version": "1.0.30001810",
+          "paths": ["apps__web>next>caniuse-lite"],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 910004,
+      "title": "Synthetic info advisory",
+      "module_name": "caniuse-lite",
+      "vulnerable_versions": "<=1.0.30001810",
+      "patched_versions": ">=1.0.30001811",
+      "severity": "info",
+      "cwe": "",
+      "github_advisory_id": "GHSA-synthetic-info",
+      "url": "https://example.invalid/GHSA-synthetic-info"
+    }
+  },
+  "metadata": {
+    "vulnerabilities": {
+      "info": 1,
+      "low": 0,
+      "moderate": 1,
+      "high": 1,
+      "critical": 1
+    },
+    "dependencies": 110,
+    "devDependencies": 342,
+    "optionalDependencies": 43,
+    "totalDependencies": 460
+  }
+}
