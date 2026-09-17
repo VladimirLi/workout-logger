@@ -78,6 +78,11 @@ export default defineConfig({
     },
   },
   use: {
+    // Text antialiasing must not depend on timing. Chromium decides per paint whether to use LCD
+    // subpixel antialiasing, so under load the same page rendered a coloured fringe on the first
+    // glyph of a line in one render and none in the next - two or three pixels, found by the
+    // repeatability proof in the CI container. Grayscale antialiasing is deterministic.
+    launchOptions: { args: ['--disable-lcd-text'] },
     baseURL: BASE_URL,
     trace: 'on-first-retry',
     // Pinned so a screenshot or a date-dependent assertion cannot drift with the
