@@ -1,0 +1,90 @@
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-block-size: var(--target-row);
+  padding-block: var(--space-2);
+  border-block-end: var(--border-width) solid var(--color-border);
+}
+
+.text {
+  display: grid;
+  flex: 1;
+  min-inline-size: 0;
+}
+
+.label {
+  font-weight: var(--font-weight-label);
+  cursor: pointer;
+}
+
+.helper {
+  margin: 0;
+  color: var(--color-ink-muted);
+  font-size: var(--font-size-label);
+  line-height: var(--line-height-label);
+}
+
+.state {
+  color: var(--color-ink);
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-label);
+}
+
+/* The input is the 44 px target; ::before draws the track and ::after the thumb. */
+.switch {
+  appearance: none;
+  position: relative;
+  flex: none;
+  inline-size: calc(var(--space-7) + var(--space-2));
+  block-size: var(--target-min);
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.switch::before {
+  content: "";
+  position: absolute;
+  inset-block: var(--space-2);
+  inset-inline: var(--space-1);
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-sunken);
+}
+
+.switch::after {
+  content: "";
+  position: absolute;
+  inset-block: calc(var(--space-3) + var(--border-width));
+  inset-inline-start: calc(var(--space-2) + var(--border-width));
+  aspect-ratio: 1;
+  border-radius: var(--radius-pill);
+  background: var(--color-ink-muted);
+  transition: transform var(--motion-fast) var(--ease-standard);
+}
+
+/* principles.accent-budget: the on state is ink, not accent; the words say On. */
+.switch:checked::before {
+  border-color: var(--color-ink);
+  background: var(--color-ink);
+}
+
+.switch:checked::after {
+  background: var(--color-bg);
+  transform: translateX(var(--space-5));
+}
+
+.switch:checked:dir(rtl)::after {
+  transform: translateX(calc(-1 * var(--space-5)));
+}
+
+@media (forced-colors: active) {
+  .switch::before {
+    border-color: CanvasText;
+  }
+
+  .switch:checked::after {
+    background: Highlight;
+  }
+}

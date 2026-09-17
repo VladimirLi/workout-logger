@@ -1,0 +1,77 @@
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-block-size: var(--target-min);
+  min-inline-size: var(--target-min);
+  padding-block: var(--space-2);
+  padding-inline: var(--space-4);
+  border: var(--border-width) solid transparent;
+  border-radius: var(--radius-control);
+  font: inherit;
+  font-weight: var(--font-weight-label);
+  line-height: var(--line-height-label);
+  text-align: center;
+  cursor: pointer;
+  transition:
+    background-color var(--motion-fast) var(--ease-standard),
+    color var(--motion-fast) var(--ease-standard);
+}
+
+.button[data-size="lg"] {
+  min-block-size: calc(var(--target-workout) + var(--space-2));
+  padding-inline: var(--space-5);
+  font-size: var(--font-size-title);
+  font-weight: var(--font-weight-heading);
+}
+
+.button[data-expand] {
+  inline-size: 100%;
+}
+
+.button[data-variant="primary"] {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+.button[data-variant="secondary"] {
+  background: var(--color-surface-sunken);
+  color: var(--color-ink);
+}
+
+.button[data-variant="tertiary"] {
+  background: transparent;
+  color: var(--color-accent);
+  padding-inline: var(--space-2);
+}
+
+@media (hover: hover) {
+  .button[data-variant="primary"]:hover {
+    background: var(--color-accent-hover);
+  }
+
+  .button[data-variant="tertiary"]:hover {
+    text-decoration: underline;
+    text-underline-offset: var(--space-1);
+  }
+}
+
+.button[data-variant="primary"]:active {
+  background: var(--color-accent-pressed);
+}
+
+.button[aria-busy="true"] {
+  cursor: progress;
+}
+
+@media (forced-colors: active) {
+  .button {
+    border-color: ButtonText;
+  }
+
+  .button[data-variant="tertiary"] {
+    border-color: transparent;
+    text-decoration: underline;
+  }
+}

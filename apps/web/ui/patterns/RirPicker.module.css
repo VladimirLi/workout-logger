@@ -1,0 +1,59 @@
+.picker {
+  position: relative;
+  display: grid;
+  gap: var(--space-1);
+  justify-items: start;
+}
+
+.picker > fieldset {
+  justify-self: stretch;
+}
+
+.help {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-block-size: var(--target-min);
+  padding-inline: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-accent);
+  font: inherit;
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-label);
+  text-decoration: underline;
+  text-underline-offset: var(--space-1);
+  cursor: pointer;
+}
+
+.mapping {
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.mapping th,
+.mapping td {
+  padding-block: var(--space-2);
+  padding-inline-end: var(--space-6);
+  border-block-end: var(--border-width) solid var(--color-border);
+  text-align: start;
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .picker {
+    gap: 0;
+  }
+
+  .picker p {
+    display: flex;
+    align-items: center;
+    min-block-size: var(--target-min);
+  }
+
+  /* The help button shares the helper line instead of taking its own row. */
+  .help {
+    position: absolute;
+    inset-block-end: 0;
+    inset-inline-end: 0;
+  }
+}

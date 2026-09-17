@@ -1,0 +1,21 @@
+.sync {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-label);
+  line-height: var(--line-height-label);
+}
+
+.sync[data-state="on-device"],
+.sync[data-state="offline"] {
+  color: var(--color-offline);
+}
+
+.sync[data-state="syncing"] {
+  color: var(--color-info);
+}
+
+.sync[data-state="needs-attention"] {
+  color: var(--color-warning);
+}

@@ -1,0 +1,63 @@
+.message {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: var(--border-width) solid transparent;
+  border-radius: var(--radius-control);
+  color: var(--color-ink);
+}
+
+.message > svg {
+  margin-block-start: var(--space-1);
+}
+
+.body {
+  display: grid;
+  gap: var(--space-2);
+  flex: 1;
+}
+
+.text {
+  margin: 0;
+}
+
+.message[data-tone="success"] {
+  background: var(--color-success-soft);
+}
+
+.message[data-tone="success"] > svg {
+  color: var(--color-success);
+}
+
+.message[data-tone="warning"] {
+  background: var(--color-warning-soft);
+}
+
+.message[data-tone="warning"] > svg {
+  color: var(--color-warning);
+}
+
+.message[data-tone="danger"] {
+  background: var(--color-danger-soft);
+  /* Errors add a thick border, so they differ from warnings without colour. */
+  border-inline-start: var(--space-1) solid var(--color-danger);
+}
+
+.message[data-tone="danger"] > svg {
+  color: var(--color-danger);
+}
+
+.message[data-tone="offline"] {
+  background: var(--color-offline-soft);
+}
+
+.message[data-tone="offline"] > svg {
+  color: var(--color-offline);
+}
+
+@media (forced-colors: active) {
+  .message {
+    border-color: CanvasText;
+  }
+}

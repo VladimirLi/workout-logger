@@ -1,0 +1,98 @@
+.stepper {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.label {
+  color: var(--color-ink);
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-label);
+  line-height: var(--line-height-label);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: var(--target-workout) 1fr var(--target-workout);
+  align-items: center;
+  gap: var(--target-gap);
+}
+
+.button {
+  display: grid;
+  place-items: center;
+  inline-size: var(--target-workout);
+  block-size: var(--target-workout);
+  padding: 0;
+  border: var(--border-width) solid transparent;
+  border-radius: var(--radius-control);
+  background: var(--color-surface-raised);
+  color: var(--color-ink);
+  cursor: pointer;
+}
+
+.button:active {
+  background: var(--color-bg);
+}
+
+.value {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: var(--space-1);
+  min-inline-size: 0;
+  min-block-size: var(--target-workout);
+  padding-inline: var(--space-2);
+  border-radius: var(--radius-control);
+  color: var(--color-ink);
+}
+
+.value:focus-within {
+  outline: var(--focus-width) solid var(--color-focus);
+  outline-offset: var(--focus-offset);
+}
+
+.input {
+  inline-size: 5ch;
+  min-inline-size: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--font-size-heading);
+  font-weight: var(--font-weight-heading);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--target-workout);
+  text-align: end;
+}
+
+.input:focus-visible {
+  outline: none;
+}
+
+.unit {
+  color: var(--color-ink-muted);
+  font-size: var(--font-size-body);
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .stepper {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: var(--space-2);
+  }
+
+  .row {
+    grid-template-columns: var(--target-workout) minmax(0, 8ch) var(--target-workout);
+  }
+}
+
+@media (forced-colors: active) {
+  .button {
+    border-color: ButtonText;
+  }
+
+  .value:focus-within {
+    outline-color: Highlight;
+  }
+}

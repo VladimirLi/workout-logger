@@ -1,0 +1,30 @@
+.surface {
+  border-radius: var(--radius-card);
+  padding: var(--space-4);
+  min-inline-size: 0;
+}
+
+.surface[data-tone="card"] {
+  background: var(--color-surface-raised);
+}
+
+.surface[data-tone="panel"] {
+  background: var(--color-surface-sunken);
+}
+
+.surface[data-tone="plain"] {
+  background: var(--color-surface);
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .surface {
+    padding: var(--space-2);
+  }
+}
+
+@media (forced-colors: active) {
+  .surface[data-tone="card"],
+  .surface[data-tone="panel"] {
+    border: var(--border-width) solid CanvasText;
+  }
+}
