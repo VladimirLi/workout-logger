@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { evaluateException, reviewDateStatus } from './license-exceptions.mjs';
 
@@ -161,30 +162,14 @@ describe('guardrail list consistency', () => {
 
 describe('design system gate', () => {
   const designSystem = readFileSync('DESIGN_SYSTEM.md', 'utf8');
+  const accepted = /^\*\*Status: Accepted\b/m.test(designSystem);
 
-  it('is still marked NOT DECIDED, which blocks substantive UI work', () => {
-    // When the design system is accepted, this test is updated in the same change
-    // that records the decision - deliberately, so acceptance is never silent.
-    expect(designSystem).toContain('Status: NOT DECIDED');
-  });
-
-  it('marks every design area as pending', () => {
-    for (const area of [
-      'Design tokens',
-      'Color',
-      'Typography',
-      'Spacing',
-      'Iconography',
-      'Motion',
-      'Component inventory',
-      'Interaction states',
-      'Charts and data display',
-      'Content voice',
-      'Responsive behavior',
-      'Visual-regression baselines',
-    ]) {
-      expect(designSystem, `DESIGN_SYSTEM.md does not mark "${area}"`).toContain(area);
-    }
+  it('records exactly one status: NOT DECIDED or Accepted', () => {
+    // Acceptance flips the branch below. It cannot happen quietly: the accepted branch
+    // demands the owner's verbatim decision payload, a trace for every decision in it,
+    // and the superseding ADR.
+    const undecided = designSystem.includes('Status: NOT DECIDED');
+    expect(Number(undecided) + Number(accepted), 'DESIGN_SYSTEM.md status').toBe(1);
   });
 
   it('selects no UI framework anywhere in the web app', () => {
@@ -194,6 +179,117 @@ describe('design system gate', () => {
         forbidden,
       );
     }
+  });
+
+  describe.runIf(!accepted)('while NOT DECIDED', () => {
+    it('marks every design area as pending', () => {
+      for (const area of [
+        'Design tokens',
+        'Color',
+        'Typography',
+        'Spacing',
+        'Iconography',
+        'Motion',
+        'Component inventory',
+        'Interaction states',
+        'Charts and data display',
+        'Content voice',
+        'Responsive behavior',
+        'Visual-regression baselines',
+      ]) {
+        expect(designSystem, `DESIGN_SYSTEM.md does not mark "${area}"`).toContain(area);
+      }
+    });
+  });
+
+  describe.runIf(accepted)('once Accepted', () => {
+    const PAYLOAD = 'docs/design-system/decision-payload.txt';
+    const MATRIX = 'docs/design-system/decision-matrix.md';
+
+    function payload() {
+      const [header, json] = readFileSync(PAYLOAD, 'utf8').split('\n');
+      return {
+        header,
+        body: JSON.parse(json ?? '') as {
+          schema: string;
+          counts: Record<string, number>;
+          selections: Record<string, string>;
+          deferred: unknown[];
+          unresolved: unknown[];
+        },
+      };
+    }
+
+    it('keeps the owner decision payload verbatim and complete', () => {
+      const { header, body } = payload();
+      expect(header).toBe('WORKOUT LOGGER DESIGN-SYSTEM DECISIONS');
+      expect(body.schema).toBe('wl-ds-workbook/v1');
+      expect(Object.keys(body.selections)).toHaveLength(65);
+      expect(body.counts).toEqual({ selected: 65, unresolved: 0, deferred: 0, total: 65 });
+      expect(body.deferred).toEqual([]);
+      expect(body.unresolved).toEqual([]);
+      for (const [decision, option] of Object.entries(body.selections)) {
+        expect(option.startsWith(`${decision}.`), `${option} does not answer ${decision}`).toBe(
+          true,
+        );
+      }
+    });
+
+    it('pins the payload bytes by digest in DESIGN_SYSTEM.md', () => {
+      const digest = createHash('sha256').update(readFileSync(PAYLOAD)).digest('hex');
+      expect(designSystem, 'DESIGN_SYSTEM.md does not record the payload digest').toContain(digest);
+    });
+
+    it('traces every selected option in DESIGN_SYSTEM.md and the decision matrix', () => {
+      const matrix = readFileSync(MATRIX, 'utf8');
+      for (const option of Object.values(payload().body.selections)) {
+        expect(designSystem, `DESIGN_SYSTEM.md does not trace ${option}`).toContain(option);
+        const row = matrix.split('\n').find((line) => line.includes(`\`${option}\``));
+        expect(row, `${MATRIX} has no row for ${option}`).toBeDefined();
+        // Every row names where the decision lives and what proves it.
+        expect(row?.split('|').filter((cell) => cell.trim() !== '').length).toBeGreaterThanOrEqual(
+          4,
+        );
+      }
+    });
+
+    it('names no option the owner did not select', () => {
+      const selected = new Set(Object.values(payload().body.selections));
+      const matrix = readFileSync(MATRIX, 'utf8');
+      const traced = [...matrix.matchAll(/`([a-z0-9-]+\.[a-z0-9-]+\.[a-z0-9-]+)`/g)].map(
+        (match) => match[1],
+      );
+      expect(traced.filter((option) => !selected.has(option))).toEqual([]);
+    });
+
+    it('is recorded by an accepted ADR that supersedes ADR-0007', () => {
+      const index = readFileSync('docs/adr/README.md', 'utf8');
+      expect(index).toMatch(/\| \[0007\]\([^)]+\) \| [^|]+ \| Superseded by 0008 \|/);
+      expect(index).toMatch(/\| \[0008\]\([^)]+\) \| [^|]+ \| Accepted \|/);
+    });
+
+    it('does not claim G-10 closed while its validation is open', () => {
+      const gates = readFileSync('docs/external-gates.md', 'utf8');
+      const g10 = gates.slice(gates.indexOf('## G-10'), gates.indexOf('## G-11'));
+      if (/CLOSED/.test(g10)) {
+        // Closure needs recorded evidence, never an assertion.
+        for (const evidence of ['R-022', 'manual', 'proposal review', 'Linux']) {
+          expect(g10, `G-10 is closed without ${evidence} evidence`).toContain(evidence);
+        }
+        expect(g10).not.toMatch(/\bOPEN\b|not performed/);
+      }
+    });
+
+    it('runs a visual-regression gate over committed baselines', () => {
+      const verify = readFileSync('scripts/verify.mjs', 'utf8');
+      expect(verify).toContain("['test:visual', ['test:visual']]");
+      const scripts = (
+        JSON.parse(readFileSync('package.json', 'utf8')) as { scripts: Record<string, string> }
+      ).scripts;
+      // A missing baseline must fail, never be written silently during the gate.
+      expect(scripts['test:visual']).toContain('--update-snapshots=none');
+      expect(existsSync('apps/web/e2e/visual')).toBe(true);
+    });
   });
 });
 
@@ -231,6 +327,7 @@ describe('gate documentation consistency', () => {
       'test:migrations',
       'test:e2e',
       'test:a11y',
+      'test:visual',
     ]) {
       expect(gates, `verify does not run ${required}`).toContain(required);
     }

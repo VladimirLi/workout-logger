@@ -25,6 +25,9 @@ export default defineConfig({
             'packages/observability/src/**/*.test.ts',
             'packages/adapters-supabase/src/**/*.test.ts',
             'apps/mcp/src/**/*.test.ts',
+            // Design tokens, presentation primitives, and formatters (ADR-0008).
+            'apps/web/tokens/**/*.test.ts',
+            'apps/web/ui/**/*.test.ts',
             'scripts/**/*.test.ts',
           ],
           environment: 'node',
