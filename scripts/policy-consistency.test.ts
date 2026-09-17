@@ -152,10 +152,55 @@ describe('guardrail list consistency', () => {
     ).toBe(true);
   });
 
-  it('runs the separation audit in CI without going through a pnpm script', () => {
-    // pnpm would read the command from package.json, which the audit exists to protect.
+  describe('the CI separation audit', () => {
     const workflow = readFileSync('.github/workflows/verify.yml', 'utf8');
-    expect(workflow).toContain('node scripts/check-guardrails.mjs --range HEAD');
+    /**
+     * The job's steps in order. Split on the step marker rather than parsed as YAML, because
+     * adding a YAML parser to run one policy test would add a dependency to the licence
+     * ledger; the marker is stable and the shape is asserted below.
+     */
+    const steps = workflow.split(/^ {6}- name: /m).slice(1);
+    const auditIndex = steps.findIndex((step) => step.includes('check-guardrails.mjs --range'));
+
+    it('reads the whole history, and does it without going through a pnpm script', () => {
+      // pnpm would read the command from package.json, which the audit exists to protect.
+      expect(workflow).toContain('node scripts/check-guardrails.mjs --range HEAD');
+      expect(workflow).toContain('fetch-depth: 0');
+      expect(steps.length).toBeGreaterThanOrEqual(5);
+      expect(auditIndex).toBeGreaterThanOrEqual(0);
+    });
+
+    it('runs before any dependency is installed or any repository hook can execute', () => {
+      // `pnpm install` runs the root `prepare` hook and installed packages' build scripts,
+      // all controlled by the commit under test. Auditing after that would let a change
+      // that weakens this check run code first.
+      expect(auditIndex).toBe(1);
+      expect(steps[0], 'the first step is not the checkout').toContain('actions/checkout');
+
+      const before = steps.slice(0, auditIndex).join('\n');
+      for (const marker of [
+        'pnpm install',
+        'pnpm/action-setup',
+        'actions/setup-node',
+        'corepack',
+        'npm ci',
+        'run: pnpm',
+      ]) {
+        expect(before, `${marker} runs before the separation audit`).not.toContain(marker);
+      }
+    });
+
+    it('can run on a bare checkout, because the script imports only Node built-ins', () => {
+      // The ordering above is only possible while this holds. A single package import would
+      // make the step need an install, and the install is what it must precede.
+      const source = readFileSync('scripts/check-guardrails.mjs', 'utf8');
+      const specifiers = [...source.matchAll(/^import\s[^']*'([^']+)'/gm)].map((match) => match[1]);
+      expect(specifiers.length).toBeGreaterThan(0);
+      for (const specifier of specifiers) {
+        expect(specifier, `${specifier} is not a Node built-in`).toMatch(/^node:/);
+      }
+      expect(source).not.toMatch(/\brequire\(/);
+    });
   });
 
   it('protects the whole observability package, not just the allowlist', () => {

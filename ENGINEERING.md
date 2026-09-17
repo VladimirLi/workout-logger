@@ -145,6 +145,11 @@ The rule is enforced at two units, because before a remote exists only one of th
   resolution it introduced — so an evil merge that widens a gate while editing the code that
   gate judges fails, while a merge that only brings two separated commits together passes.
 
+CI runs the commit check as its **first step after checkout**, as `node` rather than `pnpm`:
+before any dependency is installed and before the root `prepare` hook or any installed
+package's build script can run, all of which the commit under test controls. The script imports
+only Node built-ins so that this ordering is possible.
+
 The commit check is strictly the stricter of the two: a history that passes it can still fail
 the branch check, and must. Note the consequence for reading history — a range of commits
 diffed **as one change** will show guardrail and product files together whenever it contains
