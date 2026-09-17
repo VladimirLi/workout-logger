@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test } from '@playwright/test';
+import { expect, type Page, test } from '@playwright/test';
 import { openStory, stories } from './routes';
 
 /**
@@ -67,22 +67,39 @@ test('every story renders without an error', async ({ page }) => {
   expect(failures).toEqual([]);
 });
 
-for (const width of [375, 1280]) {
-  test(`@a11y every story passes every axe rule in both themes at ${width} px`, async ({
-    page,
-  }) => {
-    test.setTimeout(300_000);
-    await page.setViewportSize({ width, height: width === 375 ? 667 : 800 });
+/**
+ * Storybook's accessibility addon runs axe in the story frame by itself. Waiting until that run is
+ * idle before starting ours avoids "Axe is already running" on a slow machine.
+ */
+async function analyzeWhenIdle(page: Page) {
+  await page.waitForFunction(() => !(window as { axe?: { _running?: boolean } }).axe?._running);
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await new AxeBuilder({ page }).analyze();
+    } catch (error) {
+      if (attempt >= 5 || !String(error).includes('Axe is already running')) throw error;
+      await page.waitForFunction(() => !(window as { axe?: { _running?: boolean } }).axe?._running);
+    }
+  }
+}
+
+// One test per story, so a slow machine cannot time out the whole scan and a failure names it.
+for (const { id } of stories()) {
+  test(`@a11y ${id} passes every axe rule in both themes at 375 and 1280 px`, async ({ page }) => {
     // Colour transitions would otherwise be measured part-way through a theme change.
     await page.emulateMedia({ reducedMotion: 'reduce' });
     const violations: string[] = [];
-    for (const theme of ['light', 'dark'] as const) {
-      for (const { id } of stories()) {
+    for (const [width, height] of [
+      [375, 667],
+      [1280, 800],
+    ] as const) {
+      await page.setViewportSize({ width, height });
+      for (const theme of ['light', 'dark'] as const) {
         await openStory(page, id, theme);
         await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
-        const results = await new AxeBuilder({ page }).analyze();
+        const results = await analyzeWhenIdle(page);
         for (const violation of results.violations) {
-          violations.push(`${theme} ${id}: ${violation.id} (${violation.nodes.length})`);
+          violations.push(`${width} ${theme}: ${violation.id} (${violation.nodes.length})`);
         }
       }
     }
