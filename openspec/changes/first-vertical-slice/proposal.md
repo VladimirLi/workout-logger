@@ -8,17 +8,22 @@ telemetry privacy, proposal staleness, and typed measurements. None of it is rea
 user. There is no persistence, no authentication, no offline queue, and no serving MCP
 endpoint.
 
-**This change is specified and mostly not implemented.** 12 of 61 tasks are done: the domain
-and application layer of section 1 (1.1–1.6), and the parts of section 4's offline durability
-that need no server and no credentials — client-generated idempotency keys (4.2), per-entity
-ordered draining (4.4), capped exponential backoff with full jitter honouring `Retry-After`
-(4.5), retry classification (4.6), the atomic IndexedDB outbox (4.1), and the guarantee that
-nothing discards a queued mutation (4.11). The delivery policy is in
-`packages/application/src/delivery.ts` over the ports in `offline-ports.ts`, proved against the
-in-memory store; the device store is `packages/adapters-browser`, proved in Chromium against
-real IndexedDB by the same contract cases. Everything else below is unchecked, and that is an
-accurate statement of the repository's state: there is still no server persistence, no
-authentication, no UI for the journeys, and no serving MCP endpoint.
+**This change is partly implemented.** 21 of 61 tasks are done, and none of them is
+user-reachable behaviour.
+
+Done: the domain and application layer (1.1–1.6); the device side of offline durability — the
+atomic IndexedDB outbox (4.1), client-generated idempotency keys (4.2), per-entity ordered
+draining (4.4), capped backoff with full jitter (4.5), retry classification (4.6), every flush
+trigger the spec names (4.7), the pre-destructive export (4.9), and the guarantee that nothing
+discards a queued mutation (4.11); export and import (8.1, 8.2); the initial schema migration
+with row-level security, grants, and indexed policy predicates, checked statically (2.1, 2.2,
+2.4); and the credential policy checks that need no credential to run (2.7, 3.5).
+
+Not done, and not claimed: there is no server, no authentication, no screen, no route, no
+stored row, and no serving MCP endpoint. The schema has never been applied to a database. The
+flush trigger for an authentication refresh is a method nothing calls yet. Sections 5 and 7
+need a decision about identity before the device work can become a reachable product — see
+"Blocked" below.
 
 Serves: D-003, D-004, D-011, D-012, D-015, D-016, D-017, D-018, D-019, D-020, D-021, D-022,
 D-023, D-024, R-003, R-008, R-009, R-010, R-013, R-014, R-020, R-021.
@@ -63,8 +68,16 @@ cases; `packages/domain` gains plan and session aggregates.
 the existing port contract suites.
 
 **Blocked on external gates.** G-2 (Supabase project), G-3 (production domain and WebAuthn
-relying-party ID — a one-way door before any passkey enrollment), G-4 (hosting). Sections 2
-onward cannot be implemented until G-2 closes.
+relying-party ID — a one-way door before any passkey enrollment), G-4 (hosting). Everything in
+sections 2 and 3 that needs a running service is blocked on those; what could be proved
+statically or on the device has been.
+
+**Blocked on a product decision: what identity the device writes under.** The device store,
+the outbox, and the export are all keyed by user. Authentication is blocked on G-2 and G-4, so
+there is no signed-in user to key them by, and nothing here decides whether the application is
+usable before sign-in or what happens to device-local data when an account is first used.
+Sections 5 and 7 build screens that must write under some identity, so they wait on that answer
+rather than inventing one.
 
 **Depends on the design system.** Every task that renders substantive UI builds on
 `DESIGN_SYSTEM.md`, which is `Accepted` (ADR-0008, change `decide-design-system`). Those tasks
@@ -74,9 +87,9 @@ agent-proposals specification requires as reference-screen stories with baseline
 review UX richer than that minimum is a first-slice decision that has not been made. Validating the journeys with the target user (R-022)
 happens here and closes part of gate G-10.
 
-**Not claimed:** no user-reachable behaviour in this change is implemented. What is done is the
-domain, application, and offline-delivery policy named under "Why" — code below the presentation
-and provider boundaries, proved by the unit and integration gates against in-memory ports. No
-screen, no route, no stored row, no login, no queued mutation on a real device, and no MCP
-response exists yet. The proposal, specs, and tasks exist so the rest is reviewable before it
-starts.
+**Not claimed:** no user-reachable behaviour in this change is implemented. What is done sits
+below the presentation boundary: the domain, the use cases, the device store and its outbox,
+and export. The device work is proved in a real browser against real IndexedDB, not simulated,
+but nothing in the product reaches it — there is no screen, no route, no stored row on a
+server, no login, and no MCP response. The proposal, specs, and tasks exist so the rest is
+reviewable before it starts.
