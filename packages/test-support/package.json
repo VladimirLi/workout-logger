@@ -29,6 +29,7 @@
     "vitest": "catalog:"
   },
   "devDependencies": {
+    "@types/node": "catalog:",
     "vitest": "catalog:"
   }
 }
