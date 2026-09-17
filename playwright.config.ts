@@ -17,6 +17,15 @@ import { defineConfig, devices } from '@playwright/test';
  */
 const PORT = 3100;
 
+/**
+ * The design-system lab is the static Storybook build (ADR-0010). Visual, accessibility, and
+ * behaviour checks of components and reference screens load its story iframes from here.
+ * Exposed to tests as STORYBOOK_URL.
+ */
+const STORYBOOK_PORT = 6106;
+const STORYBOOK_URL = `http://127.0.0.1:${STORYBOOK_PORT}`;
+process.env['STORYBOOK_URL'] = STORYBOOK_URL;
+
 const PHONE_SMALL = { width: 375, height: 667 };
 const PHONE_LARGE = { width: 412, height: 915 };
 const WIDE = { width: 1280, height: 800 };
@@ -84,14 +93,25 @@ export default defineConfig({
     },
     ...VISUAL_PROJECTS,
   ],
-  webServer: {
-    // Production build, because a dev-server-only pass proves less than nothing
-    // about what ships.
-    command: 'pnpm --filter @workout/web exec next start --port 3100',
-    url: BASE_URL,
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-    stdout: 'pipe',
-    stderr: 'pipe',
-  },
+  webServer: [
+    {
+      // Production build, because a dev-server-only pass proves less than nothing
+      // about what ships.
+      command: 'pnpm --filter @workout/web exec next start --port 3100',
+      url: BASE_URL,
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    },
+    {
+      // The built lab, never a dev server: `pnpm storybook:build` runs before the browser gates.
+      command: `node scripts/serve-static.mjs apps/web/storybook-static ${STORYBOOK_PORT}`,
+      url: `${STORYBOOK_URL}/index.json`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 30_000,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    },
+  ],
 });
