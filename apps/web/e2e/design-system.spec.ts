@@ -2,8 +2,8 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
 import { expect, type Page, test } from '@playwright/test';
-import { FIXED_NOW, REST } from '../ui/lab/fixtures';
-import { ALL_ROUTES, SCREEN_ROUTES } from './routes';
+import { FIXED_NOW, REST } from '../ui/reference/fixtures';
+import { isReferenceScreen, openStory, SCREEN, SHELL_ROUTES, stories } from './routes';
 
 /**
  * Behaviour the accepted design system promises (DESIGN_SYSTEM.md, ADR-0008). Pixels are
@@ -19,7 +19,7 @@ const background = (page: Page) =>
 test.describe('theme (theme.first-visit.light-then-choice)', () => {
   test('a first visit is light even when the OS prefers dark', async ({ page }) => {
     await page.emulateMedia({ colorScheme: 'dark' });
-    await page.goto('/lab/screens/plan');
+    await page.goto('/');
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
     expect(await background(page)).toBe(LIGHT_BG);
   });
@@ -29,7 +29,7 @@ test.describe('theme (theme.first-visit.light-then-choice)', () => {
     // the theme, so a pass here means there is no light flash waiting for hydration.
     await page.route('**/_next/static/**/*.js', (route) => route.abort());
     await page.addInitScript(() => window.localStorage.setItem('wl-theme', 'dark'));
-    await page.goto('/lab/screens/plan');
+    await page.goto('/');
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
     expect(await background(page)).toBe(DARK_BG);
     await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#101311');
@@ -38,7 +38,7 @@ test.describe('theme (theme.first-visit.light-then-choice)', () => {
   test('System follows the OS preference, including a change mid-session', async ({ page }) => {
     await page.addInitScript(() => window.localStorage.setItem('wl-theme', 'system'));
     await page.emulateMedia({ colorScheme: 'dark' });
-    await page.goto('/lab/screens/plan');
+    await page.goto('/');
     expect(await background(page)).toBe(DARK_BG);
     await page.emulateMedia({ colorScheme: 'light' });
     expect(await background(page)).toBe(LIGHT_BG);
@@ -53,13 +53,13 @@ test.describe('theme (theme.first-visit.light-then-choice)', () => {
       .toEqual({ scheme: 'light', meta: '#EDF0EC' });
   });
 
-  test('the Settings choice persists across a reload', async ({ page }) => {
-    await page.goto('/lab/screens/settings');
+  test('the Settings choice applies at once and is stored for the next visit', async ({ page }) => {
+    await openStory(page, SCREEN.settings);
     await page.getByRole('radio', { name: 'Dark' }).check();
     expect(await background(page)).toBe(DARK_BG);
+    expect(await page.evaluate(() => window.localStorage.getItem('wl-theme'))).toBe('dark');
     await page.reload();
     await expect(page.getByRole('radio', { name: 'Dark' })).toBeChecked();
-    expect(await background(page)).toBe(DARK_BG);
   });
 });
 
@@ -67,7 +67,7 @@ test.describe('controls', () => {
   test('the load stepper steps by 2.5 kg, reads in words, and accepts a typed decimal comma', async ({
     page,
   }) => {
-    await page.goto('/lab/screens/set-focus');
+    await openStory(page, SCREEN.setFocus);
     const load = page.getByRole('spinbutton', { name: 'Load' });
     await expect(load).toHaveAttribute('aria-valuetext', '80 kilograms');
     await page.getByRole('button', { name: 'Increase load' }).click();
@@ -84,7 +84,7 @@ test.describe('controls', () => {
   test('RIR is a radio group operated with arrow keys, with a visible check on the choice', async ({
     page,
   }) => {
-    await page.goto('/lab/screens/set-focus');
+    await openStory(page, SCREEN.setFocus);
     const two = page.getByRole('radio', { name: '2' });
     await expect(two).toBeChecked();
     await two.focus();
@@ -95,7 +95,7 @@ test.describe('controls', () => {
   });
 
   test('the RIR help sheet traps focus, closes on Escape, and returns focus', async ({ page }) => {
-    await page.goto('/lab/screens/set-focus');
+    await openStory(page, SCREEN.setFocus);
     const trigger = page.getByRole('button', { name: 'What is RIR?' });
     await trigger.click();
     const sheet = page.getByRole('dialog', { name: 'RIR: reps in reserve' });
@@ -110,19 +110,19 @@ test.describe('controls', () => {
   });
 
   test('the phone back gesture closes the sheet before leaving the screen', async ({ page }) => {
-    await page.goto('/lab/screens/set-focus');
+    await openStory(page, SCREEN.setFocus);
     await page.getByRole('button', { name: 'What is RIR?' }).click();
     await expect(page.getByRole('dialog')).toBeVisible();
     await page.goBack();
     await expect(page.getByRole('dialog')).toBeHidden();
-    expect(new URL(page.url()).pathname).toBe('/lab/screens/set-focus');
+    expect(new URL(page.url()).searchParams.get('id')).toBe(SCREEN.setFocus);
   });
 
   test('logging a set crossfades to rest in place, checks the pill, and moves focus', async ({
     page,
   }) => {
     await page.clock.setFixedTime(FIXED_NOW);
-    await page.goto('/lab/screens/set-focus');
+    await openStory(page, SCREEN.setFocus);
     const status = page
       .locator('[role="status"]')
       .filter({ hasText: /^$|Set 2 saved/ })
@@ -136,7 +136,7 @@ test.describe('controls', () => {
       .locator('[data-leaving]')
       .evaluate((element) => getComputedStyle(element).animationName)
       .catch(() => 'already gone');
-    expect(leaving).toMatch(/leave$|^already gone$/);
+    expect(leaving).toMatch(/leave|^already gone$/);
     await expect(page.getByRole('heading', { level: 1, name: 'Rest' })).toBeFocused();
     await expect(status).toHaveText('Set 2 saved. Rest 1:30.');
     await expect(page.getByText('Set 2, done')).toBeAttached();
@@ -144,11 +144,11 @@ test.describe('controls', () => {
       .locator('[data-entering]')
       .evaluate((element) => getComputedStyle(element).animationDuration);
     expect(entering).toBe('0.1s');
-    expect(new URL(page.url()).pathname).toBe('/lab/screens/set-focus');
+    expect(new URL(page.url()).searchParams.get('id')).toBe(SCREEN.setFocus);
   });
 
   test('a tap on the scrim closes the sheet', async ({ page }) => {
-    await page.goto('/lab/screens/set-focus');
+    await openStory(page, SCREEN.setFocus);
     await page.getByRole('button', { name: 'What is RIR?' }).click();
     await expect(page.getByRole('dialog')).toBeVisible();
     await page.mouse.click(20, 20);
@@ -156,7 +156,7 @@ test.describe('controls', () => {
   });
 
   test('settings switches say On or Off in words and persist', async ({ page }) => {
-    await page.goto('/lab/screens/settings');
+    await openStory(page, SCREEN.settings);
     const sound = page.getByRole('switch', { name: 'Rest end sound' });
     await expect(sound).not.toBeChecked();
     await expect(page.getByRole('switch', { name: 'Vibration' })).toBeChecked();
@@ -169,7 +169,7 @@ test.describe('controls', () => {
   test('a permanent action asks first, with a clear way out that returns focus', async ({
     page,
   }) => {
-    await page.goto('/lab/screens/settings');
+    await openStory(page, SCREEN.settings);
     const trigger = page.getByRole('button', { name: 'Delete history' });
     await trigger.click();
     const dialog = page.getByRole('dialog', { name: 'Delete all history?' });
@@ -180,7 +180,7 @@ test.describe('controls', () => {
   });
 
   test('a busy button stays focusable and says what it is doing', async ({ page }) => {
-    await page.goto('/lab/components');
+    await openStory(page, 'primitives-button--busy');
     const busy = page.getByRole('button', { name: 'Saving…' });
     await expect(busy).toHaveAttribute('aria-busy', 'true');
     await expect(busy).toBeEnabled();
@@ -191,7 +191,7 @@ test.describe('proposal review (agent-proposals spec: the user reviews proposals
   test('a pending proposal shows its base revision, diff, rationale, and creation time', async ({
     page,
   }) => {
-    await page.goto('/lab/screens/proposal-review');
+    await openStory(page, SCREEN.proposalReview);
     await expect(page.getByRole('heading', { level: 1, name: 'Plan change' })).toBeVisible();
     await expect(page.getByText('Made against plan revision 12')).toBeVisible();
     await expect(page.getByText('Created Sun 13 Sept, 09:30')).toBeVisible();
@@ -215,7 +215,7 @@ test.describe('proposal review (agent-proposals spec: the user reviews proposals
   });
 
   test('accepting a stale proposal says so, and offers nothing to apply', async ({ page }) => {
-    await page.goto('/lab/screens/proposal-stale');
+    await openStory(page, SCREEN.proposalStale);
     await expect(
       page.getByText('Out of date. The plan changed after this was made.'),
     ).toBeVisible();
@@ -230,7 +230,7 @@ test.describe('proposal review (agent-proposals spec: the user reviews proposals
 test.describe('timing', () => {
   test('undo stays for 10 seconds, and pauses while hovered', async ({ page }) => {
     await page.clock.install({ time: FIXED_NOW });
-    await page.goto('/lab/states');
+    await openStory(page, SCREEN.stateMatrix);
     const undo = page.getByRole('button', { name: 'Undo' });
     await page.clock.runFor(9_000);
     await expect(undo).toBeVisible();
@@ -246,7 +246,7 @@ test.describe('timing', () => {
     page,
   }) => {
     await page.clock.install({ time: REST.startedAt });
-    await page.goto('/lab/screens/rest');
+    await openStory(page, SCREEN.rest);
     const live = page.locator('[aria-live="polite"]');
     await expect(live).toHaveText('Rest started. 1 minute 30 seconds.');
     await page.clock.runFor(60_000);
@@ -262,8 +262,14 @@ test.describe('timing', () => {
 test.describe('preferences', () => {
   test('reduced motion makes every transition and animation instant', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    for (const route of ALL_ROUTES) {
-      await page.goto(route);
+    const targets = [
+      ...SHELL_ROUTES.map((route) => () => page.goto(route)),
+      ...stories().map((story) => () => openStory(page, story.id)),
+    ];
+    test.setTimeout(180_000);
+    for (const [index, open] of targets.entries()) {
+      await open();
+      const route = String(index);
       const slow = await page.evaluate(() =>
         [...document.querySelectorAll('*')]
           .map((element) => {
@@ -288,7 +294,7 @@ test.describe('preferences', () => {
     page,
   }) => {
     await page.emulateMedia({ forcedColors: 'active' });
-    await page.goto('/lab/components');
+    await openStory(page, 'primitives-button--hierarchy');
     const button = page.getByRole('button', { name: 'Secondary', exact: true });
     await button.focus();
     await page.keyboard.press('Shift+Tab');
@@ -302,7 +308,7 @@ test.describe('preferences', () => {
 
   test('increased contrast turns muted text into full ink', async ({ page }) => {
     await page.emulateMedia({ contrast: 'more' });
-    await page.goto('/lab/components');
+    await openStory(page, 'primitives-typography--label-muted');
     const muted = page.getByText('Label text, muted');
     const ink = await page.evaluate(() => getComputedStyle(document.body).color);
     expect(await muted.evaluate((element) => getComputedStyle(element).color)).toBe(ink);
@@ -311,7 +317,7 @@ test.describe('preferences', () => {
 
 test.describe('state distinctions (R-010)', () => {
   test('every sync state has its own icon and its own words', async ({ page }) => {
-    await page.goto('/lab/states');
+    await openStory(page, SCREEN.stateMatrix);
     const states = await page.locator('[data-state]').evaluateAll((elements) =>
       elements.map((element) => ({
         icon: element.querySelector('svg')?.getAttribute('data-icon'),
@@ -329,7 +335,7 @@ test.describe('layout', () => {
     page,
   }) => {
     await page.setViewportSize({ width: 667, height: 375 });
-    await page.goto('/lab/screens/set-focus');
+    await openStory(page, SCREEN.setFocus);
     const target = await page.getByLabel('Target').boundingBox();
     const actual = await page.getByLabel('Actual').boundingBox();
     expect(target && actual && actual.x > target.x + target.width - 1).toBe(true);
@@ -337,7 +343,7 @@ test.describe('layout', () => {
 
   test('at 667 x 375 the set screen needs no vertical scrolling', async ({ page }) => {
     await page.setViewportSize({ width: 667, height: 375 });
-    await page.goto('/lab/screens/set-focus');
+    await openStory(page, SCREEN.setFocus);
     const overflow = await page.evaluate(
       () => document.documentElement.scrollHeight - document.documentElement.clientHeight,
     );
@@ -346,22 +352,31 @@ test.describe('layout', () => {
 
   test('the content column is centred and at most 520 px on a wide screen', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
-    await page.goto('/lab/screens/history');
+    await openStory(page, SCREEN.history);
     const list = await page.getByRole('list', { name: 'Workouts' }).boundingBox();
     expect(list?.width).toBeLessThanOrEqual(520);
     expect(Math.abs((list?.x ?? 0) + (list?.width ?? 0) / 2 - 640)).toBeLessThanOrEqual(1);
   });
 
-  test('every screen names itself "Screen · Workout Logger"', async ({ page }) => {
-    for (const route of SCREEN_ROUTES) {
-      await page.goto(route);
-      await expect(page).toHaveTitle(/^.+ · Workout Logger$/);
-    }
+  test('the home route is named "Workout Logger" and other routes "Screen · Workout Logger"', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await expect(page).toHaveTitle('Workout Logger');
+    await page.goto('/offline');
+    await expect(page).toHaveTitle('Offline · Workout Logger');
   });
 
   test('layout does not shift after first paint (CLS below 0.05)', async ({ page }) => {
-    for (const route of ALL_ROUTES) {
-      await page.goto(route);
+    test.setTimeout(120_000);
+    const targets = [
+      ...SHELL_ROUTES.map((route) => ({ route, open: () => page.goto(route) })),
+      ...stories()
+        .filter(isReferenceScreen)
+        .map((story) => ({ route: story.id, open: () => openStory(page, story.id) })),
+    ];
+    for (const { route, open } of targets) {
+      await open();
       await page.waitForLoadState('networkidle');
       const shift = await page.evaluate(
         () =>
@@ -409,7 +424,7 @@ test.describe('responsiveness (performance: INP under 200 ms)', () => {
       } as PerformanceObserverInit);
     });
     await page.clock.setFixedTime(FIXED_NOW);
-    await page.goto('/lab/screens/set-focus');
+    await openStory(page, SCREEN.setFocus);
     // Without Event Timing support the measurement would pass vacuously.
     expect(
       await page.evaluate(() => PerformanceObserver.supportedEntryTypes.includes('event')),

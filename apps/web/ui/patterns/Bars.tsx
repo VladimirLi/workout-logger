@@ -55,21 +55,24 @@ export function WorkoutBar({ exercise, exercises, sync }: WorkoutBarProps) {
 
 type Tab = 'today' | 'history' | 'settings';
 
-const TABS: { id: Tab; href: Route; icon: IconName; label: string }[] = [
-  { id: 'today', href: '/lab/screens/plan', icon: 'dumbbell', label: messages.nav.today },
-  { id: 'history', href: '/lab/screens/history', icon: 'history', label: messages.nav.history },
-  { id: 'settings', href: '/lab/screens/settings', icon: 'settings', label: messages.nav.settings },
+const TABS: { id: Tab; icon: IconName; label: string }[] = [
+  { id: 'today', icon: 'dumbbell', label: messages.nav.today },
+  { id: 'history', icon: 'history', label: messages.nav.history },
+  { id: 'settings', icon: 'settings', label: messages.nav.settings },
 ];
 
+/** Where each tab goes. Product routes supply these; a reference story supplies placeholders. */
+export type TabHrefs = Readonly<Record<Tab, Route>>;
+
 /** navigation.primary.bottom-tabs: three labelled tabs, hidden during a workout. */
-export function BottomTabs({ current }: { current: Tab }) {
+export function BottomTabs({ current, hrefs }: { current: Tab; hrefs: TabHrefs }) {
   return (
     <nav className={styles.tabs} aria-label={messages.nav.label}>
       <ul className={styles.tabList}>
         {TABS.map((tab) => (
           <li key={tab.id}>
             <Link
-              href={tab.href}
+              href={hrefs[tab.id]}
               className={styles.tab}
               aria-current={tab.id === current ? 'page' : undefined}
             >

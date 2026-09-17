@@ -102,7 +102,7 @@ export const messages = {
     sessionOn: (date: string) => `Session on ${date}`,
     movesTo: (date: string) => `Moves to ${date}`,
     exercisesChange: 'Its exercises change',
-    correction: (date: string) => `Correction to the workout on ${date}`,
+    correction: 'Correction to a completed workout',
     correctedSet: (setId: string, value: string) => `Set ${setId} becomes ${value}`,
   },
 

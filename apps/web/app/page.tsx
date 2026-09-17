@@ -37,7 +37,9 @@ export default function HomePage() {
             Not built yet
           </Heading>
           <ul>
-            <li>Workout logging screens. The lab shows how they will look, with fixture data.</li>
+            <li>
+              Workout logging screens. The Storybook lab shows how they will look, with fixtures.
+            </li>
             <li>Offline logging and the transactional outbox.</li>
             <li>Authentication, persistence, and the remote MCP server.</li>
           </ul>
@@ -45,9 +47,6 @@ export default function HomePage() {
       </Surface>
 
       <ul>
-        <li>
-          <Link href="/lab">Design-system lab</Link>
-        </li>
         <li>
           <Link href="/offline">Offline fallback page</Link>
         </li>

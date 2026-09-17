@@ -94,18 +94,48 @@ describe('closed component API (tokens.component-api.closed-variants)', () => {
 });
 
 describe('screens compose the design system', () => {
-  const screens = files(join(WEB, 'app'), /\.tsx$/);
+  const routes = files(join(WEB, 'app'), /\.tsx$/);
+  const referenceScreens = files(join(WEB, 'ui', 'reference', 'screens'), /\.tsx$/).filter(
+    (file) => !file.endsWith('.stories.tsx'),
+  );
+  const importsOf = (file: string) =>
+    [...readFileSync(join(WEB, file), 'utf8').matchAll(/from '([^']+)'/g)].map(
+      (match) => match[1] ?? '',
+    );
 
-  it.each(screens.map(name))('%s imports presentation only from ui/', (file) => {
-    const source = readFileSync(join(WEB, file), 'utf8');
-    const imports = [...source.matchAll(/from '([^']+)'/g)].map((match) => match[1] ?? '');
+  it.each(routes.map(name))('route %s imports presentation only from ui/', (file) => {
     const allowed = (specifier: string) =>
       /^(react|next(\/.*)?)$/.test(specifier) ||
       /^(\.\.\/)+ui$/.test(specifier) ||
       /^(\.\.\/)+ui\/tokens\/tokens\.css$/.test(specifier) ||
-      /^\.\/[\w-]+(\.css)?$/.test(specifier) ||
-      /^\.\.\/(set-focus\/SetFocus|rest\/RestView)$/.test(specifier);
-    expect(imports.filter((specifier) => !allowed(specifier))).toEqual([]);
-    expect(source, 'screens do not write their own CSS Modules').not.toMatch(/\.module\.css/);
+      /^\.\/[\w-]+(\.css)?$/.test(specifier);
+    expect(importsOf(file).filter((specifier) => !allowed(specifier))).toEqual([]);
+    expect(
+      readFileSync(join(WEB, file), 'utf8'),
+      'routes do not write their own CSS Modules',
+    ).not.toMatch(/\.module\.css/);
+  });
+
+  it.each(referenceScreens.map(name))(
+    'reference screen %s is built only from ui/ components',
+    (file) => {
+      const allowed = (specifier: string) =>
+        /^(react|next(\/.*)?)$/.test(specifier) ||
+        specifier === '../../index' ||
+        /^\.\/[A-Z]\w+$/.test(specifier);
+      expect(importsOf(file).filter((specifier) => !allowed(specifier))).toEqual([]);
+      expect(readFileSync(join(WEB, file), 'utf8')).not.toMatch(/\.module\.css/);
+    },
+  );
+
+  it('no route or code refers to a separate /lab lab any more (ADR-0010)', () => {
+    const sources = [
+      ...routes,
+      ...files(join(WEB, 'ui'), /\.tsx?$/),
+      ...files(join(WEB, 'e2e'), /\.ts$/),
+    ];
+    for (const file of sources) {
+      expect(readFileSync(file, 'utf8'), name(file)).not.toMatch(/['"`]\/lab\b|ui\/lab\//);
+    }
   });
 });
