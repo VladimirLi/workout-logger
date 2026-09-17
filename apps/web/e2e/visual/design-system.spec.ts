@@ -1,3 +1,4 @@
+import { writeFile } from 'node:fs/promises';
 import { expect, type Page, type TestInfo, test } from '@playwright/test';
 import { FIXED_NOW } from '../../ui/reference/fixtures';
 import {
@@ -190,8 +191,15 @@ for (const target of TARGETS) {
     const first = await shoot();
     const second = await shoot();
     if (!first.equals(second)) {
-      await testInfo.attach('first', { body: first, contentType: 'image/png' });
-      await testInfo.attach('second', { body: second, contentType: 'image/png' });
+      // Kept as files, not only as report attachments, so a container run leaves them behind.
+      for (const [name, body] of [
+        ['first', first],
+        ['second', second],
+      ] as const) {
+        const path = testInfo.outputPath(`${name}.png`);
+        await writeFile(path, body);
+        await testInfo.attach(name, { path, contentType: 'image/png' });
+      }
     }
     expect(first.equals(second), `${target.slug} rendered differently twice`).toBe(true);
   });
