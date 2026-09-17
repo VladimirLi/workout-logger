@@ -151,6 +151,15 @@ export function localWorkoutStoreContract(
       expect(await store.outbox(user)).toHaveLength(1);
     });
 
+    it('does not enqueue a delivered change again when it is replayed', async () => {
+      const { store } = await createHarness();
+      const request = startRequest(aStartedSession('workout-1'), 1);
+      await store.commit(request);
+      await store.acknowledge(user, key(1));
+      expect(await store.commit(request)).toEqual({ kind: 'already_delivered' });
+      expect(await store.outbox(user)).toEqual([]);
+    });
+
     it('refuses a key reused for a different change and writes nothing', async () => {
       const { store } = await createHarness();
       await store.commit(startRequest(aStartedSession('workout-1'), 1));
