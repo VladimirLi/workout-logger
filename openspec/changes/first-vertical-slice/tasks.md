@@ -58,15 +58,21 @@
 
 - [ ] 4.1 Implement the IndexedDB outbox writing mutation and outbox entry in one transaction,
       and verify under injected termination that either both or neither persist
-- [ ] 4.2 Implement client-generated idempotency keys and verify the key is identical across
-      retries of the same mutation
+- [x] 4.2 Implement client-generated idempotency keys and verify the key is identical across
+      retries of the same mutation (`pnpm test`:
+      packages/adapters-browser/src/client-keys.test.ts; `pnpm test:integration`:
+      delivery.integration.test.ts, "retries with the same idempotency key after a network
+      failure", against the in-memory store)
 - [ ] 4.3 Verify a key reused with a different payload is refused by the server
-- [ ] 4.4 Implement per-entity ordered draining and verify a blocked entity does not block a
-      different entity
-- [ ] 4.5 Implement capped exponential backoff with full jitter honouring `Retry-After`, and
-      verify simultaneous failures produce differing delays
-- [ ] 4.6 Implement retry classification and verify 408, 429, and 5xx retry while other 4xx
-      become permanent failures
+- [x] 4.4 Implement per-entity ordered draining and verify a blocked entity does not block a
+      different entity (`pnpm test:integration`: delivery.integration.test.ts, "per-entity
+      ordering (task 4.4)" and "draining the outbox")
+- [x] 4.5 Implement capped exponential backoff with full jitter honouring `Retry-After`, and
+      verify simultaneous failures produce differing delays (`pnpm test:integration`:
+      delivery.integration.test.ts, "capped exponential backoff with full jitter (task 4.5)")
+- [x] 4.6 Implement retry classification and verify 408, 429, and 5xx retry while other 4xx
+      become permanent failures (`pnpm test:integration`: delivery.integration.test.ts,
+      "retry classification (task 4.6)")
 - [ ] 4.7 Implement flush on foreground, connectivity restoration, authentication refresh, and
       explicit user action, and verify the queue drains with Background Sync unavailable
 - [ ] 4.8 Implement quota-exhaustion handling and verify queued mutations are retained while
