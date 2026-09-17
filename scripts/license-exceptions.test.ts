@@ -102,6 +102,8 @@ describe('the gate fails closed on unapproved exceptions', () => {
     }
   }
 
+  // Runs the real licence gate over the whole installed tree: seconds natively, longer in the
+  // emulated CI container, so these two cases state their budget.
   it('exits with the owner-approval code while any exception is unapproved', () => {
     const policy = JSON.parse(readFileSync('scripts/license-policy.json', 'utf8')) as {
       exceptions: { approver: string }[];
@@ -121,7 +123,7 @@ describe('the gate fails closed on unapproved exceptions', () => {
     expect(code).not.toBe(EXIT_POLICY_VIOLATION);
     expect(output).toContain('BLOCKED: owner approval required');
     expect(output).toContain('docs/license-policy.md');
-  });
+  }, 120_000);
 
   it('names every unapproved component so the owner can decide from the output', () => {
     const policy = JSON.parse(readFileSync('scripts/license-policy.json', 'utf8')) as {
@@ -136,7 +138,7 @@ describe('the gate fails closed on unapproved exceptions', () => {
     for (const exception of pending) {
       expect(output).toContain(exception.component);
     }
-  });
+  }, 120_000);
 
   it('uses distinct exit codes for a policy violation and an owner block', () => {
     expect(EXIT_POLICY_VIOLATION).not.toBe(EXIT_BLOCKED_ON_OWNER);
