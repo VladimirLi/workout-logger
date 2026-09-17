@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   formatClock,
   formatDate,
+  formatDateTime,
   formatDelta,
   formatLoad,
   formatLoadReps,
+  formatMeasurement,
   MISSING,
   NBSP,
   parseDecimal,
@@ -112,5 +114,64 @@ describe('message catalogue', () => {
         label,
       ).toEqual([]);
     }
+  });
+});
+
+describe('measurements in words', () => {
+  const kg = (value: number) => ({ unit: 'kg', value }) as const;
+
+  it('writes strength as load × reps, or reps alone', () => {
+    expect(
+      formatMeasurement({ profile: 'strength', schemaVersion: 1, repetitions: 8, load: kg(82.5) }),
+    ).toBe(`82.5${NBSP}kg × 8`);
+    expect(formatMeasurement({ profile: 'strength', schemaVersion: 1, repetitions: 12 })).toBe(
+      '12 reps',
+    );
+  });
+
+  it('keeps the side and load semantics of a unilateral set explicit', () => {
+    expect(
+      formatMeasurement({
+        profile: 'unilateral_strength',
+        schemaVersion: 1,
+        side: 'left',
+        loadSemantics: 'per_side',
+        repetitions: 10,
+        load: kg(12),
+      }),
+    ).toBe(`12${NBSP}kg × 10, left, per side`);
+    expect(
+      formatMeasurement({
+        profile: 'unilateral_strength',
+        schemaVersion: 1,
+        side: 'alternating',
+        loadSemantics: 'total',
+        repetitions: 1,
+      }),
+    ).toBe('1 rep, alternating, total');
+  });
+
+  it('writes cardio as duration and metric distance', () => {
+    expect(
+      formatMeasurement({
+        profile: 'cardio',
+        schemaVersion: 1,
+        duration: { unit: 's', value: 1_200 },
+        distance: { unit: 'm', value: 3_250 },
+      }),
+    ).toBe(`20:00, 3.25${NBSP}km`);
+    expect(
+      formatMeasurement({
+        profile: 'cardio',
+        schemaVersion: 1,
+        duration: { unit: 's', value: 95 },
+      }),
+    ).toBe('1:35');
+  });
+});
+
+describe('date and time', () => {
+  it('shows the day and a 24-hour time in the stored zone', () => {
+    expect(formatDateTime(Date.UTC(2026, 8, 13, 9, 30), 'UTC')).toBe('Sun 13 Sept, 09:30');
   });
 });

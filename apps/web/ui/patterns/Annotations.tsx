@@ -1,4 +1,4 @@
-import { formatDate, formatDelta } from '../i18n/format';
+import { formatDate, formatDateTime, formatDelta } from '../i18n/format';
 import { messages } from '../i18n/messages';
 import moduleStyles from './Annotations.module.css';
 
@@ -16,11 +16,21 @@ export function Delta({ kg }: { kg: number }) {
 }
 
 /** content.agent-attribution.text-tag: a neutral "From agent" tag, and the date on a line below. */
-export function AgentTag({ createdAt, timeZone }: { createdAt: number; timeZone: string }) {
+export function AgentTag({
+  createdAt,
+  timeZone,
+  withTime = false,
+}: {
+  createdAt: number;
+  timeZone: string;
+  /** Proposal review needs the creation time, not only the day. */
+  withTime?: boolean;
+}) {
+  const created = withTime ? formatDateTime(createdAt, timeZone) : formatDate(createdAt, timeZone);
   return (
     <span className={styles.attribution}>
       <span className={styles.agentTag}>{messages.agent.tag}</span>
-      <span className={styles.date}>{messages.agent.created(formatDate(createdAt, timeZone))}</span>
+      <span className={styles.date}>{messages.agent.created(created)}</span>
     </span>
   );
 }

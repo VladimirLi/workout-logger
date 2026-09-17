@@ -106,6 +106,12 @@ const INVENTORY: { name: string; kind: 'Primitive' | 'Pattern'; variants: string
       href: '/lab/screens/plan',
     },
     {
+      name: 'ProposalReview',
+      kind: 'Pattern',
+      variants: 'base revision, diff in words, plain-text rationale, creation time',
+      href: '/lab/screens/proposal-review',
+    },
+    {
       name: 'Screen, TwoPane',
       kind: 'Pattern',
       variants: 'centred column; landscape two-pane',
@@ -123,6 +129,8 @@ const SCREENS: { label: string; href: Route }[] = [
   { label: 'Settings', href: '/lab/screens/settings' },
   { label: 'Empty', href: '/lab/screens/empty' },
   { label: 'Error', href: '/lab/screens/error' },
+  { label: 'Proposal review', href: '/lab/screens/proposal-review' },
+  { label: 'Stale proposal', href: '/lab/screens/proposal-stale' },
 ];
 
 export default function LabPage() {

@@ -5,6 +5,7 @@
  * reference screens render only this, so a screenshot can never depend on the day it runs.
  * These are presentation fixtures, not product behaviour.
  */
+import type { PlanDiff, ScheduledSession } from '@workout/domain';
 import type { SetRow } from '../patterns/SetTable';
 
 export const FIXED_NOW = Date.UTC(2026, 8, 14, 10, 0, 0);
@@ -51,3 +52,53 @@ export const HISTORY = [
   { id: 'w2', date: FIXED_NOW - 4 * 86_400_000, name: 'Lower body A', exercises: 5, sets: 16 },
   { id: 'w1', date: FIXED_NOW - 7 * 86_400_000, name: 'Upper body A', exercises: 4, sets: 14 },
 ] as const;
+
+/** A pending agent proposal against the fixture plan (agent-proposals spec). */
+export const PROPOSAL: {
+  readonly baseRevision: number;
+  readonly createdAt: number;
+  readonly rationale: string;
+  readonly exerciseNames: Readonly<Record<string, string>>;
+  readonly planSessions: readonly ScheduledSession[];
+  readonly diff: PlanDiff;
+} = {
+  baseRevision: 12,
+  createdAt: FIXED_NOW - 24.5 * 3_600_000,
+  // Untrusted agent text, including markup that must be shown literally, never rendered.
+  rationale:
+    '<b>Squat</b> moved well at 80 kg with RIR 3 on every set, so add 2.5 kg.\nTuesday clashes with travel, so move that session one day later.',
+  exerciseNames: { 'back-squat': 'Back squat' },
+  planSessions: [
+    {
+      id: 'session-tue',
+      scheduledFor: '2026-09-15',
+      exercises: [
+        {
+          exerciseId: 'back-squat',
+          prescription: {
+            profile: 'strength',
+            schemaVersion: 1,
+            repetitions: 8,
+            load: { unit: 'kg', value: 80 },
+          },
+        },
+      ],
+    },
+  ],
+  diff: {
+    op: 'change_scheduled_session',
+    sessionId: 'session-tue',
+    scheduledFor: '2026-09-16',
+    exercises: [
+      {
+        exerciseId: 'back-squat',
+        prescription: {
+          profile: 'strength',
+          schemaVersion: 1,
+          repetitions: 8,
+          load: { unit: 'kg', value: 82.5 },
+        },
+      },
+    ],
+  },
+};

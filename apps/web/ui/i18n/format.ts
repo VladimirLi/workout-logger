@@ -1,3 +1,5 @@
+import type { Measurement } from '@workout/domain';
+
 /**
  * Formatting for numbers, units, durations, and dates (i18n.scope.english-ready).
  *
@@ -82,4 +84,45 @@ export function parseDecimal(input: string): number | undefined {
   const normalised = input.trim().replace(',', '.');
   if (!/^\d+(\.\d+)?$/.test(normalised)) return undefined;
   return Number(normalised);
+}
+
+/** Day and 24-hour time in the stored zone, e.g. "Sun 13 Sept, 09:30". */
+export function formatDateTime(epochMs: number, timeZone: string): string {
+  const time = new Intl.DateTimeFormat(LOCALE, {
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+    timeZone,
+  }).format(epochMs);
+  return `${formatDate(epochMs, timeZone)}, ${time}`;
+}
+
+function formatReps(repetitions: number): string {
+  return `${formatNumber(repetitions)} ${plural(repetitions, 'rep', 'reps')}`;
+}
+
+const LOAD_SEMANTICS_WORDS = { per_side: 'per side', total: 'total' } as const;
+
+/** A typed measurement in words, with every unit and, for unilateral sets, side and semantics. */
+export function formatMeasurement(measurement: Measurement): string {
+  switch (measurement.profile) {
+    case 'strength':
+      return measurement.load
+        ? formatLoadReps(measurement.load.value, measurement.repetitions)
+        : formatReps(measurement.repetitions);
+    case 'unilateral_strength': {
+      const amount = measurement.load
+        ? formatLoadReps(measurement.load.value, measurement.repetitions)
+        : formatReps(measurement.repetitions);
+      return `${amount}, ${measurement.side}, ${LOAD_SEMANTICS_WORDS[measurement.loadSemantics]}`;
+    }
+    case 'cardio': {
+      const duration = formatClock(measurement.duration.value);
+      if (!measurement.distance) return duration;
+      const km = new Intl.NumberFormat(LOCALE, { maximumFractionDigits: 2 }).format(
+        measurement.distance.value / 1_000,
+      );
+      return `${duration}, ${km}${NBSP}km`;
+    }
+  }
 }

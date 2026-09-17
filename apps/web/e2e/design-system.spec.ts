@@ -187,6 +187,46 @@ test.describe('controls', () => {
   });
 });
 
+test.describe('proposal review (agent-proposals spec: the user reviews proposals in the PWA)', () => {
+  test('a pending proposal shows its base revision, diff, rationale, and creation time', async ({
+    page,
+  }) => {
+    await page.goto('/lab/screens/proposal-review');
+    await expect(page.getByRole('heading', { level: 1, name: 'Plan change' })).toBeVisible();
+    await expect(page.getByText('Made against plan revision 12')).toBeVisible();
+    await expect(page.getByText('Created Sun 13 Sept, 09:30')).toBeVisible();
+    await expect(page.getByText('From agent')).toBeVisible();
+
+    const diff = page.getByRole('list', { name: 'Changes' });
+    await expect(diff.getByRole('listitem')).toHaveCount(2);
+    await expect(diff).toContainText('Back squat');
+    await expect(diff).toContainText('80\u00A0kg × 8');
+    await expect(diff).toContainText('82.5\u00A0kg × 8');
+    await expect(diff).toContainText('Tue 15 Sept');
+    await expect(diff).toContainText('Wed 16 Sept');
+
+    // The rationale is untrusted agent text: shown as plain text, never interpreted as markup.
+    const rationale = page.getByRole('region', { name: 'Why' });
+    await expect(rationale).toContainText('<b>Squat</b> moved well');
+    expect(await rationale.locator('b').count()).toBe(0);
+
+    await expect(page.getByRole('button', { name: 'Accept change' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Reject' })).toBeVisible();
+  });
+
+  test('accepting a stale proposal says so, and offers nothing to apply', async ({ page }) => {
+    await page.goto('/lab/screens/proposal-stale');
+    await expect(
+      page.getByText('Out of date. The plan changed after this was made.'),
+    ).toBeVisible();
+    await expect(
+      page.getByText('Nothing was changed. Ask the agent for a new proposal.'),
+    ).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Accept change' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Done' })).toBeVisible();
+  });
+});
+
 test.describe('timing', () => {
   test('undo stays for 10 seconds, and pauses while hovered', async ({ page }) => {
     await page.clock.install({ time: FIXED_NOW });
