@@ -108,8 +108,19 @@ function isQuotaExceeded(error: unknown): boolean {
   return error instanceof DOMException && error.name === 'QuotaExceededError';
 }
 
-/** Opens the database, creating the stores and indexes on first use. */
-function openDatabase(name: string, factory: IDBFactory): Promise<IDBDatabase> {
+/**
+ * Opens the database, creating the stores and indexes on first use.
+ *
+ * `onClosed` is called when this connection is dropped because another tab is upgrading the
+ * schema. Holding the connection open would block that tab's upgrade indefinitely, which is
+ * how a released version can leave a user unable to reach their own queued workouts - so the
+ * connection is closed and reopened lazily on the next call.
+ */
+function openDatabase(
+  name: string,
+  factory: IDBFactory,
+  onClosed: () => void,
+): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = factory.open(name, VERSION);
     request.onupgradeneeded = () => {
@@ -124,7 +135,14 @@ function openDatabase(name: string, factory: IDBFactory): Promise<IDBDatabase> {
       db.createObjectStore(SEQUENCES, { keyPath: ['userId', 'entityId'] });
       db.createObjectStore(PLANS, { keyPath: 'userId' });
     };
-    request.onsuccess = () => resolve(request.result);
+    request.onsuccess = () => {
+      const database = request.result;
+      database.onversionchange = () => {
+        database.close();
+        onClosed();
+      };
+      resolve(database);
+    };
     request.onerror = () => reject(request.error ?? new Error('could not open the database'));
     request.onblocked = () => reject(new Error('another tab is holding an older database version'));
   });
@@ -142,9 +160,11 @@ class Database {
     this.#factory = factory;
   }
 
-  /** One connection per instance, opened once. */
+  /** One connection per instance, reopened if an upgrade elsewhere closed it. */
   handle(): Promise<IDBDatabase> {
-    this.#open ??= openDatabase(this.#name, this.#factory);
+    this.#open ??= openDatabase(this.#name, this.#factory, () => {
+      this.#open = undefined;
+    });
     return this.#open;
   }
 

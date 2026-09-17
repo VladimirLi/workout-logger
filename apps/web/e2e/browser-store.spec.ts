@@ -69,8 +69,16 @@ const forward = (target, prop) => {
   const value = Reflect.get(target, prop, target);
   return typeof value === 'function' ? value.bind(target) : value;
 };
+// Every proxy below needs a set trap that writes to the raw target: assigning an event handler
+// through a proxy receiver makes the browser reject the call, which is a hang rather than an
+// error because it happens inside an IndexedDB event handler.
+const setOnTarget = (target, prop, value) => {
+  Reflect.set(target, prop, value, target);
+  return true;
+};
 const wrapStore = (store, name) =>
   new Proxy(store, {
+    set: setOnTarget,
     get(target, prop) {
       if (prop === 'put' && failing.has(name)) {
         failing.delete(name);
@@ -83,17 +91,15 @@ const wrapStore = (store, name) =>
   });
 const wrapTransaction = (transaction, name) =>
   new Proxy(transaction, {
+    set: setOnTarget,
     get: (target, prop) =>
       prop === 'objectStore'
         ? (store) => wrapStore(target.objectStore(store), name)
         : forward(target, prop),
-    set(target, prop, value) {
-      Reflect.set(target, prop, value, target);
-      return true;
-    },
   });
 const wrapDatabase = (database, name) =>
   new Proxy(database, {
+    set: setOnTarget,
     get: (target, prop) =>
       prop === 'transaction'
         ? (...args) => wrapTransaction(target.transaction(...args), name)
@@ -103,12 +109,9 @@ const factoryFor = (name) => ({
   open(databaseName, version) {
     const request = indexedDB.open(databaseName, version);
     return new Proxy(request, {
+      set: setOnTarget,
       get: (target, prop) =>
         prop === 'result' ? wrapDatabase(target.result, name) : forward(target, prop),
-      set(target, prop, value) {
-        Reflect.set(target, prop, value, target);
-        return true;
-      },
     });
   },
 });
@@ -220,6 +223,61 @@ test.describe('the IndexedDB device store', () => {
       await testCase.run({ reader, seed: (userId, plan) => reader.save(userId, plan) });
     });
   }
+
+  test('a queued mutation survives a database version upgrade', async ({ page }) => {
+    // The third condition the offline-sync spec names for never discarding a queued mutation
+    // (task 4.11). Quota exhaustion is a contract case; authentication does not exist yet. This
+    // one needs a real database: the schema is opened at a higher version, an upgrade adds a
+    // store the way a later release would, and the queue has to still be there afterwards.
+    await injectAdapter(page);
+    const databaseName = nextDatabase();
+    const store = pageStore(page, databaseName);
+    const session = aStartedSession('workout-1');
+    await store.commit({
+      userId: SYNTHETIC_USER_ID,
+      session,
+      mutation: { kind: 'start_session', session },
+      idempotencyKey: '00000000-0000-4000-8000-000000000001' as never,
+      enqueuedAt: new Date('2026-09-14T10:00:00Z'),
+    });
+    expect(await store.outbox(SYNTHETIC_USER_ID)).toHaveLength(1);
+
+    const upgraded = await page.evaluate(async (name) => {
+      const database = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open(name, 2);
+        request.onupgradeneeded = () => request.result.createObjectStore('something-later');
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+        request.onblocked = () => reject(new Error('the existing connection blocked the upgrade'));
+      });
+      const stores = [...database.objectStoreNames];
+      database.close();
+      return { version: database.version, stores };
+    }, databaseName);
+
+    expect(upgraded.version).toBe(2);
+    expect(upgraded.stores).toContain('something-later');
+
+    // A fresh page, because the connection that wrote the entry was closed by the upgrade.
+    const after = await page.context().newPage();
+    await injectAdapter(after);
+    const entries = await page.evaluate(
+      (name) =>
+        new Promise<number>((resolve, reject) => {
+          const request = indexedDB.open(name, 2);
+          request.onsuccess = () => {
+            const transaction = request.result.transaction('outbox', 'readonly');
+            const count = transaction.objectStore('outbox').count();
+            count.onsuccess = () => resolve(count.result);
+            count.onerror = () => reject(count.error);
+          };
+          request.onerror = () => reject(request.error);
+        }),
+      databaseName,
+    );
+    expect(entries, 'the upgrade lost the queued mutation').toBe(1);
+    await after.close();
+  });
 
   test('a session and its outbox entry never exist without each other, even if the page dies mid-commit', async ({
     page,
