@@ -1,0 +1,113 @@
+.topBar,
+.workoutBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: calc(var(--target-min) + var(--space-3));
+  padding-block-start: env(safe-area-inset-top);
+}
+
+.title {
+  flex: 1;
+  min-inline-size: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--font-size-heading);
+  font-weight: var(--font-weight-heading);
+  line-height: var(--line-height-heading);
+  letter-spacing: var(--tracking-heading);
+}
+
+.title:focus {
+  outline: none;
+}
+
+.trailing {
+  display: flex;
+  align-items: center;
+}
+
+.workoutBar {
+  justify-content: space-between;
+}
+
+.position {
+  flex: 1;
+  margin: 0;
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-label);
+  font-variant-numeric: tabular-nums;
+}
+
+.tabs {
+  position: sticky;
+  inset-block-end: 0;
+  z-index: var(--layer-sticky);
+  margin-inline: calc(-1 * var(--gutter));
+  padding-block-end: env(safe-area-inset-bottom);
+  border-block-start: var(--border-width) solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.tabList {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tab {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-1);
+  min-block-size: calc(var(--target-workout) + var(--space-3));
+  padding-block: var(--space-2);
+  color: var(--color-ink-muted);
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-label);
+  line-height: var(--line-height-label);
+  text-decoration: none;
+}
+
+.tab[aria-current="page"] {
+  color: var(--color-ink);
+  font-weight: var(--font-weight-heading);
+  text-decoration: underline;
+  text-underline-offset: var(--space-1);
+}
+
+.actionBar {
+  position: sticky;
+  inset-block-end: 0;
+  z-index: var(--layer-sticky);
+  margin-inline: calc(-1 * var(--gutter));
+  padding-block: var(--space-3) calc(var(--space-3) + env(safe-area-inset-bottom));
+  padding-inline: var(--gutter);
+  border-block-start: var(--border-width) solid var(--color-border);
+  background: var(--color-bg);
+}
+
+@media (forced-colors: active) {
+  .tab[aria-current="page"] {
+    color: Highlight;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .topBar,
+  .workoutBar {
+    min-block-size: var(--target-min);
+  }
+
+  .actionBar {
+    position: static;
+    grid-column: 2;
+    grid-row: 2;
+    margin-inline: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+}

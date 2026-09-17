@@ -1,0 +1,88 @@
+.group {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-inline-size: 0;
+}
+
+.legend {
+  padding: 0;
+  margin-block-end: var(--space-1);
+  color: var(--color-ink);
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-label);
+  line-height: var(--line-height-label);
+}
+
+.segments {
+  display: grid;
+  grid-template-columns: repeat(var(--segments), minmax(0, 1fr));
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-sunken);
+}
+
+.segment {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  min-block-size: var(--target-rir-segment);
+  border: var(--border-width) solid transparent;
+  border-radius: var(--radius-control);
+  color: var(--color-ink);
+  font-size: var(--font-size-title);
+  font-weight: var(--font-weight-label);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.check {
+  display: none;
+}
+
+.segment:has(.input:checked) {
+  background: var(--color-surface-raised);
+  /* color.accent-strategy.solid-primary: selection is an ink outline plus a check. */
+  border-color: var(--color-ink);
+  font-weight: var(--font-weight-heading);
+}
+
+.segment:has(.input:checked) .check {
+  display: inline-flex;
+  color: var(--color-ink);
+}
+
+.segment:has(.input:focus-visible) {
+  outline: var(--focus-width) solid var(--color-focus);
+  outline-offset: var(--focus-offset);
+}
+
+.helper {
+  margin: 0;
+  color: var(--color-ink-muted);
+  font-size: var(--font-size-label);
+  line-height: var(--line-height-label);
+}
+
+@media (forced-colors: active) {
+  .segment:has(.input:checked) {
+    border-color: Highlight;
+  }
+
+  .segment:has(.input:checked) .check {
+    color: Highlight;
+  }
+}

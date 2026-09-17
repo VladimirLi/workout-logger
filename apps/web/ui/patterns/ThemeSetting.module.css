@@ -1,0 +1,31 @@
+.group {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.legend {
+  padding: 0;
+  margin-block-end: var(--space-2);
+  font-size: var(--font-size-title);
+  font-weight: var(--font-weight-heading);
+  letter-spacing: var(--tracking-heading);
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-block-size: var(--target-row);
+  border-block-end: var(--border-width) solid var(--color-border);
+  cursor: pointer;
+}
+
+/* Native control, tinted with the accent (controls.def.native): 24 px inside a 56 px row. */
+.radio {
+  inline-size: var(--icon-button);
+  block-size: var(--icon-button);
+  margin: 0;
+  accent-color: var(--color-accent);
+}

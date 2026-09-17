@@ -1,0 +1,54 @@
+.timer {
+  position: relative;
+  display: grid;
+  place-items: center;
+  inline-size: min(100%, calc(var(--space-8) * 4));
+  aspect-ratio: 1;
+  margin-inline: auto;
+}
+
+.ring {
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  transform: rotate(-90deg);
+}
+
+.track,
+.fill {
+  fill: none;
+  stroke-width: 6;
+}
+
+.track {
+  stroke: var(--color-surface-sunken);
+}
+
+.fill {
+  stroke: var(--color-accent);
+  stroke-linecap: round;
+  /* Stepped: one visible move per second, no easing between (motion.rest-timer.ring-stepped). */
+  transition: stroke-dashoffset var(--motion-fast) steps(1, end);
+}
+
+.clock {
+  position: relative;
+  margin: 0;
+  color: var(--color-ink);
+  font-size: var(--font-size-display);
+  font-weight: var(--font-weight-display);
+  line-height: var(--line-height-display);
+  letter-spacing: var(--tracking-display);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (forced-colors: active) {
+  .fill {
+    stroke: Highlight;
+  }
+
+  .track {
+    stroke: GrayText;
+  }
+}

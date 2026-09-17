@@ -1,0 +1,32 @@
+.delta {
+  color: var(--color-ink-muted);
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-label);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.attribution {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-1);
+}
+
+.date {
+  color: var(--color-ink-muted);
+  font-size: var(--font-size-label);
+  line-height: var(--line-height-label);
+}
+
+.agentTag {
+  display: inline-flex;
+  align-items: center;
+  padding-block: var(--space-1);
+  padding-inline: var(--space-2);
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  color: var(--color-ink);
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-label);
+  line-height: var(--line-height-label);
+}

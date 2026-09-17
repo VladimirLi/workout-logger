@@ -1,0 +1,20 @@
+.icon {
+  flex: none;
+  stroke-width: var(--icon-stroke);
+  inline-size: var(--icon-body);
+  block-size: var(--icon-body);
+}
+
+.icon[data-size="inline"] {
+  inline-size: var(--icon-inline);
+  block-size: var(--icon-inline);
+}
+
+.icon[data-size="button"] {
+  inline-size: var(--icon-button);
+  block-size: var(--icon-button);
+}
+
+.icon[data-directional]:dir(rtl) {
+  transform: scaleX(-1);
+}
