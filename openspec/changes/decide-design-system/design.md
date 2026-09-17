@@ -80,12 +80,14 @@ Lucide geometry is copied unmodified with its full ISC and MIT notices, listed i
 test checks. **Rejected:** `lucide-react` — permissible under the licence policy but a
 dependency change the owner's licence decision asks to avoid without review.
 
-### Storybook is approved, not yet implemented or substituted
+### Storybook is approved and implemented, not substituted
 
 `governance.lab.storybook` was selected. Installing it needs an esbuild build permission in
 guardrail files and adds 196 packages, a material dependency change under LIC-2026-09-16. It
 was approved by Vladimir on 2026-09-17 together with the separate build-permission guardrail
-change; exact-tree review, installation, and verification remain open. `/lab` exists because
+change, then installed at exact versions (storybook 10.6.0, vite 8.3.0), with esbuild@0.28.2
+as the only allowed lifecycle script. Its build is part of `pnpm verify`, and every story is
+rendered and scanned by axe. `/lab` exists because
 `docs.source.repo-md-lab` names it; it is not presented as a Storybook replacement.
 
 ### Visual regression: per-platform baselines, repeatability proven separately
