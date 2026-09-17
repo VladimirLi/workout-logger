@@ -1,5 +1,5 @@
 {
-  "$comment": "Files whose change is a guardrail change (D-035, D-036). GUARDRAIL FILE ITSELF. generatedPaths are produced by a build tool and count as neither guardrail nor product code. packages/observability/ is guardrail in full: the attribute allowlist is the telemetry privacy control and the rest of the package is what enforces it, so protecting one without the other protects neither.",
+  "$comment": "Files whose change is a guardrail change (D-035, D-036). GUARDRAIL FILE ITSELF. guardrailPathPatterns are regular expressions for guardrail files that cannot be named as a literal path, currently the package manifests: the root manifest defines every gate command `pnpm verify` runs, and each workspace manifest defines the `build` or `storybook:build` that the root `build` and `storybook:build` gates delegate to, so a manifest can turn a gate into a no-op. generatedPaths are produced by a build tool and count as neither guardrail nor product code. packages/observability/ is guardrail in full: the attribute allowlist is the telemetry privacy control and the rest of the package is what enforces it, so protecting one without the other protects neither.",
   "guardrailPaths": [
     ".github/workflows/",
     ".dependency-cruiser.cjs",
@@ -18,6 +18,7 @@
     "docs/license-policy.md",
     "packages/observability/"
   ],
+  "guardrailPathPatterns": ["^package\\.json$"],
   "productPathPatterns": ["^apps/", "^packages/(?!observability/)"],
   "generatedPaths": ["apps/web/next-env.d.ts"]
 }

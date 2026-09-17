@@ -136,6 +136,29 @@ describe('guardrail separation, commit by commit', () => {
   );
 
   it(
+    'fails a commit that no-ops a gate in the root manifest while changing product code',
+    () => {
+      // The exact bypass that made package.json a guardrail path: turn a gate into `true`,
+      // and the product change it would have caught rides along in the same commit. Before
+      // the manifest was classified, this commit reported zero guardrail files touched.
+      const repo = sandbox();
+      try {
+        repo.write('package.json', `${JSON.stringify({ scripts: { 'test:visual': 'true' } })}\n`);
+        repo.write(PRODUCT_FILE, 'export const probe = 2;\n');
+        repo.commit('feat: quietly disable the visual gate');
+
+        const audit = repo.audit();
+        expect(audit.status).toBe(1);
+        expect(audit.stderr).toContain('guardrail: package.json');
+        expect(audit.stderr).toContain(`product:   ${PRODUCT_FILE}`);
+      } finally {
+        repo.dispose();
+      }
+    },
+    AUDIT_TIMEOUT_MS,
+  );
+
+  it(
     'fails an evil merge whose resolution changes both',
     () => {
       // Linear history is not enforced by anything outside this repository, so a merge is a
