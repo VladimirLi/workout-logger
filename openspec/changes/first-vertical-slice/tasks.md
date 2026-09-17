@@ -2,8 +2,12 @@
 > unchecked is not implemented.
 >
 > Tasks marked **[UI]** implement substantive UI and build on the accepted design system
-> (`DESIGN_SYSTEM.md`, ADR-0008). Section 7's proposal review needs its UX decided first; the
-> design system deliberately leaves it open (gate G-10).
+> (`DESIGN_SYSTEM.md`, ADR-0008). Section 7 builds on the minimum proposal review UX the design
+> system delivered on 2026-09-17: the review screens the agent-proposals specification requires
+> — base revision, diff, rationale, creation time, accept, reject, stale — exist as accepted
+> components with visual baselines (`decide-design-system` task 5.6). Section 7 implements the
+> reachable behaviour on top of them, and may decide a richer review UX, which the design system
+> deliberately left open.
 > Tasks marked **[G-2]** require a provisioned database (gate G-2).
 > Tasks marked **[G-3]** touch the WebAuthn relying-party identifier, a one-way door.
 
