@@ -1,5 +1,5 @@
-> **Nothing below is implemented.** Every task is unchecked, and that is an accurate
-> statement of the repository's state.
+> A task is checked only when a gate proves it; the evidence is named beside it. Everything
+> unchecked is not implemented.
 >
 > Tasks marked **[UI]** implement substantive UI and build on the accepted design system
 > (`DESIGN_SYSTEM.md`, ADR-0008). Section 7's proposal review needs its UX decided first; the
@@ -9,18 +9,22 @@
 
 ## 1. Domain and application
 
-- [ ] 1.1 Model the active plan aggregate with scheduled sessions and a monotonic revision,
+- [x] 1.1 Model the active plan aggregate with scheduled sessions and a monotonic revision,
       and verify the revision advances on prescription changes and not on reads
-- [ ] 1.2 Model the workout session aggregate with typed results per measurement profile, and
-      verify a bare number cannot be recorded
-- [ ] 1.3 Model completed-session immutability with corrections as audited revisions, and
+      (`pnpm test`: packages/domain/src/plan.test.ts)
+- [x] 1.2 Model the workout session aggregate with typed results per measurement profile, and
+      verify a bare number cannot be recorded (`pnpm test`: packages/domain/src/session.test.ts)
+- [x] 1.3 Model completed-session immutability with corrections as audited revisions, and
       verify the original value remains retrievable after a correction
-- [ ] 1.4 Define the outbox, idempotency-key, and sync-state ports, and verify the
-      architecture gate still passes
-- [ ] 1.5 Implement the start-session, log-set, and complete-session use cases, and verify
-      each against the in-memory ports
-- [ ] 1.6 Extend the port contract suites to cover the new repositories, and verify they pass
-      against the in-memory reference
+      (`pnpm test`: packages/domain/src/correction.test.ts)
+- [x] 1.4 Define the outbox, idempotency-key, and sync-state ports, and verify the
+      architecture gate still passes (`pnpm test:architecture`;
+      `pnpm test:integration`: offline-ports.test.ts)
+- [x] 1.5 Implement the start-session, log-set, and complete-session use cases, and verify
+      each against the in-memory ports (`pnpm test:integration`: log-workout.integration.test.ts)
+- [x] 1.6 Extend the port contract suites to cover the new repositories, and verify they pass
+      against the in-memory reference (`pnpm test:integration`:
+      local-workout-store.integration.test.ts)
 
 ## 2. Persistence and authorization
 
