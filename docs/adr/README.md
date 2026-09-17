@@ -26,3 +26,4 @@ never edited to change its decision — it is superseded by a new one.
 | [0006](0006-ci-is-the-authoritative-gate.md) | CI is the authoritative gate | Accepted |
 | [0007](0007-design-system-deferred.md) | The design system is a deliberate, separate decision | Superseded by 0008 |
 | [0008](0008-quiet-performance-design-system.md) | Quiet Performance is the design system | Accepted |
+| [0009](0009-platform-repository-and-relying-party-decisions.md) | Platform, repository, and relying-party decisions | Accepted |

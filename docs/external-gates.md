@@ -1,6 +1,7 @@
 # External setup gates
 
-**Status:** Normative checklist. Nothing here has been performed.
+**Status:** Normative checklist. No cloud resource, remote, DNS record, or deployment exists.
+Owner decisions recorded here (for example ADR-0009) do not perform any gate.
 
 Every item below requires the **user's authorization** and credentials for an external
 service. No agent provisions any of it. This repository deliberately contains no secrets,
@@ -14,6 +15,10 @@ means.
 ## G-1 — GitHub remote and repository ruleset
 
 **Status:** not performed. No remote exists.
+
+**Decided 2026-09-17 (ADR-0009, D2).** The repository will be **public**, with the intent to
+open-source the project. Before it is made public, the licence review that LIC-2026-09-16
+condition 5 requires for a distribution plan must be done, and the project licence chosen.
 
 **Required (R-026, ADR-0006).** A ruleset on the default branch with: pull requests only;
 required status checks from named trusted sources; stale review dismissal; linear history;
@@ -36,6 +41,9 @@ enforced fact, until this gate closes.
 
 **Status:** not performed. No project, no keys, no schema.
 
+**Decided 2026-09-17 (ADR-0009, D1).** Supabase **Free** for development only. The production
+decision is deferred, and the Pro requirement below still applies to production.
+
 **Required (ADR-0005, R-011, R-013).** A Supabase **Pro** project — the free tier pauses
 and is unsuitable for production. RLS and explicit grants on every exposed table or view.
 Service-role credentials server-side only.
@@ -56,25 +64,28 @@ makes Supabase unsuitable (D-025). Record the outcome in an ADR.
 
 ## G-3 — Production domain, DNS, and WebAuthn relying-party ID
 
-**Status:** not performed.
+**Status:** not performed. The RP ID is decided; DNS, origin, and enrollment are not done.
 
-**Required (R-012).** Apex/host `gym.vladimirli.com`. Decide whether the WebAuthn RP ID
-binds to `gym.vladimirli.com` or to `vladimirli.com` (only if the origin policy
-intentionally allows sibling subdomains).
+**Required (R-012).** Host `gym.vladimirli.com`. **The WebAuthn RP ID is
+`gym.vladimirli.com`**, decided by Vladimir on 2026-09-17 (ADR-0009, D4).
 
 **One-way door.** Changing the RP ID **invalidates every enrolled passkey**. Production
 credentials must never be enrolled against a provider preview domain. DNS and origin
 configuration are confirmed *before* the first production enrollment.
 
-**Done when.** DNS resolves, HTTPS serves the production origin, the RP ID decision is
-recorded in an ADR, and email OTP recovery is verified working before any passkey is
-enrolled.
+**Done when.** DNS resolves, HTTPS serves the production origin, the deployment
+configuration carries the recorded RP ID, and email OTP recovery is verified working before
+any passkey is enrolled. (The RP ID decision is recorded in ADR-0009.)
 
 ---
 
 ## G-4 — Hosting and deployment
 
-**Status:** not performed. No deployment target chosen.
+**Status:** not performed. The web target is chosen; nothing is configured or deployed.
+
+**Decided 2026-09-17 (ADR-0009, D3).** The web PWA uses Vercel under the existing
+subscription; the plan tier and project settings are not decided. MCP hosting is decided after
+a compatibility spike.
 
 **Required (D-023, D-042, D-043).** Private, authenticated, single-user HTTPS hosting
 reachable from a phone. Automatic deploy on merge. Automatic rollback on failed
@@ -85,8 +96,9 @@ post-deployment health or synthetic verification.
 **Unverified boundary.** Rollback automation cannot be written meaningfully before the
 platform is chosen.
 
-**Done when.** A target is chosen and recorded in an ADR, deploys are automatic from an
-attested merge commit via short-lived OIDC, and a rollback has been drilled.
+**Done when.** Targets for both the web app and the MCP server are recorded in an ADR, deploys
+are automatic from an attested merge commit via short-lived OIDC, and a rollback has been
+drilled.
 
 ---
 
@@ -260,6 +272,13 @@ been eliminated rather than approved.
 3. dependencies remain unmodified
 4. CI verifies exact package versions and scopes against the ledger
 5. any distribution plan, material dependency change, or expired review date blocks release and requires new review
+
+**New review required before release (recorded 2026-09-17).** Vladimir's decision to use a
+public GitHub repository with the intent to open-source the project (ADR-0009, D2) is a
+distribution plan under condition 5. The repository cannot be made public, and nothing can be
+released, until the licence exceptions are reviewed for that plan and a project licence is
+chosen. The separately approved Storybook dependency change (2026-09-17) is recorded under
+G-10.
 
 **What reopens this gate.** Any of the following makes `pnpm test:licenses` fail and requires
 new owner review before release:

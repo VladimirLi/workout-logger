@@ -75,5 +75,7 @@ the lab at `/lab` shows its components and reference screens with fixture data â
 
 ## Licence
 
-Private and unpublished. `UNLICENSED`. Dependency licence policy:
+Currently unpublished and `UNLICENSED`. The owner intends to open-source it in a public GitHub
+repository (ADR-0009); the project licence and the licence review that a distribution plan
+requires have not been done. Dependency licence policy:
 [docs/license-policy.md](docs/license-policy.md).
