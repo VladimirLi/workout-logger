@@ -1,0 +1,17 @@
+- banner:
+  - heading "History" [level=1]
+- main:
+  - heading "No workouts yet" [level=2]
+  - paragraph: Your finished workouts will show here.
+  - button "Start workout"
+- navigation "Primary":
+  - list:
+    - listitem:
+      - link "Today":
+        - /url: "#today"
+    - listitem:
+      - link "History":
+        - /url: "#history"
+    - listitem:
+      - link "Settings":
+        - /url: "#settings"

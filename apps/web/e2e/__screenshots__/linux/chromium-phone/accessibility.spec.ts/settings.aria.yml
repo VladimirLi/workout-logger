@@ -1,0 +1,29 @@
+- banner:
+  - heading "Settings" [level=1]
+- main:
+  - group "Theme":
+    - text: ""
+    - radio "Light" [checked]
+    - text: Light
+    - radio "Dark"
+    - text: Dark
+    - radio "System"
+    - text: System
+  - text: Vibration
+  - paragraph: A short buzz when you log a set and when rest ends.
+  - switch "Vibration" [checked]
+  - text: Rest end sound
+  - paragraph: A short tone when rest ends.
+  - switch "Rest end sound"
+  - button "Delete history"
+- navigation "Primary":
+  - list:
+    - listitem:
+      - link "Today":
+        - /url: "#today"
+    - listitem:
+      - link "History":
+        - /url: "#history"
+    - listitem:
+      - link "Settings":
+        - /url: "#settings"

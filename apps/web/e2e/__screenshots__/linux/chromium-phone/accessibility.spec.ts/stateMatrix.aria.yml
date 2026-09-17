@@ -1,0 +1,30 @@
+- banner:
+  - heading "State matrix" [level=1]
+- main:
+  - region "Sync":
+    - heading "Sync" [level=2]
+    - list:
+      - listitem: On device
+      - listitem: Syncing
+      - listitem: Needs attention
+      - listitem: Offline
+  - region "Messages":
+    - heading "Messages" [level=2]
+    - paragraph: Set 2 saved
+    - paragraph: Rest is longer than planned
+    - paragraph: Sync failed. Your sets are safe on this device.
+    - button "Retry"
+    - paragraph: Offline. Logging still works.
+    - paragraph: Out of date. The plan changed after this was made.
+    - paragraph: Changed on 2 devices. Choose a version.
+  - region "Loading":
+    - heading "Loading" [level=2]
+    - status: Loading history…
+  - region "Empty":
+    - heading "Empty" [level=2]
+    - heading "No workouts yet" [level=3]
+    - paragraph: Your finished workouts will show here.
+  - region "Undo":
+    - heading "Undo" [level=2]
+    - status: Set 3 deleted
+    - button "Undo"

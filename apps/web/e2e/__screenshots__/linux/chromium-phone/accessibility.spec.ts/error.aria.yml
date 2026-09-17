@@ -1,0 +1,28 @@
+- banner:
+  - button "Close"
+  - paragraph: Exercise 2 of 5
+  - text: Needs attention
+- main:
+  - heading "Back squat" [level=1]
+  - paragraph: Sync failed. Your sets are safe on this device.
+  - button "Retry"
+  - region "Logged sets":
+    - table "Logged sets":
+      - caption: Logged sets
+      - rowgroup:
+        - row "Set Load kg Reps RIR":
+          - columnheader "Set"
+          - columnheader "Load kg"
+          - columnheader "Reps"
+          - columnheader "RIR"
+      - rowgroup:
+        - row /1 \d+ kilograms 8 3/:
+          - rowheader "1"
+          - cell /\d+ kilograms/
+          - cell "8"
+          - cell "3"
+        - row /2 \d+ kilograms 8 2/:
+          - rowheader "2"
+          - cell /\d+ kilograms/
+          - cell "8"
+          - cell "2"
