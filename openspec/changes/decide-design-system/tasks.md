@@ -34,8 +34,8 @@
 - [x] 3.6 Verify the centred column and the landscape two-pane with no scrolling at 667 x 375
       with `pnpm test:e2e`
 - [ ] 3.7 Provide the Storybook lab selected by governance.lab.storybook, and verify it builds
-      in `pnpm verify` (BLOCKED: owner dependency review under LIC-2026-09-16 and a guardrail
-      change for the esbuild build permission)
+      in `pnpm verify` (OWNER APPROVED 2026-09-17: the reviewed dependency change and a
+      separate guardrail change for the esbuild build permission; implementation remains open)
 - [ ] 3.8 Measure interaction to next paint below 200 ms on the set screen, and verify it with a
       recorded measurement
 
@@ -62,6 +62,8 @@
 - [ ] 5.4 Generate Linux baselines in the pinned Playwright container and run CI's visual gate
       there, and verify CI passes (OPEN: guardrail change)
 - [ ] 5.5 Have the owner approve the baselines in a visual-change PR, and record the approval
+      (OWNER INTENT RECORDED 2026-09-17: Vladimir said to approve them; final approval remains
+      open because the Linux baselines and their visual-change PR do not yet exist)
 - [ ] 5.6 Capture proposal review baselines once its UX is decided, and verify with
       `pnpm test:visual` (OPEN: proposal review UX is outside this decision)
 

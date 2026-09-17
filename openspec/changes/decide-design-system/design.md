@@ -80,12 +80,13 @@ Lucide geometry is copied unmodified with its full ISC and MIT notices, listed i
 test checks. **Rejected:** `lucide-react` — permissible under the licence policy but a
 dependency change the owner's licence decision asks to avoid without review.
 
-### Storybook is blocked, not substituted
+### Storybook is approved, not yet implemented or substituted
 
 `governance.lab.storybook` was selected. Installing it needs an esbuild build permission in
 guardrail files and adds 196 packages, a material dependency change under LIC-2026-09-16. It
-is recorded as blocked. `/lab` exists because `docs.source.repo-md-lab` names it; it is not
-presented as a Storybook replacement.
+was approved by Vladimir on 2026-09-17 together with the separate build-permission guardrail
+change; exact-tree review, installation, and verification remain open. `/lab` exists because
+`docs.source.repo-md-lab` names it; it is not presented as a Storybook replacement.
 
 ### Visual regression: per-platform baselines, repeatability proven separately
 
@@ -111,4 +112,3 @@ honoured as routine CI scope without being read as waiving R-007's manual checks
 ## Open Questions
 
 - Which change decides the proposal review UX, and when does its baseline land?
-- Does the owner approve the Storybook dependency change, or revise that selection?
