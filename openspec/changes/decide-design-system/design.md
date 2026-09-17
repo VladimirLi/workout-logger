@@ -18,9 +18,15 @@ with 146 defaults and 22 deferrals.
 **Non-Goals:**
 
 - Implementing any product feature. The reference screens use fixtures.
-- Deciding the proposal review UX. The first vertical slice decides it.
+- Deciding a proposal review UX beyond the minimum. The minimum the agent-proposals
+  specification requires was built as reference screens with baselines (task 5.6); anything
+  richer is a first-vertical-slice decision.
 - Implementing charts (`data.charts-v1.defer`).
-- Provisioning anything, or adding a dependency.
+- Provisioning anything.
+
+Adding a dependency was a non-goal when this was written, and stopped being one on 2026-09-17:
+the owner approved Storybook as a reviewed dependency change, with the esbuild build permission
+as a separate guardrail change (ADR-0010). Nothing else was added.
 
 ## Decisions
 
@@ -39,16 +45,20 @@ settled questions and substitute agent judgement for the owner's.
 `Accepted` means the owner decided and the decision is encoded. It unblocks UI work built on
 the system. Validation — the target user using the journeys (R-022), the manual accessibility
 matrix (R-007), the proposal review UX, Linux baselines in CI, owner approval of baselines —
-is tracked separately and keeps gate G-10 open. The policy test refuses a closed G-10 that
+is tracked separately and keeps gate G-10 open. Of those, the proposal review UX and the Linux
+baselines were delivered on 2026-09-17; target-user journey use, the manual matrix, a GitHub
+Actions run, and owner approval of the committed baselines are still open. The policy test refuses a closed G-10 that
 does not mention that evidence.
 
 **Rejected:** holding `NOT DECIDED` until validation. It would block the very feature work
 through which R-022 validation happens. **Rejected:** closing G-10 on acceptance. It would
 assert journey use and conformance nobody has performed.
 
-The spec's baseline coverage for proposal review therefore applies at G-10 closure, not at
-acceptance: the proposal review UX is explicitly not part of this decision, so its baselines
-cannot exist yet. The requirement itself is unchanged.
+The spec's baseline coverage for proposal review therefore applied at G-10 closure rather than
+at acceptance. It is now met: the minimum review screens the agent-proposals specification
+requires were built from accepted components and baselined on 2026-09-17 (task 5.6). The
+requirement itself is unchanged, and a review UX richer than that minimum remains a
+first-vertical-slice decision.
 
 ### The gate stays a document status, checked by a guardrail test
 
@@ -112,8 +122,11 @@ stop the baselines showing the accepted system-font rendering.
 
 ## Risks / Trade-offs
 
-**CI's visual gate fails until Linux baselines exist.** Accepted and recorded rather than
-skipped; fixing it is a guardrail change to run CI in the pinned Playwright container.
+**CI's visual gate failed until Linux baselines existed.** Accepted and recorded rather than
+skipped, then fixed on 2026-09-17 by a guardrail change running CI in the pinned Playwright
+container by digest, with baselines generated there only after every target rendered
+identically twice. The cost that remains is two baseline sets to keep in step: a UI change
+rebaselined only on darwin fails in CI.
 
 **A lab of fixtures can look finished.** The reference screens are stories built from fixtures, and the
 validation status says the journeys have not met a real workout.
@@ -123,4 +136,7 @@ honoured as routine CI scope without being read as waiving R-007's manual checks
 
 ## Open Questions
 
-- Which change decides the proposal review UX, and when does its baseline land?
+- ~~Which change decides the proposal review UX, and when does its baseline land?~~ Answered
+  2026-09-17: this change built and baselined the minimum the agent-proposals specification
+  requires (task 5.6); `first-vertical-slice` section 7 decides anything richer and implements
+  the reachable feature.

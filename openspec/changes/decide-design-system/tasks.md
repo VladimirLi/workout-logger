@@ -75,8 +75,10 @@
 - [ ] 5.4a Verify the GitHub Actions verify workflow passes on GitHub (OPEN: no remote or
       Actions run exists, gate G-1)
 - [ ] 5.5 Have the owner approve the baselines in a visual-change PR, and record the approval
-      (OWNER INTENT RECORDED 2026-09-17: Vladimir said to approve them; final approval remains
-      open because the Linux baselines and their visual-change PR do not yet exist)
+      (OWNER INTENT RECORDED 2026-09-17: Vladimir said to approve them. The darwin and Linux
+      baselines now both exist and are committed, so what remains is the approval itself: the
+      owner has not reviewed this exact committed set, and there is no remote to open the
+      visual-change PR on, gate G-1)
 - [x] 5.6 Capture proposal review baselines, and verify with `pnpm test:visual`: the minimum
       review screens the agent-proposals specification requires (base revision, diff,
       rationale, creation time, accept, reject, stale) are built from accepted components as
