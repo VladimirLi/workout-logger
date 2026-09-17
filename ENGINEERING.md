@@ -50,6 +50,7 @@ inlines its own commands. That is what makes a green local run meaningful.
 | `pnpm test:integration` | Use-case and adapter-contract tests |
 | `pnpm test:e2e` | Browser smoke path |
 | `pnpm test:a11y` | Automated accessibility checks |
+| `pnpm test:visual` | Visual regression against committed per-platform baselines; a missing baseline fails |
 | `pnpm test:architecture` | Dependency direction and cycles |
 | `pnpm test:licenses` | License policy (exit 3 = blocked on owner approval) |
 | `pnpm test:deps` | High/critical vulnerability block |
@@ -171,16 +172,27 @@ Metadata is mandatory (D-010).
 
 ## Working on UI
 
-**Blocked until [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) is `Accepted`** (ADR-0007).
+The design system is **Accepted** ([DESIGN_SYSTEM.md](DESIGN_SYSTEM.md), ADR-0008, which
+supersedes ADR-0007). UI work builds on it; it does not re-decide it.
 
-`apps/web` is an intentionally neutral structural shell. No UI framework is selected — not
-Tailwind, not shadcn/ui, not Material. A scaffold default is not a decision. Foundational
-CSS tooling may stay only if it is provider-neutral and marked provisional; today that
-means plain CSS with custom properties and CSS Modules, encoding no palette, type scale, or
-spacing scale.
-
-Structural and accessibility work — landmarks, focus order, the 44 × 44 px target floor,
-route structure — is not "substantive UI" and may proceed.
+- **Tokens only.** Colour, type, spacing, radius, motion, and layer values come from
+  `apps/web/tokens/*.tokens.json` through the generated custom properties. A raw colour,
+  pixel size, duration, or z-index in component CSS is a defect.
+- **Screens import only from `apps/web/ui/`.** Primitives have closed variants and accept no
+  `className`; the layout-only escape hatch is documented in DESIGN_SYSTEM.md.
+- **No UI framework or component library.** Plain CSS with native custom properties, CSS
+  Modules, no runtime CSS-in-JS. Icons are vendored Lucide outlines recorded in
+  `apps/web/ui/icons/ICONS_LICENSES.md`; an icon not in that ledger fails `pnpm test`.
+- **Change control is tiered** (governance.change-control.tiered): a foundation change
+  (token tier, palette, type, spacing, motion) needs an ADR and an OpenSpec change; a
+  component API change needs an OpenSpec change; a fix needs a PR note and, if pixels
+  move, a baseline update.
+- **Baselines.** `pnpm test:visual` never writes a baseline. `pnpm visual:update` does, and
+  its output may be committed only in a visual-change PR approved by the owner. Baselines
+  are per platform; see DESIGN_SYSTEM.md § Visual regression for the open Linux/CI gap.
+- **Automated checks are not conformance.** `pnpm test:a11y` is the routine CI baseline
+  (accessibility.testing.auto-only). Manual keyboard, screen-reader, zoom, orientation,
+  contrast, and touch-target checks are still required before any conformance claim (R-007).
 
 ## Releases
 

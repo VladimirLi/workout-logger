@@ -28,6 +28,7 @@ const GATES = [
   ['sbom:generate', ['sbom:generate']],
   ['test:e2e', ['test:e2e']],
   ['test:a11y', ['test:a11y']],
+  ['test:visual', ['test:visual']],
 ];
 
 const only = process.argv.slice(2);
