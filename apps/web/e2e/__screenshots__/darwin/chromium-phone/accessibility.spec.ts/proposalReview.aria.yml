@@ -1,0 +1,14 @@
+- banner:
+  - heading "Plan change" [level=1]
+- main:
+  - text: /From agent Created Sun \d+ Sept, \d+:\d+/
+  - paragraph: /Made against plan revision \d+/
+  - list "Changes":
+    - listitem: /Session on Tue \d+ Sept Moves to Wed \d+ Sept/
+    - listitem: /Back squat \d+ kg × 8 changes to \d+\.\d+ kg × 8/
+  - region "Why":
+    - heading "Why" [level=2]
+    - paragraph: /<b>Squat<\/b> moved well at \d+ kg with RIR 3 on every set, so add 2\.5 kg\. Tuesday clashes with travel, so move that session one day later\./
+- region "Actions":
+  - button "Reject"
+  - button "Accept change"

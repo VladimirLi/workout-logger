@@ -207,3 +207,76 @@ it('records why an outlined control on a sunken panel needs the raised fill', ()
   const value = (role: string) => light.get(`color-${role}`)?.css ?? '';
   expect(contrast(value('border-strong'), value('surface-sunken'))).toBeLessThan(3);
 });
+
+/**
+ * Colour-vision deficiency (color.def.colorblind). Machado, Oliveira & Fernandes (2009)
+ * full-severity matrices, applied in linear RGB. Every contrast pair must still meet its minimum
+ * as seen with deuteranopia, protanopia, and achromatopsia, so no text or boundary depends on hue.
+ */
+const CVD: Record<string, readonly [number, number, number][]> = {
+  deuteranopia: [
+    [0.367322, 0.860646, -0.227968],
+    [0.280085, 0.672501, 0.047413],
+    [-0.01182, 0.04294, 0.968881],
+  ],
+  protanopia: [
+    [0.152286, 1.052583, -0.204868],
+    [0.114503, 0.786281, 0.099216],
+    [-0.003882, -0.048116, 1.051998],
+  ],
+  achromatopsia: [
+    [0.2126, 0.7152, 0.0722],
+    [0.2126, 0.7152, 0.0722],
+    [0.2126, 0.7152, 0.0722],
+  ],
+};
+
+function simulate(hex: string, matrix: readonly [number, number, number][]): string {
+  const toLinear = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  const toGamma = (c: number) => (c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055);
+  const linear = [1, 3, 5].map((index) =>
+    toLinear(Number.parseInt(hex.slice(index, index + 2), 16) / 255),
+  );
+  return `#${matrix
+    .map((row) => row.reduce((sum, weight, index) => sum + weight * (linear[index] ?? 0), 0))
+    .map((value) =>
+      Math.round(Math.min(1, Math.max(0, toGamma(Math.min(1, Math.max(0, value))))) * 255),
+    )
+    .map((value) => value.toString(16).padStart(2, '0'))
+    .join('')
+    .toUpperCase()}`;
+}
+
+describe.each(Object.keys(CVD))('contrast as seen with %s', (deficiency) => {
+  const matrix = CVD[deficiency] ?? [];
+  describe.each(['light', 'dark'] as const)('%s theme', (theme) => {
+    const colors = theme === 'light' ? built.light : built.dark;
+    const seen = (role: string) => simulate(colors.get(`color-${role}`)?.css ?? '#000000', matrix);
+
+    it.each(PAIRS)('%s on %s still meets its minimum', (foreground, background, minimum) => {
+      // A status colour on its own soft fill is used only for the icon and the error border,
+      // never for text (status text is ink; see StatusMessage.module.css and the test below),
+      // so as seen with a colour-vision deficiency it is held to the non-text 3:1.
+      const nonTextOnly = background === `${foreground}-soft`;
+      expect(contrast(seen(foreground), seen(background))).toBeGreaterThanOrEqual(
+        nonTextOnly ? 3 : minimum,
+      );
+    });
+  });
+});
+
+it('uses a status colour on its soft fill only for icons and borders, never for text', () => {
+  const css = readFileSync(
+    new URL('../ui/patterns/StatusMessage.module.css', import.meta.url),
+    'utf8',
+  );
+  const rules = [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)].map(([, selector = '', body = '']) => ({
+    selector: selector.trim(),
+    body,
+  }));
+  for (const { selector, body } of rules) {
+    if (/(^|[^-])color:\s*var\(--color-(success|warning|danger|info|offline)\)/.test(body)) {
+      expect(selector, 'a status colour sets text colour').toMatch(/> svg$/);
+    }
+  }
+});

@@ -1,0 +1,63 @@
+- banner:
+  - button "Close"
+  - paragraph: Exercise 2 of 5
+  - text: On device
+- main:
+  - heading "Back squat" [level=1]
+  - list:
+    - listitem: Set 1, done
+    - listitem: Set 2, not done
+    - listitem: Set 3, not done
+    - listitem: Set 4, not done
+  - paragraph: Target
+  - text: /\d+ kilograms, 8 reps \+2\.5 kg vs last Load/
+  - button "Decrease load"
+  - spinbutton "Load": /\d+/
+  - button "Increase load"
+  - text: Reps
+  - button "Decrease reps"
+  - spinbutton "Reps": "8"
+  - button "Increase reps"
+  - group "RIR":
+    - text: ""
+    - radio "0"
+    - text: "0"
+    - radio "1"
+    - text: "1"
+    - radio "2" [checked]
+    - text: "2"
+    - radio "3"
+    - text: "3"
+    - radio "4+"
+    - text: 4+
+    - paragraph: Reps you could still do
+  - button "What is RIR?"
+  - 'dialog "RIR: reps in reserve"':
+    - 'heading "RIR: reps in reserve" [level=2]'
+    - button "Close"
+    - paragraph: RIR is how many more good reps you could have done at the end of a set.
+    - table:
+      - rowgroup:
+        - row "RIR RPE":
+          - columnheader "RIR"
+          - columnheader "RPE"
+      - rowgroup:
+        - row /0 \d+/:
+          - cell "0"
+          - cell /\d+/
+        - row "1 9":
+          - cell "1"
+          - cell "9"
+        - row "2 8":
+          - cell "2"
+          - cell "8"
+        - row "3 7":
+          - cell "3"
+          - cell "7"
+        - row "4+ 6 or less":
+          - cell "4+"
+          - cell "6 or less"
+    - paragraph: RPE is worked out from RIR and cannot be edited.
+  - region "Actions":
+    - button "Log set"
+  - status

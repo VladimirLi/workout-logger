@@ -1,0 +1,62 @@
+- banner:
+  - heading "Workout done" [level=1]
+  - text: On device
+- main:
+  - paragraph: Lower body A · 2 exercises · 7 sets
+  - region "Back squat":
+    - table "Back squat":
+      - caption: Back squat
+      - rowgroup:
+        - row "Set Load kg Reps RIR":
+          - columnheader "Set"
+          - columnheader "Load kg"
+          - columnheader "Reps"
+          - columnheader "RIR"
+      - rowgroup:
+        - row /1 \d+ kilograms 8 3/:
+          - rowheader "1"
+          - cell /\d+ kilograms/
+          - cell "8"
+          - cell "3"
+        - row /2 \d+ kilograms 8 2/:
+          - rowheader "2"
+          - cell /\d+ kilograms/
+          - cell "8"
+          - cell "2"
+        - row /3 \d+\.\d+ kilograms 7 1/:
+          - rowheader "3"
+          - cell /\d+\.\d+ kilograms/
+          - cell "7"
+          - cell "1"
+        - row /4 \d+\.\d+ kilograms 6 not recorded/:
+          - rowheader "4"
+          - cell /\d+\.\d+ kilograms/
+          - cell "6"
+          - cell "not recorded"
+  - region "Romanian deadlift":
+    - table "Romanian deadlift":
+      - caption: Romanian deadlift
+      - rowgroup:
+        - row "Set Load kg Reps RIR":
+          - columnheader "Set"
+          - columnheader "Load kg"
+          - columnheader "Reps"
+          - columnheader "RIR"
+      - rowgroup:
+        - row /1 \d+ kilograms \d+ 3/:
+          - rowheader "1"
+          - cell /\d+ kilograms/
+          - cell /\d+/
+          - cell "3"
+        - row /2 \d+ kilograms \d+ 2/:
+          - rowheader "2"
+          - cell /\d+ kilograms/
+          - cell /\d+/
+          - cell "2"
+        - row "3 not recorded 9 1":
+          - rowheader "3"
+          - cell "not recorded"
+          - cell "9"
+          - cell "1"
+- region "Actions":
+  - button "Done"
