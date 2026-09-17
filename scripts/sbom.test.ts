@@ -20,9 +20,11 @@ function digest(content: string): string {
 }
 
 describe('sbom', () => {
+  // Generates the SBOM twice from the whole lockfile: about a second natively, but over Vitest's
+  // five-second default in the amd64-emulated CI container, so the budget is stated explicitly.
   it('is byte-reproducible across runs over the same lockfile', () => {
     expect(digest(generate())).toBe(digest(generate()));
-  });
+  }, 30_000);
 
   it('is valid CycloneDX describing a non-empty component set', () => {
     const document = JSON.parse(generate()) as {

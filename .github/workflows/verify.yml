@@ -30,7 +30,13 @@ jobs:
   verify:
     name: verify
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # The pinned Playwright image, by digest: the same Chromium build and system fonts the Linux
+    # visual baselines were generated in (DESIGN_SYSTEM.md, Visual regression). A runner image
+    # with different fonts would fail the visual gate for reasons unrelated to the change.
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
+      options: --ipc=host
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -51,9 +57,6 @@ jobs:
         # --frozen-lockfile fails if the lockfile and manifests disagree, which is
         # the point: CI must install exactly what was reviewed.
         run: pnpm install --frozen-lockfile
-
-      - name: Install Playwright browser
-        run: pnpm exec playwright install --with-deps chromium
 
       - name: Verify
         # The aggregate gate. Every required non-deployment check, in one command.

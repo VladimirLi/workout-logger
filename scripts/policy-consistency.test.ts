@@ -319,6 +319,21 @@ describe('design system gate', () => {
       ).toBe(true);
     });
 
+    it('runs CI in the pinned Playwright image the Linux baselines come from', () => {
+      const workflow = readFileSync('.github/workflows/verify.yml', 'utf8');
+      const catalog = readFileSync('pnpm-workspace.yaml', 'utf8');
+      const version = /'@playwright\/test': (\d+\.\d+\.\d+)/.exec(catalog)?.[1];
+      expect(version).toBeDefined();
+      expect(workflow).toMatch(
+        new RegExp(
+          `image: mcr\\.microsoft\\.com/playwright:v${version?.replaceAll('.', '\\.')}-noble@sha256:[0-9a-f]{64}`,
+        ),
+      );
+      expect(workflow, 'browsers come from the image, not a runner install').not.toMatch(
+        /playwright install/,
+      );
+    });
+
     it('runs a visual-regression gate over committed baselines', () => {
       const verify = readFileSync('scripts/verify.mjs', 'utf8');
       expect(verify).toContain("['test:visual', ['test:visual']]");
