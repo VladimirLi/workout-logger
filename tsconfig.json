@@ -7,6 +7,7 @@
     { "path": "packages/application" },
     { "path": "packages/observability" },
     { "path": "packages/adapters-supabase" },
+    { "path": "packages/adapters-browser" },
     { "path": "packages/test-support" },
     { "path": "apps/mcp" },
     { "path": "apps/web" }

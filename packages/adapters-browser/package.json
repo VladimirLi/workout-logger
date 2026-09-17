@@ -1,0 +1,27 @@
+{
+  "name": "@workout/adapters-browser",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "description": "Browser implementations of application ports: the IndexedDB workout store and outbox, client idempotency keys, and storage persistence diagnostics.",
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc --build"
+  },
+  "dependencies": {
+    "@workout/application": "workspace:*",
+    "@workout/domain": "workspace:*"
+  }
+}
