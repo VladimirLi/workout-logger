@@ -8,17 +8,17 @@ telemetry privacy, proposal staleness, and typed measurements. None of it is rea
 user. There is no persistence, no authentication, no offline queue, and no serving MCP
 endpoint.
 
-**This change is specified and mostly not implemented.** 10 of 61 tasks are done: the domain
+**This change is specified and mostly not implemented.** 12 of 61 tasks are done: the domain
 and application layer of section 1 (1.1–1.6), and the parts of section 4's offline durability
-that need no server, no database, and no IndexedDB — client-generated idempotency keys (4.2),
-per-entity ordered draining (4.4), capped exponential backoff with full jitter honouring
-`Retry-After` (4.5), and retry classification (4.6). Those four are delivery policy in
+that need no server and no credentials — client-generated idempotency keys (4.2), per-entity
+ordered draining (4.4), capped exponential backoff with full jitter honouring `Retry-After`
+(4.5), retry classification (4.6), the atomic IndexedDB outbox (4.1), and the guarantee that
+nothing discards a queued mutation (4.11). The delivery policy is in
 `packages/application/src/delivery.ts` over the ports in `offline-ports.ts`, proved against the
-in-memory store, plus the key generator in `packages/adapters-browser`. That package also holds
-a persistent-storage request helper, but 4.10 stays open until diagnostics report its answer.
-Everything else below is unchecked, and that is an accurate statement of the
-repository's state: there is still no persistence, no authentication, no IndexedDB outbox, no
-UI for the journeys, and no serving MCP endpoint.
+in-memory store; the device store is `packages/adapters-browser`, proved in Chromium against
+real IndexedDB by the same contract cases. Everything else below is unchecked, and that is an
+accurate statement of the repository's state: there is still no server persistence, no
+authentication, no UI for the journeys, and no serving MCP endpoint.
 
 Serves: D-003, D-004, D-011, D-012, D-015, D-016, D-017, D-018, D-019, D-020, D-021, D-022,
 D-023, D-024, R-003, R-008, R-009, R-010, R-013, R-014, R-020, R-021.

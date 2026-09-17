@@ -60,8 +60,14 @@
 
 ## 4. Offline durability
 
-- [ ] 4.1 Implement the IndexedDB outbox writing mutation and outbox entry in one transaction,
+- [x] 4.1 Implement the IndexedDB outbox writing mutation and outbox entry in one transaction,
       and verify under injected termination that either both or neither persist
+      (`pnpm test:e2e`: apps/web/e2e/browser-store.spec.ts — the 15 store and plan-reader
+      contract cases the in-memory reference runs, executed against IndexedDB inside Chromium,
+      plus "a session and its outbox entry never exist without each other, even if the page
+      dies mid-commit": 24 commits fired, the page destroyed with them in flight, the reopened
+      database required to pair every entry with its session. Adding a yield between the two
+      puts makes that case fail)
 - [x] 4.2 Implement client-generated idempotency keys and verify the key is identical across
       retries of the same mutation (`pnpm test`:
       packages/adapters-browser/src/client-keys.test.ts; `pnpm test:integration`:
@@ -80,11 +86,23 @@
 - [ ] 4.7 Implement flush on foreground, connectivity restoration, authentication refresh, and
       explicit user action, and verify the queue drains with Background Sync unavailable
 - [ ] 4.8 Implement quota-exhaustion handling and verify queued mutations are retained while
-      new writes stop
+      new writes stop (PARTIAL: the store maps the browser's QuotaExceededError to
+      `storage_full` and writes nothing — `pnpm test:e2e`: browser-store.spec.ts, "writes
+      neither the session nor the entry when storage is full"; the application refuses the
+      write and leaves the queue intact — `pnpm test:integration`:
+      outbox-durability.integration.test.ts. OPEN: the spec also requires a clear recovery
+      action, which is user-facing and lands with section 5)
 - [ ] 4.9 Implement the pre-destructive export and verify it is offered before any local data
       is cleared
 - [ ] 4.10 Request persistent storage and verify diagnostics report the granted or denied state
-- [ ] 4.11 Verify no code path discards a queued workout mutation automatically
+- [x] 4.11 Verify no code path discards a queued workout mutation automatically
+      (`pnpm test:integration`: outbox-durability.integration.test.ts — a 422 leaves the entry
+      queued and needing attention, a network error leaves it retrying, and only a 2xx removes
+      it; `pnpm test`: packages/adapters-browser/src/outbox-removal.test.ts — every `.delete`
+      on the outbox is inside `acknowledge`, and no drop/prune/discard/purge/evict method
+      exists; `pnpm test:e2e`: browser-store.spec.ts — the entry survives a database version
+      upgrade. The authentication-expiry condition has no code to exercise yet (section 3,
+      G-2/G-4); a 401 is asserted to be classified as needing a person, not as a discard)
 
 ## 5. Web experience
 
