@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { evaluateException, reviewDateStatus } from './license-exceptions.mjs';
 
@@ -268,16 +268,55 @@ describe('design system gate', () => {
       expect(index).toMatch(/\| \[0008\]\([^)]+\) \| [^|]+ \| Accepted \|/);
     });
 
-    it('does not claim G-10 closed while its validation is open', () => {
+    it('pins the payload digest here too, so changing the owner decision needs a guardrail change', () => {
+      // The digest in DESIGN_SYSTEM.md lives beside the payload and could be edited with it.
+      // This copy can only change in a separately reviewed guardrail change (D-035).
+      const digest = createHash('sha256').update(readFileSync(PAYLOAD)).digest('hex');
+      expect(digest).toBe('44c665fd0ca1e56d6c61c81badedd06605b5e18f6c4de8a9a8efa12a6183267c');
+    });
+
+    it('still records a decision for every design area', () => {
+      for (const area of [
+        'Tokens',
+        'Colour',
+        'Typography',
+        'Layout',
+        'Iconography',
+        'Motion',
+        'Components',
+        'State matrix',
+        'Data',
+        'Content',
+        'Accessibility',
+        'Visual regression',
+      ]) {
+        expect(designSystem, `DESIGN_SYSTEM.md has no "${area}" section`).toMatch(
+          new RegExp(`^#{2,3} ${area}\\b`, 'm'),
+        );
+      }
+    });
+
+    it('keeps G-10 open until every validation item carries dated evidence', () => {
       const gates = readFileSync('docs/external-gates.md', 'utf8');
       const g10 = gates.slice(gates.indexOf('## G-10'), gates.indexOf('## G-11'));
-      if (/CLOSED/.test(g10)) {
-        // Closure needs recorded evidence, never an assertion.
-        for (const evidence of ['R-022', 'manual', 'proposal review', 'Linux']) {
-          expect(g10, `G-10 is closed without ${evidence} evidence`).toContain(evidence);
-        }
-        expect(g10).not.toMatch(/\bOPEN\b|not performed/);
-      }
+      const open = /^\*\*Status: OPEN\.\*\*/m.test(g10);
+      const items = [...g10.matchAll(/^(\d+)\. /gm)].length;
+      expect(items, 'G-10 lists its validation items').toBeGreaterThanOrEqual(7);
+      if (open) return;
+      // Closing needs a dated, attributed record for every item - never a status edit alone.
+      const evidence = [...g10.matchAll(/^\s*Evidence: \d{4}-\d{2}-\d{2}, [^,]+, .+$/gm)];
+      expect(evidence.length, 'G-10 is closed without dated evidence for each item').toBe(items);
+      // Proposal review is outside this decision, so its baselines must exist before closure.
+      const screenshots = 'apps/web/e2e/__screenshots__/linux';
+      expect(existsSync(screenshots), 'G-10 is closed without Linux baselines').toBe(true);
+      const list = (dir: string): string[] =>
+        readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
+          entry.isDirectory() ? list(`${dir}/${entry.name}`) : [entry.name],
+        );
+      expect(
+        list(screenshots).some((file) => file.includes('proposal-review')),
+        'G-10 is closed without proposal review baselines',
+      ).toBe(true);
     });
 
     it('runs a visual-regression gate over committed baselines', () => {
