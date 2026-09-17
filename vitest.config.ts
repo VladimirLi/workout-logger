@@ -24,6 +24,9 @@ export default defineConfig({
             'packages/contracts/src/**/*.test.ts',
             'packages/observability/src/**/*.test.ts',
             'packages/adapters-supabase/src/**/*.test.ts',
+            // Pure parts of the browser adapter. Its IndexedDB behaviour is proved in a real
+            // browser by apps/web/e2e/browser-store.spec.ts, because Node has no IndexedDB.
+            'packages/adapters-browser/src/**/*.test.ts',
             'apps/mcp/src/**/*.test.ts',
             // Design tokens, presentation primitives, and formatters (ADR-0008).
             'apps/web/tokens/**/*.test.ts',
