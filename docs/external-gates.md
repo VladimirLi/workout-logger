@@ -226,6 +226,9 @@ remains can only be done by a person or on a device, and an agent must not asser
 6. Storybook (`governance.lab.storybook`) is reviewed as a dependency change under
    LIC-2026-09-16 and its build permission is decided in a guardrail change, or the owner
    changes that decision.
+   Evidence: 2026-09-17, Vladimir, approved the reviewed Storybook dependency change and the
+   separate esbuild build-permission guardrail change; installation and exact-tree checks
+   remain to be implemented.
 7. Installation, vibration, and the rest tone are confirmed on real iOS and Android phones.
 8. Interaction to Next Paint is measured under 200 ms, and the 16 px icon is reviewed.
 

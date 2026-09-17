@@ -57,5 +57,5 @@ is unchanged. No dependency is added.
 **Still open (gate G-10):** the canonical list is `DESIGN_SYSTEM.md`, Validation status. It
 includes target-user use of the critical journeys (R-022), the manual accessibility matrix,
 the proposal review UX and its baselines, Linux baselines in CI (the visual gate fails in CI
-until then), owner approval of baselines, Storybook (blocked on a dependency and guardrail
-review), and device checks.
+until then), final owner approval of the complete baselines, Storybook implementation (its
+dependency and guardrail prerequisites were approved on 2026-09-17), and device checks.
