@@ -19,52 +19,67 @@ type LogToRestProps = {
   savedAnnouncement: string;
 };
 
+type Mode = 'set' | 'leaving' | 'rest';
+
+/** Half of --motion-base: the set view fades out, then rest fades in, 200 ms in total. */
+const HALF_CROSSFADE_MS = 100;
+
 /**
  * motion.log-to-rest.crossfade and feedback.set-saved.inline-rest: logging a set replaces
- * the set view with rest in place, with a 200 ms fade (instant under reduced motion), a
- * haptic tick (haptics.def.log-tick), and focus on the rest heading.
+ * the set view with rest in place. The set view fades out and rest fades in (instant under
+ * reduced motion), a haptic tick plays (haptics.def.log-tick), focus moves to the rest
+ * heading, and a live region that was already on the page announces the save.
  */
 export function LogToRest({ set, rest, restHeadingId, savedAnnouncement }: LogToRestProps) {
-  const [mode, setMode] = useState<'set' | 'rest'>('set');
+  const [mode, setMode] = useState<Mode>('set');
   const [announcement, setAnnouncement] = useState('');
   const logged = useRef(false);
 
   useEffect(() => {
+    if (mode !== 'leaving') return;
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const timeout = window.setTimeout(() => setMode('rest'), reduced ? 0 : HALF_CROSSFADE_MS);
+    return () => window.clearTimeout(timeout);
+  }, [mode]);
+
+  useEffect(() => {
     if (mode !== 'rest' || !logged.current) return;
     document.getElementById(restHeadingId)?.focus();
-  }, [mode, restHeadingId]);
-
-  if (mode === 'rest') {
-    return (
-      <>
-        <div className={styles.view} data-entering>
-          {rest}
-        </div>
-        <p className="visually-hidden" role="status">
-          {announcement}
-        </p>
-      </>
-    );
-  }
+    // Set after the region exists and focus has moved, so the change is announced.
+    setAnnouncement(savedAnnouncement);
+  }, [mode, restHeadingId, savedAnnouncement]);
 
   return (
     <div className={styles.layout}>
-      <div className={styles.view}>{set}</div>
-      <StickyActionBar>
-        <Button
-          variant="primary"
-          size="lg"
-          expand
-          onClick={() => {
-            logged.current = true;
-            vibrate(10);
-            setAnnouncement(savedAnnouncement);
-            setMode('rest');
-          }}
-        >
-          {messages.actions.logSet}
-        </Button>
-      </StickyActionBar>
+      {mode === 'rest' ? (
+        <div className={styles.view} data-entering>
+          {rest}
+        </div>
+      ) : (
+        <>
+          <div className={styles.view} data-leaving={mode === 'leaving' || undefined}>
+            {set}
+          </div>
+          <StickyActionBar>
+            <Button
+              variant="primary"
+              size="lg"
+              expand
+              onClick={() => {
+                if (logged.current) return;
+                logged.current = true;
+                vibrate(10);
+                setMode('leaving');
+              }}
+            >
+              {messages.actions.logSet}
+            </Button>
+          </StickyActionBar>
+        </>
+      )}
+      <p className="visually-hidden" role="status">
+        {announcement}
+      </p>
     </div>
   );
 }

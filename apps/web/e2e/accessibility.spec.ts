@@ -20,6 +20,8 @@ for (const theme of ['light', 'dark'] as const) {
     }) => {
       await page.addInitScript((value) => window.localStorage.setItem('wl-theme', value), theme);
       await page.goto(route);
+      // A broken bootstrap would otherwise scan the light theme twice.
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
       const results = await new AxeBuilder({ page }).withTags(WCAG).analyze();
       // Any violation fails; serious and critical ones are the floor governance.def.axe sets.
       expect(
@@ -91,6 +93,10 @@ test('@a11y in-workout controls meet 48 px with 8 px between them', async ({ pag
     'button[aria-label^="Decrease"], button[aria-label^="Increase"], input[name="rir"], main button:has-text("Log set")',
   );
   expect(workout.length).toBeGreaterThanOrEqual(8);
+  // controls.rir.segmented: each RIR segment is 56 px tall.
+  for (const box of workout.filter((item) => /^[0-4]\+?$/.test(item.label.trim()))) {
+    expect(box.height, `RIR ${box.label}`).toBeGreaterThanOrEqual(56);
+  }
   for (const box of workout) {
     expect(box.height, box.label).toBeGreaterThanOrEqual(48);
     expect(box.width, box.label).toBeGreaterThanOrEqual(48);

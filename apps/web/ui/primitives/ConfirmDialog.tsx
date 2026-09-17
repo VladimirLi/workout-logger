@@ -16,6 +16,8 @@ type ConfirmDialogProps = {
   confirm: string;
   /** The clear cancel, also naming the result, e.g. "Keep history". */
   cancel: string;
+  /** Runs when the permanent action is confirmed. */
+  onConfirm?: () => void;
 };
 
 /**
@@ -23,7 +25,14 @@ type ConfirmDialogProps = {
  * ask first, in a dialog with a clear Cancel. Reversible ones act at once with Undo. The
  * confirming button is secondary: the safe choice is never the visually loudest.
  */
-export function ConfirmDialog({ trigger, title, body, confirm, cancel }: ConfirmDialogProps) {
+export function ConfirmDialog({
+  trigger,
+  title,
+  body,
+  confirm,
+  cancel,
+  onConfirm,
+}: ConfirmDialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const [open, setOpen] = useState(false);
   const titleId = useId();
@@ -57,7 +66,13 @@ export function ConfirmDialog({ trigger, title, body, confirm, cancel }: Confirm
           <Button variant="primary" onClick={() => setOpen(false)}>
             {cancel}
           </Button>
-          <Button variant="secondary" onClick={() => setOpen(false)}>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setOpen(false);
+              onConfirm?.();
+            }}
+          >
             {confirm}
           </Button>
         </div>

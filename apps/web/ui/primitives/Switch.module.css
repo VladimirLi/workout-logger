@@ -61,7 +61,7 @@
   aspect-ratio: 1;
   border-radius: var(--radius-pill);
   background: var(--color-ink-muted);
-  transition: transform var(--motion-fast) var(--ease-standard);
+  transition: transform var(--motion-base) var(--ease-standard);
 }
 
 /* principles.accent-budget: the on state is ink, not accent; the words say On. */

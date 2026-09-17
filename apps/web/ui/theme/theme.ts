@@ -18,10 +18,12 @@ export function isThemePreference(value: unknown): value is ThemePreference {
 }
 
 /**
- * Inline, dependency-free, and static: no user input is interpolated into it. Kept in sync
- * with applyTheme by ui/theme/theme.test.ts, which executes it against a fake document.
+ * Inline, dependency-free, and static: no user input is interpolated into it. It also follows
+ * an operating-system scheme change while the page is open, reading the current preference
+ * from data-theme so a choice made in Settings is respected. ui/theme/theme.test.ts executes
+ * it against a fake document.
  */
-export const THEME_BOOTSTRAP = `(function(){var p='light';try{var s=localStorage.getItem('${THEME_STORAGE_KEY}');if(s==='light'||s==='dark'||s==='system')p=s}catch(e){}var d=document.documentElement;function a(){var k=p==='dark'||(p==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches);d.setAttribute('data-theme',p);d.style.colorScheme=k?'dark':'light';var m=document.querySelectorAll('meta[name="theme-color"]');for(var i=0;i<m.length;i++)m[i].setAttribute('content',k?'${THEME_COLOR.dark}':'${THEME_COLOR.light}')}a();document.addEventListener('DOMContentLoaded',a)})()`;
+export const THEME_BOOTSTRAP = `(function(){var p='light';try{var s=localStorage.getItem('${THEME_STORAGE_KEY}');if(s==='light'||s==='dark'||s==='system')p=s}catch(e){}var d=document.documentElement;function a(){var k=p==='dark'||(p==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches);d.setAttribute('data-theme',p);d.style.colorScheme=k?'dark':'light';var m=document.querySelectorAll('meta[name="theme-color"]');for(var i=0;i<m.length;i++)m[i].setAttribute('content',k?'${THEME_COLOR.dark}':'${THEME_COLOR.light}')}a();document.addEventListener('DOMContentLoaded',a);var q=window.matchMedia('(prefers-color-scheme: dark)');if(q.addEventListener)q.addEventListener('change',function(){var t=d.getAttribute('data-theme');if(t==='light'||t==='dark'||t==='system')p=t;a()})})()`;
 
 export function resolvesDark(preference: ThemePreference, systemDark: boolean): boolean {
   return preference === 'dark' || (preference === 'system' && systemDark);

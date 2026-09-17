@@ -11,6 +11,12 @@
     max(var(--gutter), env(safe-area-inset-right));
 }
 
+/* Safe-area insets are physical; in right-to-left the inline start is the right edge. */
+.screen:dir(rtl) {
+  padding-inline: max(var(--gutter), env(safe-area-inset-right))
+    max(var(--gutter), env(safe-area-inset-left));
+}
+
 /* layout.def.breakpoints: 400 and 600. Custom properties cannot be used in a media query. */
 @media (min-width: 400px) {
   .screen {
