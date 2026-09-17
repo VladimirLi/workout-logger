@@ -238,7 +238,8 @@ remains can only be done by a person or on a device, and an agent must not asser
    specification requires are Storybook reference screens with darwin baselines and behaviour
    tests; Linux baselines are tracked by item 4.
 4. Linux visual baselines exist and CI runs the visual gate in the pinned Playwright
-   container. Until then `pnpm test:visual` fails in CI; only darwin baselines are committed.
+   container. Linux baselines are committed and `CI=1 pnpm verify` passes in that image locally;
+   the workflow runs in it by digest. A GitHub Actions run has not happened (no remote, G-1).
 5. The owner approves the baselines in a visual-change PR.
 6. Storybook (`governance.lab.storybook`) is reviewed as a dependency change under
    LIC-2026-09-16 and its build permission is decided in a guardrail change, or the owner

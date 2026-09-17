@@ -411,8 +411,10 @@ phone offering installation, which is verified only on a device.
 | visual-phone-large-light, -dark | 412 × 915 | light, dark | 100 % |
 | visual-wide-light, -dark | 1280 × 800 | light, dark | 100 % |
 
-Every lab page and reference screen is captured in every project: 14 pages × 7 projects = 98
-baselines. The threshold is 0.1 % of pixels. Fixtures pin time (2026-09-14 10:00 UTC through
+The product routes and every reference screen story are captured in every project, and every
+foundation, primitive, and pattern story at the small phone in both themes: 282 files per
+platform, including the colour-vision and forced-colours renders and the accessibility-tree
+snapshots. The threshold is 0.1 % of pixels. Fixtures pin time (2026-09-14 10:00 UTC through
 the page clock), data (`apps/web/ui/reference/fixtures.ts`), browser (the Chromium build pinned by
 `@playwright/test`), animations (disabled), the caret (hidden), time zone, and locale.
 
@@ -422,18 +424,21 @@ platform's own UI font, so baselines are stored per platform and captured after
 pixels; that shows up as a visual diff to review, not as silent drift. A test-only font was
 rejected because it would stop the baselines showing the accepted rendering.
 
-A repeatability test renders every page twice in fresh contexts and requires identical bytes;
-`toHaveScreenshot` alone cannot prove that. It proves determinism within a run on one machine,
-not across machines.
+A repeatability test renders every target twice in fresh contexts, one test per target, and
+requires identical bytes; `toHaveScreenshot` alone cannot prove that. It proves determinism
+within a run on one machine, not across machines.
 
 `pnpm test:visual` never writes a baseline, so a missing one fails. `pnpm visual:update`
 writes them, and its output may be committed only in a visual-change PR the owner approves.
 
-**Current baselines are provisional.** The initial darwin baselines were committed with this
-change, before any PR flow exists (no remote, G-1), so they have not had that approval.
-Only darwin baselines exist: `pnpm verify` passes locally on macOS, and **the visual gate fails
-in CI** (Ubuntu) until Linux baselines are generated in the pinned Playwright container and
-CI runs there. That is recorded as a failing gate, not skipped.
+**Darwin and Linux baselines both exist.** Linux baselines were generated in
+`mcr.microsoft.com/playwright:v1.63.0-noble` (linux/amd64) only after every target rendered
+identically twice in every project, and `CI=1 pnpm verify` passes every gate in that image. CI's
+verify job runs in the same image, pinned by digest. No GitHub Actions run exists yet (no remote,
+G-1).
+
+**Current baselines are provisional.** They were committed before any PR flow exists, so they have
+not had the owner's visual-change PR approval.
 
 ## Change control
 
@@ -508,8 +513,8 @@ test enforces that.
 | Manual accessibility matrix (R-007) | **Browser evidence recorded; people and devices not.** `test:a11y` keeps accessibility-tree snapshots of every reference screen, keyboard-only walks through logging, retry, undo, and proposal decisions, forced-colours and 200 % text / 320 px checks, and every axe rule on every story. VoiceOver, TalkBack, Windows forced colours, and a keyboard user on macOS Safari have not been run. | Each row of the matrix above run by a person with that technology, recorded |
 | Colour-blind simulation check (colour-blind default) | **Simulated; not reviewed by a person.** `pnpm test` checks every contrast pair as seen with deuteranopia, protanopia, and achromatopsia (Machado 2009); `test:visual` keeps renders of the state matrix, set focus, and proposal review under Chromium's emulation of each, and under forced colours. Nothing depends on hue alone. | A person reviews those renders, recorded |
 | Proposal review UX and its baselines | **Minimum implemented.** The review content the agent-proposals specification requires is built from accepted components as `Reference screens/Proposal review` and `Stale proposal`, with baselines and behaviour tests. Any richer review UX is a first-slice decision. | Nothing further for the design system |
-| Linux baselines for CI | **Missing.** Only darwin baselines exist, so `test:visual` fails in CI until they are generated in the pinned Playwright container. | Baselines generated in `mcr.microsoft.com/playwright:v1.63.0-noble` and CI run in that image (a guardrail change) |
-| Owner approval of baselines | **Pending artifact.** On 2026-09-17 Vladimir said to approve them, but Linux baselines and their visual-change PR do not exist yet, so there is no final artifact to approve. | Vladimir approves the complete Darwin and Linux baseline set in its visual-change PR |
+| Linux baselines for CI | **Generated and verified locally; no GitHub run.** Linux baselines come from the pinned Playwright image after a byte-identical repeatability pass, `CI=1 pnpm verify` passes every gate in that image, and the verify workflow runs in it by digest. | A GitHub Actions verify run passes on the remote (G-1) |
+| Owner approval of baselines | **Pending PR.** On 2026-09-17 Vladimir said to approve them. The complete darwin and Linux set now exists, but no visual-change PR does (no remote). | Vladimir approves the complete Darwin and Linux baseline set in its visual-change PR |
 | Storybook (`governance.lab.storybook`) | **Implemented, and the only lab (ADR-0010).** Implemented 2026-09-17 from the owner-approved change: storybook, @storybook/nextjs-vite, and @storybook/addon-a11y 10.6.0 with vite 8.3.0. esbuild@0.28.2 is the only lifecycle script allowed. The licence gate passes (541 components, no new exception) and the audit gate reports no advisories. `pnpm storybook:build` runs in `pnpm verify`; `pnpm test` pins one story per component in the agreed hierarchy; `test:e2e` renders every story and keyboard-tests the interactive ones; `test:a11y` runs every axe rule on every story at 375 and 1280 px in both themes. | Nothing further; kept here until G-10 closes |
 | Installation offered on a real phone | **Not verified.** | iOS and Android device check, recorded |
 | Vibration and rest tone on a device | **Not verified.** | Device check, recorded |
