@@ -113,6 +113,19 @@ docs/license-policy.md
 packages/observability/
 ```
 
+Matched by pattern rather than listed literally:
+
+```text
+^package\.json$
+```
+
+The root `package.json` is a guardrail because it **owns every gate command**: `pnpm verify`
+runs `pnpm <gate>` for each gate, so a manifest edit can turn any gate into a no-op. The
+workspace manifests stay product files — a package's manifest arrives with the package — so the
+commands the `build` and `storybook:build` gates delegate to them are pinned in
+`scripts/gate-commands.test.ts` instead, which is a guardrail file. Either way, weakening what a
+gate runs is a guardrail change.
+
 `packages/observability/` is a guardrail **in full**, not just its allowlist: the attribute
 list is the telemetry privacy control and the rest of the package is what enforces it, so
 protecting one without the other protects neither.

@@ -124,6 +124,7 @@ describe('license policy consistency', () => {
 describe('guardrail list consistency', () => {
   const guardrails = JSON.parse(readFileSync('scripts/guardrails.json', 'utf8')) as {
     guardrailPaths: string[];
+    guardrailPathPatterns?: string[];
   };
   const engineering = readFileSync('ENGINEERING.md', 'utf8');
 
@@ -131,6 +132,30 @@ describe('guardrail list consistency', () => {
     for (const path of guardrails.guardrailPaths) {
       expect(engineering, `ENGINEERING.md does not list guardrail path ${path}`).toContain(path);
     }
+  });
+
+  it('documents every guardrail path pattern in ENGINEERING.md', () => {
+    // A pattern protects files no literal path names, so an undocumented one is a rule
+    // nobody reading this repository would know applies to them.
+    for (const pattern of guardrails.guardrailPathPatterns ?? []) {
+      expect(engineering, `ENGINEERING.md does not list guardrail pattern ${pattern}`).toContain(
+        pattern,
+      );
+    }
+  });
+
+  it('protects the root manifest, which owns every gate command', () => {
+    const patterns = (guardrails.guardrailPathPatterns ?? []).map((source) => new RegExp(source));
+    expect(
+      guardrails.guardrailPaths.includes('package.json') ||
+        patterns.some((pattern) => pattern.test('package.json')),
+    ).toBe(true);
+  });
+
+  it('runs the separation audit in CI without going through a pnpm script', () => {
+    // pnpm would read the command from package.json, which the audit exists to protect.
+    const workflow = readFileSync('.github/workflows/verify.yml', 'utf8');
+    expect(workflow).toContain('node scripts/check-guardrails.mjs --range HEAD');
   });
 
   it('protects the whole observability package, not just the allowlist', () => {

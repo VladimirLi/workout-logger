@@ -2,7 +2,10 @@ name: verify
 
 # The authoritative gate (ADR-0006). CI invokes the SAME root scripts a developer
 # runs locally, so a green local run means what it says. Nothing is inlined here
-# that is not also a `pnpm` script.
+# that is not also a `pnpm` script, with one deliberate exception: the guardrail
+# separation audit runs `node` directly. Going through a `pnpm` script would route
+# it via package.json, which is one of the files it exists to protect, so a commit
+# could point that script at nothing and the audit would not run to notice.
 #
 # GUARDRAIL FILE. An implementing agent may not change this in the same change as
 # the product code it judges (D-035).
@@ -57,6 +60,12 @@ jobs:
         # --frozen-lockfile fails if the lockfile and manifests disagree, which is
         # the point: CI must install exactly what was reviewed.
         run: pnpm install --frozen-lockfile
+
+      - name: Audit guardrail separation
+        # Invoked as node, not pnpm: see the note at the top of this file. Runs before verify
+        # so a commit that weakens a gate is reported even if the weakened suite then passes.
+        # The whole history, because that is the claim - no commit has ever mixed the two.
+        run: node scripts/check-guardrails.mjs --range HEAD
 
       - name: Verify
         # The aggregate gate. Every required non-deployment check, in one command.

@@ -53,10 +53,17 @@ function changedFiles() {
   return { files: output ? output.split('\n') : [] };
 }
 
+/**
+ * Guardrail files that cannot be named as a literal path. The package manifests are the
+ * case: the root one defines every gate command, and a workspace one defines the build that
+ * the build gate delegates to, so editing a manifest can make a gate pass by doing nothing.
+ */
+const guardrailPatterns = (config.guardrailPathPatterns ?? []).map((source) => new RegExp(source));
+
 const isGuardrail = (file) =>
   config.guardrailPaths.some((path) =>
     path.endsWith('/') ? file.startsWith(path) : file === path,
-  );
+  ) || guardrailPatterns.some((pattern) => pattern.test(file));
 
 /** Splits a file list into the two categories the rule is about. Anything else is neither. */
 function classify(files) {
