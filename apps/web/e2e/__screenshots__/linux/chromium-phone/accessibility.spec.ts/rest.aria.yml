@@ -1,0 +1,17 @@
+- banner:
+  - button "Close"
+  - paragraph: Exercise 2 of 5
+  - text: Syncing
+- main:
+  - heading "Rest" [level=1]
+  - list:
+    - listitem: Set 1, done
+    - listitem: Set 2, done
+    - listitem: Set 3, not done
+    - listitem: Set 4, not done
+  - paragraph: /Set 2 saved\. Rest 1:\d+\./
+  - paragraph: 1 minute left
+  - paragraph
+  - paragraph: "/Next: Back squat, \\d+ kg × 8/"
+  - button /Add \d+ seconds/
+  - button "Skip rest"

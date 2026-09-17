@@ -1,0 +1,34 @@
+- banner:
+  - heading "Today" [level=1]
+- main:
+  - heading "Lower body A" [level=2]
+  - paragraph: /5 exercises · \d+ sets/
+  - text: /From agent Created Sun \d+ Sept/
+  - button "Start workout"
+  - list:
+    - listitem:
+      - paragraph: Back squat
+      - paragraph: /4 sets · \d+ kg × 8/
+    - listitem:
+      - paragraph: Romanian deadlift
+      - paragraph: /3 sets · \d+ kg × \d+/
+    - listitem:
+      - paragraph: Split squat
+      - paragraph: /3 sets · \d+ kg × \d+/
+    - listitem:
+      - paragraph: Leg curl
+      - paragraph: /3 sets · \d+ kg × \d+/
+    - listitem:
+      - paragraph: Calf raise
+      - paragraph: /3 sets · \d+ kg × \d+/
+- navigation "Primary":
+  - list:
+    - listitem:
+      - link "Today":
+        - /url: "#today"
+    - listitem:
+      - link "History":
+        - /url: "#history"
+    - listitem:
+      - link "Settings":
+        - /url: "#settings"
