@@ -51,6 +51,36 @@ for (const route of ALL_ROUTES) {
   });
 }
 
+test('@visual the gate tolerates changes under 0.1 percent and fails above it', async ({
+  page,
+}, testInfo) => {
+  // A lasting proof of governance.visual-regression.two-viewport's threshold, against the real
+  // committed baseline. One project is enough: the threshold is shared configuration.
+  test.skip(testInfo.project.name !== 'visual-phone-small-light', 'threshold proof runs once');
+  const route = '/lab/screens/set-focus';
+  const mark = (size: number) =>
+    page.addStyleTag({
+      content: `body::after{content:"";position:fixed;inset-block-start:0;inset-inline-start:0;inline-size:${size}px;block-size:${size}px;background:#ff00ff;z-index:99}`,
+    });
+  const viewport = page.viewportSize();
+  const limit = Math.floor((viewport?.width ?? 0) * (viewport?.height ?? 0) * 0.001);
+
+  await prepare(page, testInfo);
+  await open(page, route);
+  // 10 x 10 = 100 changed pixels, under the 250-pixel limit at 375 x 667.
+  expect(100).toBeLessThan(limit);
+  await mark(10);
+  await expect(page).toHaveScreenshot(`${slug(route)}.png`);
+
+  await open(page, route);
+  // 20 x 20 = 400 changed pixels, over the limit: the comparison must fail.
+  expect(400).toBeGreaterThan(limit);
+  await mark(20);
+  await expect(
+    expect(page).toHaveScreenshot(`${slug(route)}.png`, { timeout: 3_000 }),
+  ).rejects.toThrow(/pixels \(ratio [\d.]+ of all image pixels\) are different/);
+});
+
 test('@visual rendering is repeatable: two fresh pages give identical pixels', async ({
   browser,
 }, testInfo) => {
