@@ -52,6 +52,7 @@ export class InMemoryLocalWorkoutStore implements LocalWorkoutStore {
         (entry) => entry.idempotencyKey === request.idempotencyKey,
       );
       if (queued) return Promise.resolve({ kind: 'committed', entry: queued });
+      return Promise.resolve({ kind: 'already_delivered' });
     }
 
     const entityKey = this.#sessionKey(request.userId, request.session.id);

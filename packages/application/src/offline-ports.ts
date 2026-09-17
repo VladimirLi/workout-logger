@@ -88,7 +88,9 @@ export type LocalCommitOutcome =
   /** The device is out of storage. Nothing was written; queued mutations are untouched. */
   | { readonly kind: 'storage_full' }
   /** The key was already used for a different change. Nothing was written. */
-  | { readonly kind: 'idempotency_key_reused' };
+  | { readonly kind: 'idempotency_key_reused' }
+  /** This exact change was already delivered and acknowledged. Nothing was written again. */
+  | { readonly kind: 'already_delivered' };
 
 /**
  * The device's workout store and outbox.

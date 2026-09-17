@@ -40,7 +40,8 @@ export interface WorkoutPorts {
 
 export type WorkoutCommitFailure =
   | { readonly kind: 'storage_full' }
-  | { readonly kind: 'idempotency_key_reused' };
+  | { readonly kind: 'idempotency_key_reused' }
+  | { readonly kind: 'already_delivered' };
 
 export interface WorkoutChange<S extends WorkoutSession> {
   readonly session: S;
@@ -65,6 +66,7 @@ async function commit<S extends WorkoutSession>(
       return ok({ session, entry: outcome.entry });
     case 'storage_full':
     case 'idempotency_key_reused':
+    case 'already_delivered':
       return err({ kind: outcome.kind });
   }
 }
