@@ -12,8 +12,9 @@
  * `--range <rev-range>` classifies each commit in the range separately instead. Before a
  * remote exists there is no merge base and no pull request, so the branch comparison above
  * reports "not applicable" and the separation is carried by the commits themselves: each one
- * is guardrail-only, product-only, or neither. That is what a reviewer reads, and
- * scripts/guardrail-separation.test.ts holds it for every commit since the recorded start.
+ * is guardrail-only, product-only, or neither. Merge commits are audited by their combined
+ * diff, which is the resolution the merge itself introduced. That is what a reviewer reads, and
+ * scripts/guardrail-separation.test.ts holds it for every commit in the history.
  */
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -80,13 +81,18 @@ if (rangeIndex !== -1) {
     console.error('check-guardrails: --range needs a git rev-range, for example A..HEAD.');
     process.exit(2);
   }
-  // --no-merges: a merge commit's own diff is the union of its parents' work, so classifying
-  // it would report a co-change that no author ever made. The parents are in the range.
-  const listed = git(['rev-list', '--reverse', '--no-merges', range]);
+  const listed = git(['rev-list', '--reverse', range]);
   const commits = listed ? listed.split('\n') : [];
   const mixed = [];
   for (const commit of commits) {
-    const output = git(['show', '--name-only', '--format=', commit]);
+    // --cc is what makes a merge commit auditable rather than skipped. A combined diff lists
+    // only the files that differ from EVERY parent, which is exactly the merge's own work: an
+    // evil merge that widens a gate while editing the code that gate judges shows up here,
+    // and a clean merge lists nothing because each side's changes belong to the parent commits
+    // that carry them - and those are in this range too. On a non-merge commit --cc is the
+    // ordinary diff. It is passed explicitly because `git show` chooses a merge format from
+    // configuration, and this classification must not depend on the operator's git config.
+    const output = git(['show', '--name-only', '--format=', '--cc', commit]);
     const result = classify(output ? output.split('\n').filter(Boolean) : []);
     if (result.mixed) mixed.push({ commit, ...result });
   }
