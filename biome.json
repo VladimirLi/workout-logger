@@ -13,6 +13,7 @@
       "!**/coverage",
       "!**/playwright-report",
       "!**/test-results",
+      "!**/storybook-static",
       "!**/*.tsbuildinfo",
       "!pnpm-lock.yaml",
       "!openspec",

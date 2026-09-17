@@ -13,6 +13,7 @@ out/
 coverage/
 playwright-report/
 test-results/
+storybook-static/
 blob-report/
 .playwright/
 artifacts/

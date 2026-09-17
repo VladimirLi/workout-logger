@@ -15,7 +15,7 @@ import { describe, expect, it } from 'vitest';
  * Minimum necessary permission is established from the installed tree, not assumed:
  * every package in the lockfile's installed set is scanned for install lifecycle scripts,
  * and the allowBuilds map must decide exactly those packages - no undecided build, and no
- * standing grant for a package that is not there. Today that set is empty.
+ * standing grant for a package that is not there. Today that set is esbuild alone.
  */
 
 const REMOVED_OR_UNSAFE_KEYS = [
@@ -154,10 +154,11 @@ describe('permissions are exactly the minimum the installed tree needs', () => {
     }
   });
 
-  it('matches the recorded expectation for this tree: no dependency needs to build', () => {
+  it('matches the recorded expectation for this tree: only esbuild builds', () => {
     // Recorded rather than derived, so a new build-script dependency is a visible change
-    // to this test and to pnpm-workspace.yaml, both guardrail files.
-    expect(withLifecycleScripts).toEqual([]);
-    expect(allowBuilds).toEqual({});
+    // to this test and to pnpm-workspace.yaml, both guardrail files. esbuild arrives with
+    // the owner-approved Storybook toolchain (2026-09-17).
+    expect(withLifecycleScripts).toEqual(['esbuild']);
+    expect(allowBuilds).toEqual({ esbuild: true });
   });
 });
