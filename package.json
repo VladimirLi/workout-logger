@@ -30,6 +30,7 @@
     "test:migrations": "node scripts/validate-migrations.mjs",
     "test:guardrails": "node scripts/check-guardrails.mjs",
     "build": "pnpm typecheck && pnpm --filter \"./packages/**\" --filter \"./apps/**\" build",
+    "storybook:build": "pnpm --filter @workout/web storybook:build",
     "verify": "node scripts/verify.mjs",
     "openspec": "openspec",
     "spec:validate": "openspec validate --all --strict --no-interactive",

@@ -9,6 +9,8 @@ catalog:
   '@axe-core/playwright': 4.13.0
   '@modelcontextprotocol/sdk': 1.30.0
   '@playwright/test': 1.63.0
+  '@storybook/addon-a11y': 10.6.0
+  '@storybook/nextjs-vite': 10.6.0
   '@types/node': 22.20.3
   '@types/react': 19.3.0
   '@types/react-dom': 19.3.0
@@ -17,7 +19,9 @@ catalog:
   next: 16.3.5
   react: 19.3.0
   react-dom: 19.3.0
+  storybook: 10.6.0
   typescript: 6.0.3
+  vite: 8.3.0
   vitest: 5.0.1
   zod: 4.6.5
 
@@ -52,11 +56,16 @@ ignoredOptionalDependencies:
 # than being skipped with a warning. allowBuilds is the decision map: `name: true` lets a
 # package run its scripts, `name: false` records that it must not.
 #
-# The map is deliberately empty. No installed dependency has a lifecycle script: esbuild
-# and unrs-resolver are not in the tree, @biomejs/biome ships none, and sharp is excluded
-# above. Granting permission to packages that are not here would be a standing licence for
-# some future version of them to run code at install time unreviewed.
-# scripts/build-permissions.test.ts checks this against pnpm's effective configuration and
-# the installed tree. Adding an entry is a supply-chain decision and a guardrail change.
+# The map holds exactly one grant. esbuild@0.28.2 arrives with the Storybook toolchain
+# (storybook and vite) and its postinstall (`node install.js`) selects and verifies the
+# platform binary. Vladimir approved the Storybook dependency change and this separate
+# build-permission change on 2026-09-17 (DESIGN_SYSTEM.md, governance.lab.storybook).
+# No other installed dependency has a lifecycle script: unrs-resolver is not in the tree,
+# @biomejs/biome ships none, and sharp is excluded above. Granting permission to packages
+# that are not here would be a standing licence for some future version of them to run code
+# at install time unreviewed. scripts/build-permissions.test.ts checks this against pnpm's
+# effective configuration and the installed tree. Adding an entry is a supply-chain decision
+# and a guardrail change.
 strictDepBuilds: true
-allowBuilds: {}
+allowBuilds:
+  esbuild: true

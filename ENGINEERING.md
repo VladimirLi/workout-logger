@@ -59,6 +59,7 @@ inlines its own commands. That is what makes a green local run meaningful.
 | `pnpm test:guardrails` | Guardrail/product co-change check |
 | `pnpm spec:validate` | OpenSpec artifact validation |
 | `pnpm build` | Production build |
+| `pnpm storybook:build` | Static Storybook build of the design-system lab; `test:e2e` renders every story and `test:a11y` scans it |
 | `pnpm sbom:generate` | CycloneDX SBOM from the lockfile |
 | **`pnpm verify`** | **Every required non-deployment gate** |
 

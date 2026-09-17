@@ -167,6 +167,8 @@ module.exports = {
       path: [
         'node_modules',
         '[.]next/',
+        // Storybook's static build output, like .next: generated bundles, not source.
+        'storybook-static/',
         '/dist/',
         '/dist-types/',
         '/coverage/',

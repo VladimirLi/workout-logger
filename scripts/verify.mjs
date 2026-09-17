@@ -18,6 +18,7 @@ const GATES = [
   ['test', ['test']],
   ['test:integration', ['test:integration']],
   ['build', ['build']],
+  ['storybook:build', ['storybook:build']],
   ['test:architecture', ['test:architecture']],
   ['test:licenses', ['test:licenses']],
   ['test:deps', ['test:deps']],

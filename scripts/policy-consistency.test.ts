@@ -367,6 +367,7 @@ describe('gate documentation consistency', () => {
       'test:e2e',
       'test:a11y',
       'test:visual',
+      'storybook:build',
     ]) {
       expect(gates, `verify does not run ${required}`).toContain(required);
     }
