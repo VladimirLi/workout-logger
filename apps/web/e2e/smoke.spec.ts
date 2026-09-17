@@ -39,12 +39,16 @@ test('the web app manifest route is served and well formed', async ({ request })
 test('the service worker registers', async ({ page }) => {
   await page.goto('/');
 
-  const registered = await page.waitForFunction(
-    async () => (await navigator.serviceWorker.getRegistrations()).length > 0,
-    undefined,
-    { timeout: 15_000 },
-  );
-  expect(await registered.jsonValue()).toBe(true);
+  // Polled: waitForFunction treats the Promise an async predicate returns as already truthy, so it
+  // passed only when registration had finished before the first check.
+  await expect
+    .poll(
+      () => page.evaluate(async () => (await navigator.serviceWorker.getRegistrations()).length),
+      {
+        timeout: 15_000,
+      },
+    )
+    .toBeGreaterThan(0);
 });
 
 test('the offline fallback route is reachable', async ({ page }) => {

@@ -18,6 +18,9 @@ type RestTimerProps = {
   initialNow: number;
 };
 
+/** How late the first tick may be and still announce the start. */
+const START_GRACE_SECONDS = 5;
+
 const RADIUS = 44;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
@@ -50,7 +53,11 @@ export function RestTimer({ durationSeconds, startedAt, initialNow }: RestTimerP
       announced.current.add(key);
       setAnnouncement(text);
     };
-    if (remaining === durationSeconds) once('start', messages.rest.started(durationSeconds));
+    // Within the first few seconds, not only at exactly the full duration: a slow device can
+    // render its first tick a second or two late. A screen opened well into rest stays quiet.
+    if (durationSeconds - remaining <= START_GRACE_SECONDS && remaining > 10) {
+      once('start', messages.rest.started(durationSeconds));
+    }
     // At or below 10, not exactly 10: a throttled tab can skip a second.
     if (remaining <= 10 && remaining > 0) once('ten', messages.rest.tenSecondsLeft);
     if (remaining === 0 && !announced.current.has('done')) {

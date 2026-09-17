@@ -242,6 +242,18 @@ test.describe('timing', () => {
     await expect(undo).toBeHidden();
   });
 
+  test('the rest timer still announces the start when the screen opens a moment late', async ({
+    page,
+  }) => {
+    // A slow phone can render the rest screen a second or two after rest began; the start
+    // announcement must not depend on seeing the exact first second.
+    await page.clock.install({ time: REST.startedAt + 2_000 });
+    await openStory(page, SCREEN.rest);
+    await expect(page.locator('[aria-live="polite"]')).toHaveText(
+      'Rest started. 1 minute 30 seconds.',
+    );
+  });
+
   test('the rest timer announces start, 10 seconds left, and done, and nothing between', async ({
     page,
   }) => {
