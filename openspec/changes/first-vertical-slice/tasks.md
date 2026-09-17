@@ -1,8 +1,9 @@
 > **Nothing below is implemented.** Every task is unchecked, and that is an accurate
 > statement of the repository's state.
 >
-> Tasks marked **[UI]** implement substantive UI and MUST NOT be started while
-> `DESIGN_SYSTEM.md` reads `NOT DECIDED` (gate G-10, change `decide-design-system`).
+> Tasks marked **[UI]** implement substantive UI and build on the accepted design system
+> (`DESIGN_SYSTEM.md`, ADR-0008). Section 7's proposal review needs its UX decided first; the
+> design system deliberately leaves it open (gate G-10).
 > Tasks marked **[G-2]** require a provisioned database (gate G-2).
 > Tasks marked **[G-3]** touch the WebAuthn relying-party identifier, a one-way door.
 

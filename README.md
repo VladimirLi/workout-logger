@@ -29,7 +29,7 @@ checkout with no undeclared global tools.
 | Normative intent | [VISION.md](VISION.md), [ROADMAP.md](ROADMAP.md), [docs/adr/](docs/adr/) |
 | Working agreement | [AGENTS.md](AGENTS.md), [ENGINEERING.md](ENGINEERING.md) |
 | Controls | [SECURITY.md](SECURITY.md), [OBSERVABILITY.md](OBSERVABILITY.md) |
-| Blocking gate | [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) — the visual design system is **not decided** |
+| Design system | [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) — Quiet Performance **accepted**; validation open (G-10) |
 | External gates | [docs/external-gates.md](docs/external-gates.md) — ten open, none provisioned; G-11 (licence sign-off) closed conditionally |
 | Specs | [openspec/](openspec/) — three changes, all validating |
 | Discovery evidence | [docs/discovery/decision-record.md](docs/discovery/decision-record.md) |
@@ -40,7 +40,7 @@ with its canary, agent-proposal stale-revision rejection, and typed measurement 
 ## Layout
 
 ```text
-apps/web                    Next.js PWA — structural shell, deliberately unstyled
+apps/web                    Next.js PWA — shell, design-system tokens and components, /lab
 apps/mcp                    remote MCP entry point — declares its tool surface, does not serve
 packages/domain             entities, value objects, invariants — no framework, no IO
 packages/application        use cases and provider-neutral ports
@@ -69,8 +69,9 @@ No secrets, no real environment values, no cloud resources, no DNS records, no G
 no deployment. Provider integrations are ports and adapters. Everything requiring the owner's
 authorization is enumerated in [docs/external-gates.md](docs/external-gates.md).
 
-The web shell has no visual design, and that is a decision rather than an omission — see
-[ADR-0007](docs/adr/0007-design-system-deferred.md).
+The web shell has no product screens yet. It is styled with the accepted design system, and
+the lab at `/lab` shows its components and reference screens with fixture data — see
+[ADR-0008](docs/adr/0008-quiet-performance-design-system.md).
 
 ## Licence
 

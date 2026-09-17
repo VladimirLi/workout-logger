@@ -201,18 +201,36 @@ status check bound to an exact SHA, and the runner enforces the limits as config
 
 ---
 
-## G-10 — Design system acceptance
+## G-10 — Design system acceptance and validation
 
-**Status:** not performed. **Blocks substantive UI work.**
+**Status: OPEN.** The decisions are accepted; validation is not performed.
 
-**Required (ADR-0007).** [DESIGN_SYSTEM.md](../DESIGN_SYSTEM.md) must reach status
-`Accepted` before any change implementing substantive UI may merge.
+**Decision recorded 2026-09-17.** Vladimir, the owner, submitted the design-system workbook
+payload selecting all 65 decisions (0 unresolved, 0 deferred). It is kept verbatim in
+[docs/design-system/decision-payload.txt](design-system/decision-payload.txt) and recorded by
+[DESIGN_SYSTEM.md](../DESIGN_SYSTEM.md) (status `Accepted`, version 1.0.0) and
+[ADR-0008](adr/0008-quiet-performance-design-system.md). Substantive UI may now be built on it.
 
-**Not an external-service gate** — it needs no credentials. It is listed here because it
-is a human decision an agent must not make on its own.
+**Not an external-service gate** — it needs no credentials. It stays listed because what
+remains can only be done by a person or on a device, and an agent must not assert it.
 
-**Done when.** The design system is decided iteratively, `DESIGN_SYSTEM.md` records it,
-an ADR is written, and visual-regression baselines exist.
+**Still required before this gate closes** (DESIGN_SYSTEM.md, Validation status):
+
+1. The target user has used the critical journeys, with the evidence recorded (R-022). The
+   journeys are not built yet.
+2. The manual accessibility matrix (VoiceOver, TalkBack, keyboard, forced colours, 200 % text
+   and 400 % zoom, reduced motion) has been run and recorded (R-007), plus a colour-blind
+   simulation review.
+3. The proposal review UX is decided in its own change, with visual baselines.
+4. Linux visual baselines exist and CI runs the visual gate in the pinned Playwright
+   container. Until then `pnpm test:visual` fails in CI; only darwin baselines are committed.
+5. The owner approves the baselines in a visual-change PR.
+6. Storybook (`governance.lab.storybook`) is reviewed as a dependency change under
+   LIC-2026-09-16 and its build permission is decided in a guardrail change, or the owner
+   changes that decision.
+7. Installation is confirmed on a real iOS and Android phone.
+
+**Done when** every item above is recorded with who did it and when.
 
 ---
 

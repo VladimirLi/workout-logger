@@ -57,10 +57,11 @@ the existing port contract suites.
 relying-party ID — a one-way door before any passkey enrollment), G-4 (hosting). Sections 2
 onward cannot be implemented until G-2 closes.
 
-**Blocked on the design system.** Every task that renders substantive UI depends on
-`DESIGN_SYSTEM.md` reaching `Accepted` — see the `decide-design-system` change and gate G-10.
-Those tasks are marked in `tasks.md` and MUST NOT be started while that status is
-`NOT DECIDED`. Non-visual work in sections 1 through 4 is not blocked by it.
+**Depends on the design system.** Every task that renders substantive UI builds on
+`DESIGN_SYSTEM.md`, which is `Accepted` (ADR-0008, change `decide-design-system`). Those tasks
+are marked in `tasks.md`. The proposal review UX (section 7) is not decided by the design
+system and needs its own decision first. Validating the journeys with the target user (R-022)
+happens here and closes part of gate G-10.
 
 **Not claimed:** nothing in this change is implemented. The proposal, specs, and tasks exist
 so the work is reviewable before it starts.
