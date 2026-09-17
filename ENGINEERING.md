@@ -128,7 +128,9 @@ The rule is enforced at two units, because before a remote exists only one of th
   a remote exists (G-1).
 - **Each commit**, by `scripts/guardrail-separation.test.ts` under `pnpm test`, which runs
   `node scripts/check-guardrails.mjs --range HEAD` over the whole history. Every commit must be
-  guardrail-only, product-only, or neither.
+  guardrail-only, product-only, or neither. A merge commit is read by its combined diff — the
+  resolution it introduced — so an evil merge that widens a gate while editing the code that
+  gate judges fails, while a merge that only brings two separated commits together passes.
 
 The commit check is strictly the stricter of the two: a history that passes it can still fail
 the branch check, and must. Note the consequence for reading history — a range of commits
