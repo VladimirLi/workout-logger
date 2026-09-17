@@ -51,7 +51,8 @@ export function RestTimer({ durationSeconds, startedAt, initialNow }: RestTimerP
       setAnnouncement(text);
     };
     if (remaining === durationSeconds) once('start', messages.rest.started(durationSeconds));
-    if (remaining === 10) once('ten', messages.rest.tenSecondsLeft);
+    // At or below 10, not exactly 10: a throttled tab can skip a second.
+    if (remaining <= 10 && remaining > 0) once('ten', messages.rest.tenSecondsLeft);
     if (remaining === 0 && !announced.current.has('done')) {
       once('done', messages.rest.done);
       // haptics.rest-end.vibrate-optional-sound: vibration where supported and enabled, the

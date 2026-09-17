@@ -4,6 +4,12 @@
   }
 }
 
+@keyframes leave {
+  to {
+    opacity: 0;
+  }
+}
+
 .layout {
   display: flex;
   flex: 1;
@@ -18,8 +24,12 @@
   gap: var(--space-5);
 }
 
+.view[data-leaving] {
+  animation: leave var(--motion-fast) var(--ease-exit) forwards;
+}
+
 .view[data-entering] {
-  animation: enter var(--motion-base) var(--ease-standard);
+  animation: enter var(--motion-fast) var(--ease-standard);
 }
 
 /*

@@ -8,6 +8,8 @@ function boot(stored: string | null | Error, systemDark = false) {
   const style: { colorScheme?: string } = {};
   const metas = [{ content: '', setAttribute: (_: string, v: string) => (metas[0]!.content = v) }];
   const listeners: (() => void)[] = [];
+  const mediaListeners: (() => void)[] = [];
+  const system = { dark: systemDark };
   runInNewContext(THEME_BOOTSTRAP, {
     localStorage: {
       getItem: (key: string) => {
@@ -15,23 +17,37 @@ function boot(stored: string | null | Error, systemDark = false) {
         return key === THEME_STORAGE_KEY ? stored : null;
       },
     },
-    window: { matchMedia: () => ({ matches: systemDark }) },
+    window: {
+      matchMedia: () => ({
+        get matches() {
+          return system.dark;
+        },
+        addEventListener: (_: string, listener: () => void) => mediaListeners.push(listener),
+      }),
+    },
     document: {
       documentElement: {
         setAttribute: (name: string, value: string) => {
           attributes[name] = value;
         },
+        getAttribute: (name: string) => attributes[name] ?? null,
         style,
       },
       querySelectorAll: () => metas,
       addEventListener: (_: string, listener: () => void) => listeners.push(listener),
     },
   });
+  const changeSystem = (dark: boolean) => {
+    system.dark = dark;
+    for (const listener of mediaListeners) listener();
+    return { theme: attributes['data-theme'], scheme: style.colorScheme, meta: metas[0]!.content };
+  };
   return {
     theme: attributes['data-theme'],
     scheme: style.colorScheme,
     meta: metas[0]!.content,
     listeners,
+    changeSystem,
   };
 }
 
@@ -59,6 +75,16 @@ describe('theme bootstrap', () => {
 
   it('falls back to light when storage is unavailable', () => {
     expect(boot(new Error('SecurityError'))).toMatchObject({ theme: 'light' });
+  });
+
+  it('follows an OS scheme change mid-session when the preference is system', () => {
+    const booted = boot('system', false);
+    expect(booted.scheme).toBe('light');
+    expect(booted.changeSystem(true)).toMatchObject({ scheme: 'dark', meta: THEME_COLOR.dark });
+  });
+
+  it('ignores an OS scheme change when the preference is explicit', () => {
+    expect(boot('light', false).changeSystem(true)).toMatchObject({ scheme: 'light' });
   });
 
   it('re-applies once the document has parsed, so late theme-color tags are updated', () => {

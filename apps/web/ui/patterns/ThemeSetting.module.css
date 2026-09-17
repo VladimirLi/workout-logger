@@ -22,10 +22,14 @@
   cursor: pointer;
 }
 
-/* Native control, tinted with the accent (controls.def.native): 24 px inside a 56 px row. */
+/*
+ * Native control at 24 px inside a 56 px row (controls.def.native). Tinted with ink, not the
+ * accent: selection is ink (color.accent-strategy.solid-primary) and the accent fill belongs
+ * to the primary button (principles.accent-budget.action-progress).
+ */
 .radio {
   inline-size: var(--icon-button);
   block-size: var(--icon-button);
   margin: 0;
-  accent-color: var(--color-accent);
+  accent-color: var(--color-ink);
 }

@@ -19,7 +19,9 @@ type UndoToastProps = {
 /** The only toast in the system (feedback.def.toasts). */
 export function UndoToast({ message, onUndo, onExpire, durationMs = 10_000 }: UndoToastProps) {
   const [visible, setVisible] = useState(true);
-  const [paused, setPaused] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const paused = hovered || focused;
   const remaining = useRef(durationMs);
 
   useEffect(() => {
@@ -41,10 +43,12 @@ export function UndoToast({ message, onUndo, onExpire, durationMs = 10_000 }: Un
     // biome-ignore lint/a11y/noStaticElementInteractions: pause-on-hover only; the button inside is the control
     <div
       className={styles.toast}
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
-      onFocus={() => setPaused(true)}
-      onBlur={() => setPaused(false)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onFocus={() => setFocused(true)}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false);
+      }}
     >
       <p className={styles.message} role="status">
         {message}

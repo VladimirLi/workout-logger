@@ -35,13 +35,22 @@ test.describe('theme (theme.first-visit.light-then-choice)', () => {
     await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#101311');
   });
 
-  test('System follows the OS preference', async ({ page }) => {
+  test('System follows the OS preference, including a change mid-session', async ({ page }) => {
     await page.addInitScript(() => window.localStorage.setItem('wl-theme', 'system'));
     await page.emulateMedia({ colorScheme: 'dark' });
     await page.goto('/lab/screens/plan');
     expect(await background(page)).toBe(DARK_BG);
     await page.emulateMedia({ colorScheme: 'light' });
     expect(await background(page)).toBe(LIGHT_BG);
+    // Browser chrome and native controls follow too, via the bootstrap's change listener.
+    await expect
+      .poll(() =>
+        page.evaluate(() => ({
+          scheme: document.documentElement.style.colorScheme,
+          meta: document.querySelector('meta[name="theme-color"]')?.getAttribute('content'),
+        })),
+      )
+      .toEqual({ scheme: 'light', meta: '#EDF0EC' });
   });
 
   test('the Settings choice persists across a reload', async ({ page }) => {
@@ -109,20 +118,32 @@ test.describe('controls', () => {
     expect(new URL(page.url()).pathname).toBe('/lab/screens/set-focus');
   });
 
-  test('logging a set crossfades to rest in place and moves focus to the rest heading', async ({
+  test('logging a set crossfades to rest in place, checks the pill, and moves focus', async ({
     page,
   }) => {
     await page.clock.setFixedTime(FIXED_NOW);
     await page.goto('/lab/screens/set-focus');
-    await page.getByRole('button', { name: 'Log set' }).click();
+    const status = page
+      .locator('[role="status"]')
+      .filter({ hasText: /^$|Set 2 saved/ })
+      .last();
+    // The live region is on the page, empty, before anything is logged.
+    await expect(status).toBeAttached();
+    await expect(status).toHaveText('');
+    const logSet = page.getByRole('button', { name: 'Log set' });
+    await logSet.click();
+    const leaving = await page
+      .locator('[data-leaving]')
+      .evaluate((element) => getComputedStyle(element).animationName)
+      .catch(() => 'already gone');
+    expect(leaving).toMatch(/leave$|^already gone$/);
     await expect(page.getByRole('heading', { level: 1, name: 'Rest' })).toBeFocused();
-    await expect(
-      page.getByRole('status').filter({ hasText: 'Set 2 saved. Rest 1:30.' }),
-    ).toBeAttached();
-    const animation = await page
+    await expect(status).toHaveText('Set 2 saved. Rest 1:30.');
+    await expect(page.getByText('Set 2, done')).toBeAttached();
+    const entering = await page
       .locator('[data-entering]')
       .evaluate((element) => getComputedStyle(element).animationDuration);
-    expect(animation).toBe('0.2s');
+    expect(entering).toBe('0.1s');
     expect(new URL(page.url()).pathname).toBe('/lab/screens/set-focus');
   });
 
@@ -199,13 +220,28 @@ test.describe('timing', () => {
 });
 
 test.describe('preferences', () => {
-  test('reduced motion makes transitions instant', async ({ page }) => {
+  test('reduced motion makes every transition and animation instant', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    await page.goto('/lab/components');
-    const duration = await page
-      .getByRole('button', { name: 'Primary', exact: true })
-      .evaluate((button) => Number.parseFloat(getComputedStyle(button).transitionDuration));
-    expect(duration).toBeLessThanOrEqual(0.0001);
+    for (const route of ALL_ROUTES) {
+      await page.goto(route);
+      const slow = await page.evaluate(() =>
+        [...document.querySelectorAll('*')]
+          .map((element) => {
+            const style = getComputedStyle(element);
+            const longest = (value: string) =>
+              Math.max(...value.split(',').map((part) => Number.parseFloat(part) || 0));
+            return {
+              tag: element.tagName,
+              seconds: Math.max(
+                longest(style.transitionDuration),
+                longest(style.animationDuration),
+              ),
+            };
+          })
+          .filter(({ seconds }) => seconds > 0.0001),
+      );
+      expect(slow, route).toEqual([]);
+    }
   });
 
   test('forced colours keep a visible focus indicator and real control borders', async ({

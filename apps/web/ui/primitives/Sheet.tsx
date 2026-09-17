@@ -44,6 +44,11 @@ export function Sheet({ title, closeLabel, open, onClose, children }: SheetProps
       pushed.current = true;
     } else if (!open && dialog.open) {
       dialog.close();
+      // Closed by the parent: remove the history entry opening pushed, or Back would do nothing.
+      if (pushed.current) {
+        pushed.current = false;
+        window.history.back();
+      }
     }
   }, [open, titleId]);
 

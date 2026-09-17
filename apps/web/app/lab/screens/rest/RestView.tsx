@@ -6,6 +6,7 @@ import {
   Heading,
   messages,
   RestTimer,
+  SetProgress,
   Stack,
   StatusMessage,
   Surface,
@@ -23,6 +24,12 @@ export function RestView() {
       <Heading level={1} id={REST_HEADING_ID} focusTarget>
         {messages.rest.heading}
       </Heading>
+      {/* feedback.set-saved.inline-rest: the logged set's pill now carries its check. */}
+      <SetProgress
+        total={exercise.set.total}
+        done={exercise.set.current}
+        current={exercise.set.current + 1}
+      />
       <StatusMessage kind="success">{messages.set.saved(2, REST.durationSeconds)}</StatusMessage>
       <Surface tone="card" aria-label="Rest timer">
         <RestTimer
