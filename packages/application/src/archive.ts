@@ -22,6 +22,8 @@ import {
   unilateralStrengthMeasurement,
   type WorkoutSession,
 } from '@workout/domain';
+import type { ArchiveSink, ArchiveSource, LocalDataEraser } from './archive-ports.js';
+import { exportHistoryCsv } from './history-csv.js';
 import type { Clock } from './ports.js';
 
 /**
@@ -35,21 +37,6 @@ import type { Clock } from './ports.js';
  * An unknown field is a refusal, not a silent drop: an import that quietly discarded what it
  * did not understand would lose exactly the data the export exists to protect.
  */
-
-/** Everything an export reads. Separate from the outbox port: reading all history is not logging. */
-export interface ArchiveSource {
-  plans(userId: string): Promise<readonly Plan[]>;
-  sessions(userId: string): Promise<readonly WorkoutSession[]>;
-  /** Proposal artifacts, carried through untouched. Empty where no proposal store is wired. */
-  proposals?(userId: string): Promise<readonly Record<string, unknown>[]>;
-}
-
-/** Everything an import writes. A clean instance is one where all of these are empty. */
-export interface ArchiveSink {
-  putPlan(userId: string, plan: Plan): Promise<void>;
-  putSession(userId: string, session: WorkoutSession): Promise<void>;
-  putProposal?(userId: string, proposal: Record<string, unknown>): Promise<void>;
-}
 
 const instant = (at: Date): string => at.toISOString();
 
@@ -345,4 +332,42 @@ export async function importArchive(
     sessions: parsed.data.sessions.length,
     proposals,
   });
+}
+
+export interface PreDestructiveExport {
+  readonly archive: ArchivePayload;
+  readonly historyCsv: string;
+  /** How many mutations had not yet reached the server when the export was taken. */
+  readonly unsynchronized: number;
+}
+
+/**
+ * Clears local data, and cannot do it without producing the export first (task 4.9,
+ * offline-sync spec: a destructive recovery action offers an export of unsynchronized records).
+ *
+ * The export is taken and returned BEFORE anything is erased, and the caller receives it, so
+ * there is no ordering a caller can choose that clears first and exports after. That is why
+ * this takes the eraser rather than the UI calling `clearAll` itself - a separate "please
+ * export first" step is a step someone eventually skips.
+ *
+ * Unsynchronized records are in the archive like any others: sessions are exported whatever
+ * their delivery state, and the count is reported so the interface can say what is at stake.
+ */
+export async function clearLocalDataAfterExport(
+  ports: {
+    readonly source: ArchiveSource;
+    readonly outbox: { outbox(userId: string): Promise<readonly { readonly entityId: string }[]> };
+    readonly eraser: LocalDataEraser;
+    readonly clock: Clock;
+  },
+  userId: string,
+): Promise<PreDestructiveExport> {
+  const pending = await ports.outbox.outbox(userId);
+  const archive = await exportArchive({ source: ports.source, clock: ports.clock }, userId);
+  const historyCsv = await exportHistoryCsv({ source: ports.source }, userId);
+
+  // Only now, with the export in hand and about to be returned to the caller.
+  await ports.eraser.clearAll(userId);
+
+  return { archive, historyCsv, unsynchronized: pending.length };
 }

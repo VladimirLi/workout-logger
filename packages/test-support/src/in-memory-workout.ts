@@ -7,6 +7,7 @@ import type {
   Ids,
   LocalCommitOutcome,
   LocalCommitRequest,
+  LocalDataEraser,
   LocalWorkoutStore,
   OutboxEntry,
   PlanReader,
@@ -21,7 +22,9 @@ import { FixedClock } from './in-memory-ports.js';
  * The browser adapter (IndexedDB) must pass the same contract suite. Atomicity here comes from
  * applying the session and the entry in one synchronous step, with no await in between.
  */
-export class InMemoryLocalWorkoutStore implements LocalWorkoutStore, ArchiveSource, ArchiveSink {
+export class InMemoryLocalWorkoutStore
+  implements LocalWorkoutStore, ArchiveSource, ArchiveSink, LocalDataEraser
+{
   readonly #sessions = new Map<string, WorkoutSession>();
   readonly #outbox = new Map<string, OutboxEntry[]>();
   /** Every key ever committed, with the mutation it named, including acknowledged ones. */
@@ -141,6 +144,23 @@ export class InMemoryLocalWorkoutStore implements LocalWorkoutStore, ArchiveSour
     const plans = this.#plans.get(userId) ?? [];
     plans.push(plan);
     this.#plans.set(userId, plans);
+    return Promise.resolve();
+  }
+
+  /** Everything for one user, including the queue: only the pre-destructive export path. */
+  clearAll(userId: string): Promise<void> {
+    const prefix = `${userId}::`;
+    for (const key of [...this.#sessions.keys()]) {
+      if (key.startsWith(prefix)) this.#sessions.delete(key);
+    }
+    for (const key of [...this.#keys.keys()]) {
+      if (key.startsWith(prefix)) this.#keys.delete(key);
+    }
+    for (const key of [...this.#sequences.keys()]) {
+      if (key.startsWith(prefix)) this.#sequences.delete(key);
+    }
+    this.#outbox.delete(userId);
+    this.#plans.delete(userId);
     return Promise.resolve();
   }
 }

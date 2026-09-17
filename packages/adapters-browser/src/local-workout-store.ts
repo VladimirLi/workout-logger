@@ -5,6 +5,7 @@ import type {
   IdempotencyKey,
   LocalCommitOutcome,
   LocalCommitRequest,
+  LocalDataEraser,
   LocalWorkoutStore,
   OutboxEntry,
   PlanReader,
@@ -378,7 +379,7 @@ export class IndexedDbPlanStore implements PlanReader {
  * A separate class over the same database: exporting reads all of history, which is a
  * different concern from logging a set, and the outbox port deliberately has no way to do it.
  */
-export class IndexedDbArchive implements ArchiveSource, ArchiveSink {
+export class IndexedDbArchive implements ArchiveSource, ArchiveSink, LocalDataEraser {
   readonly #db: Database;
 
   constructor(options: IndexedDbOptions = {}) {
@@ -428,5 +429,38 @@ export class IndexedDbArchive implements ArchiveSource, ArchiveSink {
         session,
       } satisfies SessionRecord);
     });
+  }
+
+  /**
+   * Erases one user's data, queue included, in a single transaction (task 4.9).
+   *
+   * This is the only place the outbox is emptied other than `acknowledge`, and it is reachable
+   * only through `clearLocalDataAfterExport`, which takes the export first. One transaction,
+   * so an interrupted clear does not leave sessions whose queue entries are gone.
+   */
+  async clearAll(userId: string): Promise<void> {
+    await this.#db.transaction(
+      [SESSIONS, OUTBOX, KEYS, SEQUENCES, PLANS],
+      'readwrite',
+      async (transaction) => {
+        const byUser = async (store: string, index: string, range: IDBKeyRange) => {
+          const target = transaction.objectStore(store);
+          const keys = await promise<IDBValidKey[]>(target.index(index).getAllKeys(range));
+          for (const key of keys) target.delete(key);
+        };
+        const only = IDBKeyRange.only(userId);
+        const spanning = IDBKeyRange.bound([userId, ''], [userId, '\uffff']);
+        await byUser(SESSIONS, BY_USER_STATUS, spanning);
+        await byUser(OUTBOX, BY_USER, only);
+        await byUser(PLANS, BY_USER, only);
+        // These two have no index: their key path starts with the user, so a bounded range
+        // over the primary key is the whole set for that user.
+        for (const store of [KEYS, SEQUENCES]) {
+          const target = transaction.objectStore(store);
+          const keys = await promise<IDBValidKey[]>(target.getAllKeys(spanning));
+          for (const key of keys) target.delete(key);
+        }
+      },
+    );
   }
 }
