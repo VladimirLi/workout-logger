@@ -36,8 +36,10 @@
 - [x] 3.7 Provide the Storybook lab selected by governance.lab.storybook, and verify it builds
       in `pnpm verify` (`pnpm storybook:build`), every story renders (`pnpm test:e2e`), and every
       story passes axe in both themes (`pnpm test:a11y`)
-- [ ] 3.8 Measure interaction to next paint below 200 ms on the set screen, and verify it with a
-      recorded measurement
+- [x] 3.8 Measure interaction to next paint below 200 ms on the set screen, and verify it with a
+      recorded measurement (`pnpm test:e2e`: Event Timing lab measurement at a 4x CPU slowdown
+      over stepper, keyboard, RIR, sheet, and log-set interactions; worst 24 ms on 2026-09-17;
+      field INP on a real phone remains unmeasured)
 
 ## 4. Identity
 
@@ -56,9 +58,9 @@
       offline and sync failure state) in all seven projects, and verify none is missing with
       `pnpm test:visual`
 - [x] 5.3 Add `test:visual` to `pnpm verify`, and verify with `pnpm verify` that it runs
-- [ ] 5.3a Verify, with a lasting test, that the visual gate fails on a change above the 0.1
-      percent threshold (OPEN: only a one-off manual check was run, where a 391-pixel change
-      to the set pills failed and reverting it passed; it left no artifact)
+- [x] 5.3a Verify, with a lasting test, that the visual gate fails on a change above the 0.1
+      percent threshold and tolerates one below it, against the committed set-screen baseline
+      (`pnpm test:visual`)
 - [ ] 5.4 Generate Linux baselines in the pinned Playwright container and run CI's visual gate
       there, and verify CI passes (OPEN: guardrail change)
 - [ ] 5.5 Have the owner approve the baselines in a visual-change PR, and record the approval

@@ -502,7 +502,7 @@ test enforces that.
 | Storybook (`governance.lab.storybook`) | **Implemented.** Implemented 2026-09-17 from the owner-approved change: storybook, @storybook/nextjs-vite, and @storybook/addon-a11y 10.6.0 with vite 8.3.0. esbuild@0.28.2 is the only lifecycle script allowed. The licence gate passes (541 components, no new exception) and the audit gate reports no advisories. `pnpm storybook:build` runs in `pnpm verify`; `test:e2e` renders every story and fails on a render error, and `test:a11y` runs axe on every story in both themes. | Nothing further; kept here until G-10 closes |
 | Installation offered on a real phone | **Not verified.** | iOS and Android device check, recorded |
 | Vibration and rest tone on a device | **Not verified.** | Device check, recorded |
-| Interaction to Next Paint under 200 ms | **Not measured.** Layout shift is measured (under 0.05). | Field or lab measurement, recorded |
+| Interaction to Next Paint under 200 ms | **Lab measured; field unmeasured.** `test:e2e` measures set-screen interactions with the Event Timing API at a 4x CPU slowdown and requires under 200 ms (worst 24 ms on 2026-09-17). Layout shift is measured (under 0.05). | A field measurement on a real phone, recorded |
 | App icon legibility at 16 px | **Judged by eye only.** | Owner review of the rendered favicon |
 
 ## Version history

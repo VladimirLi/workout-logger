@@ -230,7 +230,8 @@ remains can only be done by a person or on a device, and an agent must not asser
    separate esbuild build-permission guardrail change; it is installed and gated by
    `pnpm storybook:build`, `test:e2e`, and `test:a11y`.
 7. Installation, vibration, and the rest tone are confirmed on real iOS and Android phones.
-8. Interaction to Next Paint is measured under 200 ms, and the 16 px icon is reviewed.
+8. Interaction to Next Paint is measured under 200 ms on a real phone (a lab measurement
+   already passes in `test:e2e`), and the 16 px icon is reviewed.
 
 **Done when** each numbered item has a line directly under it in the form
 `Evidence: YYYY-MM-DD, <who>, <what was recorded and where>`. `pnpm test` refuses a closed status
