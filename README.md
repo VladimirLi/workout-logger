@@ -40,7 +40,7 @@ with its canary, agent-proposal stale-revision rejection, and typed measurement 
 ## Layout
 
 ```text
-apps/web                    Next.js PWA — shell, design-system tokens and components, /lab
+apps/web                    Next.js PWA — shell, design-system tokens, components, Storybook
 apps/mcp                    remote MCP entry point — declares its tool surface, does not serve
 packages/domain             entities, value objects, invariants — no framework, no IO
 packages/application        use cases and provider-neutral ports
@@ -70,8 +70,9 @@ no deployment. Provider integrations are ports and adapters. Everything requirin
 authorization is enumerated in [docs/external-gates.md](docs/external-gates.md).
 
 The web shell has no product screens yet. It is styled with the accepted design system, and
-the lab at `/lab` shows its components and reference screens with fixture data — see
-[ADR-0008](docs/adr/0008-quiet-performance-design-system.md).
+Storybook (`pnpm storybook`) is the lab for its components and reference screens with fixture
+data — see [ADR-0008](docs/adr/0008-quiet-performance-design-system.md) and
+[ADR-0010](docs/adr/0010-storybook-is-the-only-design-system-lab.md).
 
 ## Licence
 

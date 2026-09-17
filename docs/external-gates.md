@@ -231,7 +231,12 @@ remains can only be done by a person or on a device, and an agent must not asser
 
 1. The target user has used the critical journeys (R-022). The journeys are not built yet.
 2. The manual accessibility matrix and a colour-blind simulation review are recorded (R-007).
+   Browser-level evidence exists (accessibility-tree snapshots, keyboard walks, simulated
+   colour-vision renders); runs by people with real assistive technology do not.
 3. The proposal review UX is decided in its own change, with visual baselines.
+   Evidence: 2026-09-17, Vladimir directed and Claude implemented, the minimum review screens the agent-proposals
+   specification requires are Storybook reference screens with darwin baselines and behaviour
+   tests; Linux baselines are tracked by item 4.
 4. Linux visual baselines exist and CI runs the visual gate in the pinned Playwright
    container. Until then `pnpm test:visual` fails in CI; only darwin baselines are committed.
 5. The owner approves the baselines in a visual-change PR.

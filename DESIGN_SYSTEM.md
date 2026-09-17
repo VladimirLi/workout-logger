@@ -8,7 +8,8 @@ decisions selected, 0 unresolved, 0 deferred. The payload is kept verbatim in
 SHA-256 `44c665fd0ca1e56d6c61c81badedd06605b5e18f6c4de8a9a8efa12a6183267c`.
 
 **Recorded by:** [ADR-0008](docs/adr/0008-quiet-performance-design-system.md), which supersedes
-ADR-0007, and the OpenSpec change `decide-design-system`.
+ADR-0007, [ADR-0010](docs/adr/0010-storybook-is-the-only-design-system-lab.md), and the OpenSpec
+change `decide-design-system`.
 
 **Validation: open.** Accepting the decisions unblocks UI work built on them. It does not
 validate the critical journeys with the target user (R-022), does not establish WCAG
@@ -34,8 +35,9 @@ this system does not provide proposes it; it does not add it locally.
 | Defaults, deferrals, and reference tables from the workbook | [docs/design-system/defaults.md](docs/design-system/defaults.md) |
 | Token source (DTCG 2025.10 JSON) | `apps/web/tokens/*.tokens.json` |
 | Generated custom properties and TypeScript table | `apps/web/ui/tokens/` (never edited by hand) |
-| Primitives, patterns, icons, catalogue, fixtures | `apps/web/ui/` |
-| Live examples: inventory, state matrix, reference screens | `/lab` in the web app |
+| Primitives, patterns, icons, catalogue | `apps/web/ui/` |
+| Reference screens and their fixtures | `apps/web/ui/reference/` |
+| The lab: foundations, component inventory, state matrix, reference screens | Storybook (`pnpm storybook`, built by `pnpm storybook:build`), the only lab (ADR-0010) |
 | Icon licences | `apps/web/ui/icons/ICONS_LICENSES.md` |
 | Visual baselines | `apps/web/e2e/__screenshots__/{platform}/` |
 
@@ -143,8 +145,8 @@ workbook's recommendation; the owner chose them deliberately.
 
 ### Governance
 
-- `governance.lab.storybook` ¹: Storybook as the component lab, with the accessibility addon; viewport and interaction tools are built in. Stories live beside the components in `apps/web/ui`.
-- `governance.visual-regression.two-viewport`: 375 × 667 and 1280 × 800, light and dark, lab states and key screens, 0.1 % threshold.
+- `governance.lab.storybook` ¹: Storybook is the only lab (ADR-0010), with the accessibility addon; viewport and interaction tools are built in. Stories live beside the components in `apps/web/ui`, one component per file.
+- `governance.visual-regression.two-viewport`: 375 × 667 and 1280 × 800, light and dark, the state matrix and key screens, 0.1 % threshold.
 - `governance.change-control.tiered`: foundation changes need an ADR and OpenSpec; component API changes need OpenSpec; fixes need a PR note and baseline.
 
 ### Brand
@@ -165,8 +167,8 @@ workbook's recommendation; the owner chose them deliberately.
 
 ### Documentation
 
-- `docs.source.repo-md-lab`: this file for rules, `apps/web/tokens` for values, `/lab` for live examples.
-- `docs.examples.coded-screens`: Set Focus, Rest, History, Settings, Empty, and Error built from real components with fixtures.
+- `docs.source.repo-md-lab`: this file for rules, `apps/web/tokens` for values, Storybook for live examples (the lab moved from `/lab` to Storybook by owner decision, ADR-0010).
+- `docs.examples.coded-screens`: Set Focus, Rest, History, Settings, Empty, and Error built from real components with fixtures, as `Reference screens` stories.
 
 ### Performance
 
@@ -289,7 +291,10 @@ against that. A test records the restriction.
 
 ## Components
 
-The inventory is live at `/lab`, with each entry linked to where it renders. Primitives take
+The inventory is the Storybook sidebar, filed as `Foundations`, `Primitives`,
+`Patterns/{Navigation, Workout, Feedback, Data, Settings, Proposals, Layout}`, and
+`Reference screens`, one component per story file; a unit test fails when an exported component
+has no story or a story is misfiled. Primitives take
 closed variant props and no `className` or `style`; screens compose them and import only from
 `apps/web/ui`. `Stack` is the layout-only escape hatch. A visual override needs an ADR note and
 a follow-up to add a variant or remove the override.
@@ -319,16 +324,21 @@ a follow-up to add a variant or remove the override.
 | UndoToast | Pattern | 10 s, paused on hover or focus |
 | ThemeSetting, FeedbackSettings | Pattern | Light, Dark, System; vibration, rest tone |
 | TopBar, WorkoutBar, BottomTabs, StickyActionBar | Pattern | app and workout chrome |
+| StickyActionBar | Pattern | a region labelled Actions, so landmark navigation reaches it |
+| ProposalReview | Pattern | base revision, diff in words, plain-text rationale, creation time |
 | Screen, TwoPane | Pattern | centred column, landmarks; landscape two-pane |
 
-**Reference screens** at `/lab/screens/*`: plan, set focus, RIR help, rest, workout summary,
-history, settings, empty, error. The six named by `docs.examples.coded-screens` are all
-present; plan, summary, and RIR help are added because R-007 names them.
+**Reference screens** (`Reference screens/*` stories): plan, set focus, RIR help, rest, workout
+summary, history, settings, empty history, sync error, proposal review, stale proposal, and the
+state matrix. The six named by `docs.examples.coded-screens` are all present; plan, summary, RIR
+help, and the proposal screens are added because R-007 and the agent-proposals specification
+name them.
 
 ## State matrix
 
 The source for copy, icon shape, tone, and announcement of every state is the table in
-[defaults.md](docs/design-system/defaults.md), Feedback. `/lab/states` renders every cell. No
+[defaults.md](docs/design-system/defaults.md), Feedback. The `Reference screens/State matrix`
+story renders every cell. No
 state relies on colour: each pairs an icon shape with words, and an error adds a thick border.
 Only a blocking error is announced assertively; everything else is polite or silent.
 
@@ -362,7 +372,8 @@ decoration. A pressed state appears within 100 ms.
   contrast turns muted ink to ink and borders to strong borders.
 
 **Testing depth (`accessibility.testing.auto-only`).** The owner chose automated checks as the
-routine CI baseline: axe on every lab page and screen in both themes, plus automated target,
+routine CI baseline: every axe rule on every story at 375 and 1280 px and on the product routes,
+in both themes, plus automated target,
 focus, reflow, landmark, and reduced-motion checks. This is a choice about what runs on every
 change. It does not waive R-007: automated scans cannot establish conformance, so no
 conformance claim may be made until the manual matrix below has been performed and recorded.
@@ -402,7 +413,7 @@ phone offering installation, which is verified only on a device.
 
 Every lab page and reference screen is captured in every project: 14 pages × 7 projects = 98
 baselines. The threshold is 0.1 % of pixels. Fixtures pin time (2026-09-14 10:00 UTC through
-the page clock), data (`apps/web/ui/lab/fixtures.ts`), browser (the Chromium build pinned by
+the page clock), data (`apps/web/ui/reference/fixtures.ts`), browser (the Chromium build pinned by
 `@playwright/test`), animations (disabled), the caret (hidden), time zone, and locale.
 
 **Fonts are pinned per platform, not across OS versions.** The accepted system uses the
@@ -436,7 +447,7 @@ Versioning is semantic, recorded here: major for a token rename or removal, mino
 token or component, patch for a fix. Deprecated tokens and props are marked with their
 replacement and kept for one minor version. Vladimir owns foundations and approvals; agents
 propose through OpenSpec. The system is reviewed at each milestone and after every 10 merged
-UI PRs. Code and the lab are the source of truth; differences from the workbook mockups are
+UI PRs. Code and the Storybook lab are the source of truth; differences from the workbook mockups are
 logged below, then resolved.
 
 ## Reconciliation log
@@ -493,13 +504,13 @@ test enforces that.
 
 | Item | State | What closes it |
 |---|---|---|
-| Target user has used the critical journeys (R-022) | **Not performed.** The journeys are not built; the lab uses fixtures. | Vladimir uses the first vertical slice's journeys and the evidence is recorded |
-| Manual accessibility matrix (R-007) | **Not performed.** | Each row above run and recorded |
-| Colour-blind simulation check (colour-blind default) | **Not performed.** | Deuteranopia and protanopia review of the lab, recorded |
-| Proposal review UX and its baselines | **Not decided.** Out of scope here; the first vertical slice decides it. | A separate OpenSpec change with baselines |
+| Target user has used the critical journeys (R-022) | **Not performed.** The journeys are not built; Storybook uses fixtures. | Vladimir uses the first vertical slice's journeys and the evidence is recorded |
+| Manual accessibility matrix (R-007) | **Browser evidence recorded; people and devices not.** `test:a11y` keeps accessibility-tree snapshots of every reference screen, keyboard-only walks through logging, retry, undo, and proposal decisions, forced-colours and 200 % text / 320 px checks, and every axe rule on every story. VoiceOver, TalkBack, Windows forced colours, and a keyboard user on macOS Safari have not been run. | Each row of the matrix above run by a person with that technology, recorded |
+| Colour-blind simulation check (colour-blind default) | **Simulated; not reviewed by a person.** `pnpm test` checks every contrast pair as seen with deuteranopia, protanopia, and achromatopsia (Machado 2009); `test:visual` keeps renders of the state matrix, set focus, and proposal review under Chromium's emulation of each, and under forced colours. Nothing depends on hue alone. | A person reviews those renders, recorded |
+| Proposal review UX and its baselines | **Minimum implemented.** The review content the agent-proposals specification requires is built from accepted components as `Reference screens/Proposal review` and `Stale proposal`, with baselines and behaviour tests. Any richer review UX is a first-slice decision. | Nothing further for the design system |
 | Linux baselines for CI | **Missing.** Only darwin baselines exist, so `test:visual` fails in CI until they are generated in the pinned Playwright container. | Baselines generated in `mcr.microsoft.com/playwright:v1.63.0-noble` and CI run in that image (a guardrail change) |
 | Owner approval of baselines | **Pending artifact.** On 2026-09-17 Vladimir said to approve them, but Linux baselines and their visual-change PR do not exist yet, so there is no final artifact to approve. | Vladimir approves the complete Darwin and Linux baseline set in its visual-change PR |
-| Storybook (`governance.lab.storybook`) | **Implemented.** Implemented 2026-09-17 from the owner-approved change: storybook, @storybook/nextjs-vite, and @storybook/addon-a11y 10.6.0 with vite 8.3.0. esbuild@0.28.2 is the only lifecycle script allowed. The licence gate passes (541 components, no new exception) and the audit gate reports no advisories. `pnpm storybook:build` runs in `pnpm verify`; `test:e2e` renders every story and fails on a render error, and `test:a11y` runs axe on every story in both themes. | Nothing further; kept here until G-10 closes |
+| Storybook (`governance.lab.storybook`) | **Implemented, and the only lab (ADR-0010).** Implemented 2026-09-17 from the owner-approved change: storybook, @storybook/nextjs-vite, and @storybook/addon-a11y 10.6.0 with vite 8.3.0. esbuild@0.28.2 is the only lifecycle script allowed. The licence gate passes (541 components, no new exception) and the audit gate reports no advisories. `pnpm storybook:build` runs in `pnpm verify`; `pnpm test` pins one story per component in the agreed hierarchy; `test:e2e` renders every story and keyboard-tests the interactive ones; `test:a11y` runs every axe rule on every story at 375 and 1280 px in both themes. | Nothing further; kept here until G-10 closes |
 | Installation offered on a real phone | **Not verified.** | iOS and Android device check, recorded |
 | Vibration and rest tone on a device | **Not verified.** | Device check, recorded |
 | Interaction to Next Paint under 200 ms | **Lab measured; field unmeasured.** `test:e2e` measures set-screen interactions with the Event Timing API at a 4x CPU slowdown and requires under 200 ms (worst 24 ms on 2026-09-17). Layout shift is measured (under 0.05). | A field measurement on a real phone, recorded |

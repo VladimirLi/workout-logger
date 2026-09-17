@@ -87,8 +87,18 @@ guardrail files and adds 196 packages, a material dependency change under LIC-20
 was approved by Vladimir on 2026-09-17 together with the separate build-permission guardrail
 change, then installed at exact versions (storybook 10.6.0, vite 8.3.0), with esbuild@0.28.2
 as the only allowed lifecycle script. Its build is part of `pnpm verify`, and every story is
-rendered and scanned by axe. `/lab` exists because
-`docs.source.repo-md-lab` names it; it is not presented as a Storybook replacement.
+rendered and scanned by axe.
+
+### Storybook replaces /lab
+
+A `/lab` route first rendered the inventory, the state matrix, and the reference screens beside
+Storybook. On 2026-09-17 Vladimir decided Storybook is the only lab (ADR-0010). The reference
+screens moved to `apps/web/ui/reference/` as stories, the browser gates read the static
+Storybook build, and a unit test pins one component-level story per exported component in the
+agreed hierarchy.
+
+**Rejected:** keeping both labs. Two inventories drift, and product routes existed only to show
+fixtures.
 
 ### Visual regression: per-platform baselines, repeatability proven separately
 
@@ -105,7 +115,7 @@ stop the baselines showing the accepted system-font rendering.
 **CI's visual gate fails until Linux baselines exist.** Accepted and recorded rather than
 skipped; fixing it is a guardrail change to run CI in the pinned Playwright container.
 
-**A lab of fixtures can look finished.** Every lab page says it uses fixture data, and the
+**A lab of fixtures can look finished.** The reference screens are stories built from fixtures, and the
 validation status says the journeys have not met a real workout.
 
 **Owner selections that trade coverage for speed** (`accessibility.testing.auto-only`) are
