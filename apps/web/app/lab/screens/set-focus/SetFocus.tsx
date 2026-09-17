@@ -52,8 +52,8 @@ export function SetFocus({ helpOpen = false }: { helpOpen?: boolean }) {
             detail={
               <Surface tone="panel" aria-label="Actual">
                 <Stack gap={4}>
-                  <Stepper quantity="load" defaultValue={exercise.target.loadKg} />
-                  <Stepper quantity="reps" defaultValue={exercise.target.reps} />
+                  <Stepper quantity="load" name="load" defaultValue={exercise.target.loadKg} />
+                  <Stepper quantity="reps" name="reps" defaultValue={exercise.target.reps} />
                   <RirPicker defaultValue={exercise.target.rir} startOpen={helpOpen} />
                 </Stack>
               </Surface>

@@ -57,6 +57,19 @@ describe('tokens only', () => {
   });
 });
 
+describe('elevation (shape.elevation.tonal)', () => {
+  it('casts a shadow only from overlays: sheet, dialog, and toast', () => {
+    const casting = stylesheets
+      .filter((file) => readFileSync(file, 'utf8').includes('--shadow-overlay'))
+      .map((file) => name(file).split('/').pop());
+    expect(casting.sort()).toEqual([
+      'ConfirmDialog.module.css',
+      'Sheet.module.css',
+      'UndoToast.module.css',
+    ]);
+  });
+});
+
 describe('logical properties (i18n.rtl.logical-now)', () => {
   it.each(stylesheets.map(name))('%s uses no physical direction', (file) => {
     // Media features such as min-width describe the viewport, not layout direction.
