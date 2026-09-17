@@ -67,8 +67,13 @@
 - [x] 5.3a Verify, with a lasting test, that the visual gate fails on a change above the 0.1
       percent threshold and tolerates one below it, against the committed set-screen baseline
       (`pnpm test:visual`)
-- [ ] 5.4 Generate Linux baselines in the pinned Playwright container and run CI's visual gate
-      there, and verify CI passes (OPEN: guardrail change)
+- [x] 5.4 Generate Linux baselines in the pinned Playwright container, run CI in that image,
+      and verify the CI path passes: baselines generated only after every target rendered
+      identically twice in every project, and `CI=1 pnpm verify` passing all gates inside
+      `mcr.microsoft.com/playwright:v1.63.0-noble` (linux/amd64); `.github/workflows/verify.yml`
+      runs in that image by digest (`pnpm test`: policy-consistency.test.ts)
+- [ ] 5.4a Verify the GitHub Actions verify workflow passes on GitHub (OPEN: no remote or
+      Actions run exists, gate G-1)
 - [ ] 5.5 Have the owner approve the baselines in a visual-change PR, and record the approval
       (OWNER INTENT RECORDED 2026-09-17: Vladimir said to approve them; final approval remains
       open because the Linux baselines and their visual-change PR do not yet exist)
