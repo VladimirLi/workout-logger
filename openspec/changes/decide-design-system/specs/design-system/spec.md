@@ -162,7 +162,8 @@ Once accepted, the system SHALL have visual-regression baselines for every lab p
 reference screen — including the plan view, the active set, the rest state, the completion
 summary, and every offline and synchronization failure state — at representative small and
 large phone viewports and a wide viewport, light and dark themes, and 200 percent text.
-Fixtures MUST pin time, data, fonts, browser, and animations. Before gate G-10 closes, the
+Fixtures MUST pin time, data, browser, and animations, and baselines MUST be stored per
+platform because the accepted system font is the platform's own. Before gate G-10 closes, the
 proposal review view MUST also have baselines.
 
 #### Scenario: A baseline is missing for a required state
@@ -175,7 +176,7 @@ proposal review view MUST also have baselines.
 
 #### Scenario: G-10 closes without proposal review baselines
 - **WHEN** gate G-10 is marked closed and no proposal review baseline exists
-- **THEN** the closure is refused
+- **THEN** `pnpm test` fails
 
 ### Requirement: Automated checks do not establish conformance
 Accessibility conformance SHALL require manual keyboard, screen-reader, zoom, orientation,
@@ -196,11 +197,15 @@ fixture. The target user MUST have used it.
 - **THEN** the journey remains unvalidated
 
 ### Requirement: Acceptance does not close validation
-The design system gate SHALL remain open after acceptance until target-user journey use, the
-manual accessibility checks, the proposal review UX with its baselines, baselines for the CI
-platform, and owner approval of the baselines are recorded.
+The design system gate SHALL remain open after acceptance until every item of the design
+system document's canonical validation list has a dated, attributed evidence record, and
+Linux and proposal review baselines exist.
 
-#### Scenario: The gate is marked closed without evidence
-- **WHEN** gate G-10 is marked closed and does not mention R-022, manual checks, proposal
-  review, and Linux baselines
+#### Scenario: The gate is marked closed by a status edit alone
+- **WHEN** gate G-10's status is changed from OPEN and any numbered item lacks a line
+  `Evidence: YYYY-MM-DD, <who>, <what>`
+- **THEN** `pnpm test` fails
+
+#### Scenario: The gate is closed without proposal review baselines
+- **WHEN** every item has evidence but no proposal review baseline exists for Linux
 - **THEN** `pnpm test` fails

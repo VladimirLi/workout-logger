@@ -54,7 +54,8 @@ is unchanged. No dependency is added.
 
 **Unblocks:** changes that implement substantive UI, which now build on `apps/web/ui`.
 
-**Still open (gate G-10):** target-user use of the critical journeys (R-022); the manual
-accessibility matrix; the proposal review UX and its baselines; Linux baselines in CI; owner
-approval of baselines; Storybook, which is blocked on a dependency and guardrail review; and
-installation on a real phone.
+**Still open (gate G-10):** the canonical list is `DESIGN_SYSTEM.md`, Validation status. It
+includes target-user use of the critical journeys (R-022), the manual accessibility matrix,
+the proposal review UX and its baselines, Linux baselines in CI (the visual gate fails in CI
+until then), owner approval of baselines, Storybook (blocked on a dependency and guardrail
+review), and device checks.

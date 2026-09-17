@@ -214,13 +214,11 @@ payload selecting all 65 decisions (0 unresolved, 0 deferred). It is kept verbat
 **Not an external-service gate** — it needs no credentials. It stays listed because what
 remains can only be done by a person or on a device, and an agent must not assert it.
 
-**Still required before this gate closes** (DESIGN_SYSTEM.md, Validation status):
+**Still required before this gate closes:** every row of the canonical list in
+[DESIGN_SYSTEM.md](../DESIGN_SYSTEM.md), Validation status. In summary:
 
-1. The target user has used the critical journeys, with the evidence recorded (R-022). The
-   journeys are not built yet.
-2. The manual accessibility matrix (VoiceOver, TalkBack, keyboard, forced colours, 200 % text
-   and 400 % zoom, reduced motion) has been run and recorded (R-007), plus a colour-blind
-   simulation review.
+1. The target user has used the critical journeys (R-022). The journeys are not built yet.
+2. The manual accessibility matrix and a colour-blind simulation review are recorded (R-007).
 3. The proposal review UX is decided in its own change, with visual baselines.
 4. Linux visual baselines exist and CI runs the visual gate in the pinned Playwright
    container. Until then `pnpm test:visual` fails in CI; only darwin baselines are committed.
@@ -228,9 +226,12 @@ remains can only be done by a person or on a device, and an agent must not asser
 6. Storybook (`governance.lab.storybook`) is reviewed as a dependency change under
    LIC-2026-09-16 and its build permission is decided in a guardrail change, or the owner
    changes that decision.
-7. Installation is confirmed on a real iOS and Android phone.
+7. Installation, vibration, and the rest tone are confirmed on real iOS and Android phones.
+8. Interaction to Next Paint is measured under 200 ms, and the 16 px icon is reviewed.
 
-**Done when** every item above is recorded with who did it and when.
+**Done when** each numbered item has a line directly under it in the form
+`Evidence: YYYY-MM-DD, <who>, <what was recorded and where>`. `pnpm test` refuses a closed status
+without one per item, and without Linux and proposal review baselines.
 
 ---
 

@@ -207,7 +207,7 @@ every hex agrees with its components, then writes `apps/web/ui/tokens/tokens.css
 
 **Names.** `--color-*`, `--space-0` … `--space-8`, `--radius-control|card|sheet|pill`,
 `--font-size-label|body|title|heading|display`, `--font-weight-*`, `--line-height-*`,
-`--tracking-*`, `--motion-fast|base|slow`, `--ease-standard|exit`, `--layer-base|sticky|sheet|dialog|toast`,
+`--tracking-*`, `--motion-fast|base|slow|skeleton-delay`, `--ease-standard|exit`, `--layer-base|sticky|sheet|dialog|toast`,
 `--target-min|workout|gap|rir-segment|row`, `--icon-inline|body|button|stroke`, `--focus-width|offset`,
 `--shadow-overlay`, `--layout-*`. No vendor, model, or provider names.
 
@@ -336,9 +336,10 @@ Only a blocking error is announced assertively; everything else is polite or sil
 
 | Token | Value | Use |
 |---|---|---|
-| --motion-fast | 100 ms | press feedback, switch thumb |
-| --motion-base | 200 ms | log-to-rest fade |
-| --motion-slow | 300 ms | skeleton delay |
+| --motion-fast | 100 ms | press feedback; each half of the log-to-rest crossfade |
+| --motion-base | 200 ms | position changes such as the switch thumb |
+| --motion-slow | 300 ms | reserved for larger position changes |
+| --motion-skeleton-delay | 300 ms | nothing shows for this long before a skeleton |
 | --ease-standard | cubic-bezier(0.2, 0, 0, 1) | entering |
 | --ease-exit | cubic-bezier(0.3, 0, 1, 1) | leaving |
 
@@ -401,14 +402,27 @@ phone offering installation, which is verified only on a device.
 
 Every lab page and reference screen is captured in every project: 14 pages × 7 projects = 98
 baselines. The threshold is 0.1 % of pixels. Fixtures pin time (2026-09-14 10:00 UTC through
-the page clock), data (`apps/web/ui/lab/fixtures.ts`), fonts (the system stack, captured after
-`document.fonts.ready`, with baselines per platform), browser (the Chromium build pinned by
-`@playwright/test`), animations (disabled), the caret (hidden), time zone, and locale. A
-repeatability test renders every page twice in fresh contexts and requires identical bytes;
-`toHaveScreenshot` alone cannot prove that.
+the page clock), data (`apps/web/ui/lab/fixtures.ts`), browser (the Chromium build pinned by
+`@playwright/test`), animations (disabled), the caret (hidden), time zone, and locale.
+
+**Fonts are pinned per platform, not across OS versions.** The accepted system uses the
+platform's own UI font, so baselines are stored per platform and captured after
+`document.fonts.ready`. An operating-system update that changes the system font can move
+pixels; that shows up as a visual diff to review, not as silent drift. A test-only font was
+rejected because it would stop the baselines showing the accepted rendering.
+
+A repeatability test renders every page twice in fresh contexts and requires identical bytes;
+`toHaveScreenshot` alone cannot prove that. It proves determinism within a run on one machine,
+not across machines.
 
 `pnpm test:visual` never writes a baseline, so a missing one fails. `pnpm visual:update`
 writes them, and its output may be committed only in a visual-change PR the owner approves.
+
+**Current baselines are provisional.** The initial darwin baselines were committed with this
+change, before any PR flow exists (no remote, G-1), so they have not had that approval.
+Only darwin baselines exist: `pnpm verify` passes locally on macOS, and **the visual gate fails
+in CI** (Ubuntu) until Linux baselines are generated in the pinned Playwright container and
+CI runs there. That is recorded as a failing gate, not skipped.
 
 ## Change control
 
@@ -451,21 +465,31 @@ Where the accepted inputs disagreed, or needed interpretation, this is what was 
 9. **Dark borders.** "Borders only on inputs" governs surfaces. List and table separators are
    hairline separators under the separators default, not surface borders.
 10. **Accent budget.** Completed pills use the accent tint; the current tab, selected segment,
-    and switch on-state use ink, so the only accent fill is the primary button.
+    switch on-state, and native radios use ink, so the only accent fill is the primary button.
+    The native-controls default says `accent-color`; the ink tint is applied through it, because
+    `color.accent-strategy.solid-primary` makes selection ink.
 11. **Confirm dialog emphasis.** The safe choice ("Keep history") is the primary button; the
     permanent action is secondary.
 12. **Stale icon.** The matrix asks for a clock with a slash. Lucide has none; `timer-off` is used.
 13. **Core step labels.** Only `green-700` was named. The other steps are derived so that a larger
     step is always darker, and a test enforces it.
 14. **Retry copy.** The state matrix labels the button "Retry"; the catalogue uses it.
-15. **Feature defaults.** Defaults that describe feature behaviour (wake lock during a workout,
+15. **Stepper increments and precision.** `controls.adjust.flank-stepper` takes its increment
+    from plate settings, which do not exist yet; the load step is 2.5 kg until the settings
+    feature supplies it. A typed load snaps to 0.25 kg under the precision default, so "81,3"
+    becomes 81.25. The rounding is currently silent; saying so beside the field is feature work.
+16. **Crossfade.** The set view fades out and rest fades in, 100 ms each (200 ms in total).
+17. **Feature defaults.** Defaults that describe feature behaviour (wake lock during a workout,
     the Install app row after a second workout, theme sync to a signed-in profile, sync retry
     back-off, announcing syncing after 10 s) bind the feature change that builds that behaviour.
     They are not implemented by this change.
 
 ## Validation status
 
-Accepted is not validated. These remain open, and nothing here claims otherwise.
+Accepted is not validated. These remain open, and nothing here claims otherwise. **This table
+is the canonical list.** Gate G-10, ADR-0008, and the OpenSpec change refer to it rather than
+repeating it. G-10 closes only when every row has a dated, attributed evidence line; a guardrail
+test enforces that.
 
 | Item | State | What closes it |
 |---|---|---|
@@ -474,7 +498,7 @@ Accepted is not validated. These remain open, and nothing here claims otherwise.
 | Colour-blind simulation check (colour-blind default) | **Not performed.** | Deuteranopia and protanopia review of the lab, recorded |
 | Proposal review UX and its baselines | **Not decided.** Out of scope here; the first vertical slice decides it. | A separate OpenSpec change with baselines |
 | Linux baselines for CI | **Missing.** Only darwin baselines exist, so `test:visual` fails in CI until they are generated in the pinned Playwright container. | Baselines generated in `mcr.microsoft.com/playwright:v1.63.0-noble` and CI run in that image (a guardrail change) |
-| Owner approval of baselines | **Pending.** | A visual-change PR approved by Vladimir |
+| Owner approval of baselines | **Pending.** The initial baselines were committed without it. | A visual-change PR approved by Vladimir |
 | Storybook (`governance.lab.storybook`) | **Blocked.** Installing it needs an esbuild build permission in `pnpm-workspace.yaml` and `scripts/build-permissions.test.ts` (guardrail files) and adds 196 packages, a material dependency change under LIC-2026-09-16. `/lab` renders the inventory meanwhile; it is not a substitute. | Owner review of the dependency change and a separate guardrail change |
 | Installation offered on a real phone | **Not verified.** | iOS and Android device check, recorded |
 | Vibration and rest tone on a device | **Not verified.** | Device check, recorded |
