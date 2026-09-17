@@ -35,6 +35,8 @@ const QUANTITIES = {
 type StepperProps = {
   quantity: keyof typeof QUANTITIES;
   defaultValue: number;
+  /** Submits the committed value with a surrounding form under this name. */
+  name?: string;
 };
 
 const KEY_STEPS: Record<string, number> = { ArrowUp: 1, ArrowDown: -1, PageUp: 5, PageDown: -5 };
@@ -44,7 +46,7 @@ const KEY_STEPS: Record<string, number> = { ArrowUp: 1, ArrowDown: -1, PageUp: 5
  * spinbutton you can also tap and type into, with the phone's decimal keypad
  * (platform.number-entry.native-decimal). Arrow keys step it; Page Up/Down step five times.
  */
-export function Stepper({ quantity, defaultValue }: StepperProps) {
+export function Stepper({ quantity, defaultValue, name }: StepperProps) {
   const id = useId();
   const { label, unit, step, max, normalise, speak } = QUANTITIES[quantity];
   const noun = label.toLowerCase();
@@ -73,6 +75,7 @@ export function Stepper({ quantity, defaultValue }: StepperProps) {
 
   return (
     <div className={styles.stepper}>
+      {name ? <input type="hidden" name={name} value={value} /> : null}
       <label className={styles.label} htmlFor={id}>
         {label}
       </label>

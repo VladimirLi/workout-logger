@@ -46,7 +46,9 @@ describe('icon ledger (ICONS_LICENSES.md)', () => {
     }
   });
 
-  it('stays inside the 15 KB compressed icon budget (performance.budget.moderate)', () => {
+  it('keeps the vendored icon geometry source inside the 15 KB compressed budget (performance.budget.moderate)', () => {
+    // This measures the geometry source, the whole icon set. The shipped chunk also carries
+    // module wrapper code; it is covered by the overall CSS and bundle review, not here.
     const size = gzipSync(readFileSync(join(HERE, 'geometry.ts'))).length;
     expect(size).toBeLessThanOrEqual(15_000);
   });

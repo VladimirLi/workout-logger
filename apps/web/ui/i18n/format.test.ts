@@ -94,14 +94,17 @@ describe('message catalogue', () => {
     expect(messages.count.sets(3)).toBe('3 sets');
   });
 
-  it('writes headings and labels in sentence case', () => {
-    const labels = [
-      messages.rirHelp.title,
-      messages.states.empty,
-      messages.actions.logSet,
-      messages.actions.startWorkout,
-      messages.set.rirHelpButton,
-    ];
+  it('writes every catalogue string in sentence case', () => {
+    const leaves = (value: unknown): string[] =>
+      typeof value === 'string'
+        ? [value]
+        : typeof value === 'object' && value !== null
+          ? Object.values(value).flatMap(leaves)
+          : [];
+    // Proper nouns and abbreviations keep their capitals; a new sentence may start one too.
+    const labels = leaves(messages).map((label) =>
+      label.replace(/\b(Workout Logger|RIR|RPE)\b/g, '').replace(/[.?]\s+[A-Z]/g, '. x'),
+    );
     for (const label of labels) {
       const words = label.split(' ').slice(1);
       expect(
