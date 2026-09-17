@@ -343,6 +343,62 @@ test.describe('layout', () => {
   });
 });
 
+test.describe('responsiveness (performance: INP under 200 ms)', () => {
+  test('every set-screen interaction responds within 200 ms at a 4x CPU slowdown', async ({
+    page,
+  }, testInfo) => {
+    // A lab measurement, not field INP: the Event Timing API reports each interaction's full
+    // duration (input delay, processing, next paint). INP is the worst of them when there are
+    // fewer than 50. Only interactions of 16 ms or more are reported, so none means all were
+    // faster. The CPU slowdown approximates a mid-range phone.
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+    await page.addInitScript(() => {
+      const record: { name: string; duration: number }[] = [];
+      (window as unknown as { __events: typeof record }).__events = record;
+      new PerformanceObserver((list) => {
+        for (const entry of list.getEntries() as (PerformanceEntry & {
+          interactionId?: number;
+        })[]) {
+          if (entry.interactionId) record.push({ name: entry.name, duration: entry.duration });
+        }
+      }).observe({
+        type: 'event',
+        buffered: true,
+        durationThreshold: 16,
+      } as PerformanceObserverInit);
+    });
+    await page.clock.setFixedTime(FIXED_NOW);
+    await page.goto('/lab/screens/set-focus');
+    // Without Event Timing support the measurement would pass vacuously.
+    expect(
+      await page.evaluate(() => PerformanceObserver.supportedEntryTypes.includes('event')),
+    ).toBe(true);
+    await page.getByRole('button', { name: 'Increase load' }).click();
+    await page.getByRole('button', { name: 'Decrease reps' }).click();
+    await page.getByRole('radio', { name: '3' }).check();
+    await page.getByRole('spinbutton', { name: 'Load' }).focus();
+    await page.keyboard.press('ArrowUp');
+    await page.getByRole('button', { name: 'What is RIR?' }).click();
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Log set' }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Rest' })).toBeFocused();
+    // Let the last interaction's next paint be reported.
+    await page.evaluate(
+      () => new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 100))),
+    );
+    const events = await page.evaluate(
+      () => (window as unknown as { __events: { name: string; duration: number }[] }).__events,
+    );
+    const worst = Math.max(0, ...events.map((event) => event.duration));
+    testInfo.annotations.push({
+      type: 'INP (lab, 4x CPU)',
+      description: `${worst} ms over ${events.length} reported events`,
+    });
+    expect(worst).toBeLessThan(200);
+  });
+});
+
 test.describe('budget (performance.budget.moderate)', () => {
   const STATIC = join(__dirname, '..', '.next', 'static');
 
