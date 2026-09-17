@@ -57,6 +57,9 @@ test('@visual the gate tolerates changes under 0.1 percent and fails above it', 
   // A lasting proof of governance.visual-regression.two-viewport's threshold, against the real
   // committed baseline. One project is enough: the threshold is shared configuration.
   test.skip(testInfo.project.name !== 'visual-phone-small-light', 'threshold proof runs once');
+  // While baselines are being written, a comparison would overwrite the real baseline with the
+  // marked page. The proof only means something in the gate, where nothing is written.
+  test.skip(testInfo.config.updateSnapshots !== 'none', 'threshold proof runs only in the gate');
   const route = '/lab/screens/set-focus';
   const mark = (size: number) =>
     page.addStyleTag({

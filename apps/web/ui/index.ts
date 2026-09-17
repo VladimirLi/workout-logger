@@ -11,6 +11,7 @@ export { AgentTag, Delta } from './patterns/Annotations';
 export { BottomTabs, StickyActionBar, TopBar, WorkoutBar } from './patterns/Bars';
 export { FeedbackSettings } from './patterns/FeedbackSettings';
 export { LogToRest } from './patterns/LogToRest';
+export { ProposalReview, type ProposalView } from './patterns/ProposalReview';
 export { RestTimer } from './patterns/RestTimer';
 export { RirPicker } from './patterns/RirPicker';
 export { Screen, TwoPane } from './patterns/Screen';

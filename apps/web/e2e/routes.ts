@@ -16,6 +16,8 @@ export const SCREEN_ROUTES = [
   '/lab/screens/settings',
   '/lab/screens/empty',
   '/lab/screens/error',
+  '/lab/screens/proposal-review',
+  '/lab/screens/proposal-stale',
 ] as const;
 
 export const ALL_ROUTES = [...SHELL_ROUTES, ...LAB_ROUTES, ...SCREEN_ROUTES] as const;

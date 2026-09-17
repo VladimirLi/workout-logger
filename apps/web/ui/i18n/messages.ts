@@ -86,6 +86,26 @@ export const messages = {
 
   agent: { tag: 'From agent', created: (date: string) => `Created ${date}` },
 
+  proposal: {
+    title: 'Plan change',
+    changes: 'Changes',
+    why: 'Why',
+    baseRevision: (revision: number) =>
+      formatMessage('Made against plan revision {revision}', { revision }),
+    accept: 'Accept change',
+    reject: 'Reject',
+    changesTo: 'changes to',
+    staleNothingApplied: 'Nothing was changed. Ask the agent for a new proposal.',
+    replacePlan: 'Replaces the whole plan',
+    sessions: (count: number) =>
+      formatMessage('{count, plural, one {# session} other {# sessions}}', { count }),
+    sessionOn: (date: string) => `Session on ${date}`,
+    movesTo: (date: string) => `Moves to ${date}`,
+    exercisesChange: 'Its exercises change',
+    correction: (date: string) => `Correction to the workout on ${date}`,
+    correctedSet: (setId: string, value: string) => `Set ${setId} becomes ${value}`,
+  },
+
   theme: { label: 'Theme', light: 'Light', dark: 'Dark', system: 'System' },
 
   settings: {
