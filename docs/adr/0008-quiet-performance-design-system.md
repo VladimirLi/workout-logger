@@ -31,10 +31,12 @@ offline, out of breath.
    ledger do not change.
 4. **Visual regression is a required gate** (`pnpm test:visual`), with per-platform baselines,
    pinned fixtures, a repeatability test, and a 0.1 % threshold.
-5. **Accepted is not validated.** Gate G-10 stays open until the critical journeys have been
-   used by the target user (R-022), the manual accessibility matrix is recorded, the proposal
-   review UX is decided with its baselines, Linux baselines run in CI, and the owner approves
-   the baselines.
+5. **Accepted is not validated.** Gate G-10 stays open until every item in DESIGN_SYSTEM.md,
+   Validation status, has dated evidence: among them target-user use of the journeys (R-022),
+   the manual accessibility matrix, the proposal review UX with baselines, Linux baselines in
+   CI, owner approval of baselines, Storybook, and device checks.
+6. **The payload digest is pinned in a guardrail test**, so changing the owner's decision input
+   needs a separately reviewed guardrail change.
 
 ### What was chosen over what
 
@@ -60,12 +62,16 @@ The workbook recorded the alternatives for each decision. The consequential ones
 
 ## Consequences
 
-**Good.** UI work has a single, tested vocabulary. Contrast, target sizes, focus, reflow, theme
-flash, and visual drift are checked mechanically on every change. No dependency or licence
+**Good.** UI work has a single, tested vocabulary. Contrast, target sizes, focus, reflow, and
+theme flash are checked on every `pnpm verify`; visual drift is checked on macOS now, and in CI
+once Linux baselines exist. No dependency or licence
 exposure was added.
 
 **Bad.** Only darwin baselines exist, so the visual gate fails in CI until Linux baselines are
 generated in the pinned Playwright container and CI runs there; that needs a guardrail change.
+A permanently red CI gate invites being ignored, so this is the first follow-up. The guardrail
+commit that added `test:visual` also fails that gate on its own, because the visual specs
+arrive in the product commits after it; the two phases must merge together or in order.
 Storybook, a selected decision, is not delivered. The reference screens use fixtures, so the
 system has not yet met a real workout.
 

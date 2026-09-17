@@ -48,15 +48,17 @@
 
 ## 5. Visual regression
 
-- [x] 5.1 Pin time, data, fonts, browser, animations, caret, time zone, and locale, and verify
-      two fresh renders of every page are byte-identical with `pnpm test:visual`
+- [x] 5.1 Pin time, data, browser, animations, caret, time zone, and locale, store baselines
+      per platform for the system font, and verify two fresh renders of every page are
+      byte-identical with `pnpm test:visual`
 - [x] 5.2 Capture baselines for every lab page and reference screen (plan, active set, rest,
       summary, history, settings, empty, error, RIR help, and the state matrix with every
       offline and sync failure state) in all seven projects, and verify none is missing with
       `pnpm test:visual`
-- [x] 5.3 Add `test:visual` to `pnpm verify`, and verify it fails on a deliberate change above
-      the accepted 0.1 percent threshold (a 391-pixel change to the set pills failed; reverting
-      it passed)
+- [x] 5.3 Add `test:visual` to `pnpm verify`, and verify with `pnpm verify` that it runs
+- [ ] 5.3a Verify, with a lasting test, that the visual gate fails on a change above the 0.1
+      percent threshold (OPEN: only a one-off manual check was run, where a 391-pixel change
+      to the set pills failed and reverting it passed; it left no artifact)
 - [ ] 5.4 Generate Linux baselines in the pinned Playwright container and run CI's visual gate
       there, and verify CI passes (OPEN: guardrail change)
 - [ ] 5.5 Have the owner approve the baselines in a visual-change PR, and record the approval
@@ -71,5 +73,6 @@
       evidence is recorded rather than asserted (OPEN: journeys not built)
 - [ ] 6.3 Run the manual accessibility matrix and a colour-blind simulation review, and record
       the results (OPEN)
-- [ ] 6.4 Close gate G-10 in docs/external-gates.md once 3.7, 4.2, 5.4, 5.5, 5.6, 6.2, and 6.3
-      are done, and verify it records who validated the system and when
+- [ ] 6.4 Close gate G-10 in docs/external-gates.md once every row of DESIGN_SYSTEM.md,
+      Validation status, has evidence (tasks 3.7, 3.8, 4.2, 5.4, 5.5, 5.6, 6.2, 6.3 among them),
+      and verify with `pnpm test` that each item carries a dated evidence line
