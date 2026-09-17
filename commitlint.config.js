@@ -22,6 +22,7 @@ export default {
         'contracts',
         'observability',
         'adapters-supabase',
+        'adapters-browser',
         'test-support',
         'web',
         'mcp',
