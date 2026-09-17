@@ -75,6 +75,11 @@ a {
  * author animation, which is the standard accessibility pattern (R-007). With reduced
  * motion, transitions become instant; the rest timer still steps, because its steps are
  * state changes, not animation. biome.json scopes noImportantStyles off for this file alone.
+ *
+ * Transitions are removed, not shortened to 0.01ms: transition-property defaults to `all`, so a
+ * tiny duration made EVERY property transition, and a theme change showed the old colours for a frame
+ * (found by the Storybook accessibility audit, 2026-09-17). Animations keep 0.01ms so their
+ * end events still fire.
  */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -82,7 +87,7 @@ a {
   *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+    transition: none !important;
     scroll-behavior: auto !important;
   }
 }
