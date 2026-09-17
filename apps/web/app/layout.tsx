@@ -1,55 +1,59 @@
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
+import { messages, THEME_BOOTSTRAP, THEME_COLOR } from '../ui';
 import { ServiceWorkerRegistration } from './service-worker-registration';
+import '../ui/tokens/tokens.css';
 import './global.css';
 
 /**
- * Root layout - structural only.
+ * Root layout (DESIGN_SYSTEM.md, ADR-0008).
  *
- * No brand, no visual language, no component library (ADR-0007). Landmarks and
- * skip navigation are here because they are accessibility structure, which is
- * required regardless of what the design system turns out to be.
+ * Identity follows the accepted decisions: the plain-text name (brand.name.plain-text), the
+ * rising-bars app icon (brand.app-icon.bars), standalone display
+ * (platform.display-mode.standalone), and a plain manifest launch with no custom splash
+ * images (brand.launch.manifest-plain). Declaring these does not make the app installable
+ * on a given phone; that is recorded only from a real device (docs/external-gates.md, G-10).
  */
 
 export const metadata: Metadata = {
-  title: 'Workout Logger',
-  description:
-    'Single-user workout logger. Structural shell; the design system is not decided yet.',
-  // No appleWebApp and no applicationName. appleWebApp renders mobile-web-app-capable plus
-  // an Apple title and status-bar style, telling a phone to launch the site as a standalone
-  // app; applicationName renders application-name, the name an installed or pinned app
-  // shows. Both are installability and identity decisions that wait on DESIGN_SYSTEM.md
-  // (ADR-0007, G-10).
+  title: messages.appName,
+  applicationName: messages.appName,
+  description: 'Single-user workout logger.',
+  appleWebApp: { capable: true, title: messages.appName, statusBarStyle: 'default' },
+  icons: {
+    icon: [
+      { url: '/icons/icon.svg', type: 'image/svg+xml' },
+      { url: '/icons/icon-32.png', sizes: '32x32', type: 'image/png' },
+    ],
+    apple: [{ url: '/icons/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
+  },
   formatDetection: { telephone: false },
   robots: { index: false, follow: false },
 };
 
 export const viewport: Viewport = {
-  // Phone-first (R-004). userScalable is left at its default so pinch zoom works;
-  // suppressing it would fail the WCAG 2.2 zoom requirement (R-007).
+  // userScalable is left at its default so pinch zoom works (WCAG 2.2, R-007).
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
+  // First visit is light; the bootstrap rewrites this for a stored dark preference.
+  themeColor: THEME_COLOR.light,
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    // data-theme is set again by the bootstrap before first paint, so the attribute can
+    // legitimately differ from the server HTML.
+    <html lang="en" data-theme="light" suppressHydrationWarning>
+      <head>
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: a static constant with no interpolated input; it must run before first paint to avoid a theme flash (theme.first-visit.light-then-choice) */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP }} />
+      </head>
       <body>
         <a href="#main" className="skip-link">
-          Skip to main content
+          {messages.skipToContent}
         </a>
-        <header>
-          <p>
-            <strong>Workout Logger</strong> — foundation shell
-          </p>
-        </header>
         <main id="main">{children}</main>
-        <footer>
-          <p>
-            Unstyled by design. The visual design system is an open decision; see DESIGN_SYSTEM.md.
-          </p>
-        </footer>
         <ServiceWorkerRegistration />
       </body>
     </html>
