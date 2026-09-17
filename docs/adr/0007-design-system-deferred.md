@@ -1,6 +1,6 @@
 # 0007 — The design system is a deliberate, separate decision
 
-**Status:** Accepted
+**Status:** Superseded by [0008](0008-quiet-performance-design-system.md)
 **Date:** 2026-09-16
 **Discovery:** D-002, D-021, R-004, R-007, R-022
 

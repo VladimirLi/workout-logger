@@ -1,78 +1,75 @@
-## 1. Inputs
+> Tasks are checked only where a gate proves them. Open items are open on purpose; see
+> `DESIGN_SYSTEM.md`, Validation status, and gate G-10.
 
-- [ ] 1.1 Extract the inherited non-negotiable constraints from R-004, R-007, and R-010 into a
-      single checklist, and verify each maps to a requirement in this change's spec
-- [ ] 1.2 Record the real use context in writing - one-handed, mid-set, phone, sometimes
-      offline, out of breath - and verify each candidate is judged against it
-- [ ] 1.3 Inventory the screens and states the first horizon actually needs, and verify the
-      list covers plan, active set, rest, completion summary, proposal review, and every
-      offline and sync failure state
+## 1. Decision input
 
-## 2. Candidates
+- [x] 1.1 Commit the owner's workbook payload verbatim, and verify its digest, schema, and
+      counts with `pnpm test` (scripts/policy-consistency.test.ts)
+- [x] 1.2 Trace all 65 selected options in DESIGN_SYSTEM.md and the decision matrix, and verify
+      with `pnpm test` that none is missing and no unselected option is named
+- [x] 1.3 Record the defaults, deferrals, and reconciliation log, write ADR-0008 superseding
+      ADR-0007, and verify the ADR index with `pnpm test`
 
-- [ ] 2.1 Prepare at least two distinct directions as working prototypes at 375x667, and
-      verify each renders the full state inventory
-- [ ] 2.2 Verify each candidate against the constraint checklist and record which constraint
-      eliminated any rejected candidate
-- [ ] 2.3 Verify each surviving candidate's contrast in light and dark at 200 percent text
-      with an automated contrast check
+## 2. Tokens
 
-## 3. Decisions
+- [x] 2.1 Author DTCG 2025.10 core and semantic tokens with a generator, and verify drift,
+      reference integrity, and step ordering with `pnpm test`
+- [x] 2.2 Verify every role pair meets the AA+ target in light and dark with `pnpm test`
+- [x] 2.3 Verify the first visit is light, a stored preference applies before any application
+      script, and System follows the OS, with `pnpm test:e2e`
 
-- [ ] 3.1 Decide the token structure and theming mechanism, and verify tokens resolve in both
-      themes
-- [ ] 3.2 Decide the color system with semantic roles, and verify every role pair meets WCAG
-      2.2 AA contrast
-- [ ] 3.3 Decide typography including families, scale, weights, line heights, and licensing,
-      and verify the licence is compatible with docs/license-policy.md
-- [ ] 3.4 Decide the spacing and layout scale, and verify no primary view scrolls horizontally
-      at 375 CSS pixels
-- [ ] 3.5 Decide iconography including set, style, licensing, and delivery, and verify the
-      licence passes the license gate
-- [ ] 3.6 Decide motion durations and easing, and verify every animation is suppressed under
-      prefers-reduced-motion
-- [ ] 3.7 Decide the component inventory and its API conventions, and verify every state in
-      the inventory has a component that renders it
-- [ ] 3.8 Decide interaction states for default, hover, focus, active, disabled, loading,
-      empty, offline, and error, and verify focus is visible on every interactive component
-- [ ] 3.9 Decide how the three sync states are distinguished, and verify they remain
-      distinguishable in a grayscale rendering
-- [ ] 3.10 Decide charts and data display, or record that the first horizon needs none, and
-      verify the decision either way
-- [ ] 3.11 Decide content voice and microcopy rules, and verify the shell's existing copy
-      conforms
-- [ ] 3.12 Decide responsive behavior and breakpoints, and verify rendering at both a small
-      and a large phone viewport
+## 3. Components and rules
 
-## 4. Implementation
+- [x] 3.1 Build closed-variant primitives and patterns, and verify tokens-only CSS, logical
+      properties, the closed API, and screen imports with `pnpm test`
+- [x] 3.2 Vendor the icons with their licence ledger, and verify the ledger with `pnpm test` and
+      that no dependency changed with `pnpm test:licenses`
+- [x] 3.3 Verify 44 px targets, 48 px workout targets and 8 px gaps, visible focus, reflow at
+      200 percent text and 320 px, one h1, and axe in both themes with `pnpm test:a11y`
+- [x] 3.4 Verify the stepper, RIR control, sheet, dialog, undo timing, timer announcements,
+      log-to-rest, switches, reduced motion, forced colours, increased contrast, and distinct
+      sync states with `pnpm test:e2e`
+- [x] 3.5 Verify the CSS budget, that no font ships, the icon budget, and layout shift below
+      0.05 with `pnpm test:e2e` and `pnpm test`
+- [x] 3.6 Verify the centred column and the landscape two-pane with no scrolling at 667 x 375
+      with `pnpm test:e2e`
+- [ ] 3.7 Provide the Storybook lab selected by governance.lab.storybook, and verify it builds
+      in `pnpm verify` (BLOCKED: owner dependency review under LIC-2026-09-16 and a guardrail
+      change for the esbuild build permission)
+- [ ] 3.8 Measure interaction to next paint below 200 ms on the set screen, and verify it with a
+      recorded measurement
 
-- [ ] 4.1 Replace or explicitly re-affirm the provisional CSS baseline, and verify
-      `pnpm lint` and `pnpm test:a11y` still pass
-- [ ] 4.2 Verify the web application declares only the UI dependencies this change decided,
-      and that the no-implicit-UI-framework check reflects the decision
-- [ ] 4.3 Verify `pnpm test:licenses` passes with any newly added font or icon dependency
+## 4. Identity
+
+- [x] 4.1 Ship the accepted manifest, icons, and theme colour, flip the installability guard
+      from forbidding them to requiring them, and verify with `pnpm test:e2e`
+- [ ] 4.2 Verify the application is offered for installation on a real iOS and Android phone,
+      and record the evidence (OPEN: device)
 
 ## 5. Visual regression
 
-- [ ] 5.1 Add visual-regression fixtures pinning time, data, fonts, browser, and animations,
-      and verify two consecutive runs produce identical output
-- [ ] 5.2 Capture baselines for every state in the inventory at both phone viewports, both
-      themes, and 200 percent text, and verify none is missing
-- [ ] 5.3 Add the visual-regression check to `pnpm verify` and verify it fails on a
-      deliberate one-pixel change
-- [ ] 5.4 Add manifest icons at the required sizes and verify the application is actually
-      installable on a phone, flipping the installability guard from forbidding icons to
-      requiring them
+- [x] 5.1 Pin time, data, fonts, browser, animations, caret, time zone, and locale, and verify
+      two fresh renders of every page are byte-identical with `pnpm test:visual`
+- [x] 5.2 Capture baselines for every lab page and reference screen (plan, active set, rest,
+      summary, history, settings, empty, error, RIR help, and the state matrix with every
+      offline and sync failure state) in all seven projects, and verify none is missing with
+      `pnpm test:visual`
+- [x] 5.3 Add `test:visual` to `pnpm verify`, and verify it fails on a deliberate change above
+      the accepted 0.1 percent threshold (a 391-pixel change to the set pills failed; reverting
+      it passed)
+- [ ] 5.4 Generate Linux baselines in the pinned Playwright container and run CI's visual gate
+      there, and verify CI passes (OPEN: guardrail change)
+- [ ] 5.5 Have the owner approve the baselines in a visual-change PR, and record the approval
+- [ ] 5.6 Capture proposal review baselines once its UX is decided, and verify with
+      `pnpm test:visual` (OPEN: proposal review UX is outside this decision)
 
-## 6. Acceptance
+## 6. Acceptance and validation
 
-- [ ] 6.1 Rewrite DESIGN_SYSTEM.md to record the decision and verify no area remains marked
-      pending
-- [ ] 6.2 Flip the status to Accepted and update the status assertion in the same change, and
-      verify `pnpm test` passes
-- [ ] 6.3 Write the ADR recording what was chosen and what was rejected, and verify the ADR
-      index lists it
-- [ ] 6.4 Confirm the target user has used the critical journeys, per R-022, and verify the
-      evidence is recorded rather than asserted
-- [ ] 6.5 Close gate G-10 in docs/external-gates.md and verify it records who accepted the
-      system and when
+- [x] 6.1 Flip DESIGN_SYSTEM.md to Accepted with the status assertion changed in a separate
+      guardrail commit, and verify `pnpm test` passes
+- [ ] 6.2 Confirm the target user has used the critical journeys, per R-022, and verify the
+      evidence is recorded rather than asserted (OPEN: journeys not built)
+- [ ] 6.3 Run the manual accessibility matrix and a colour-blind simulation review, and record
+      the results (OPEN)
+- [ ] 6.4 Close gate G-10 in docs/external-gates.md once 3.7, 4.2, 5.4, 5.5, 5.6, 6.2, and 6.3
+      are done, and verify it records who validated the system and when

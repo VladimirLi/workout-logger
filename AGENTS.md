@@ -11,8 +11,8 @@ change and requires human approval.
 3. Read [docs/adr/](docs/adr/) before proposing anything structural.
 4. Check [docs/external-gates.md](docs/external-gates.md) before assuming something is
    available. Ten gates are open and no cloud resource exists.
-5. If the task touches UI, read [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) first. It is a blocking
-   gate.
+5. If the task touches UI, read [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) first. It is accepted;
+   build on it, do not re-decide it.
 
 Run `pnpm verify` before claiming anything is done.
 
@@ -26,7 +26,8 @@ What still requires a human:
 
 - Approving or changing product intent — `VISION.md`, `ROADMAP.md`, `AGENTS.md`, an ADR, or
   an OpenSpec change that alters product behavior.
-- Accepting the design system (gate G-10).
+- Changing the design system's foundations, approving visual baselines, and validating it
+  (gate G-10).
 - Anything security-sensitive or irreversible: credentials, cloud provisioning, DNS, the
   WebAuthn relying-party ID, production data, branch rulesets.
 - Signing off a license exception (gate G-11).
@@ -91,20 +92,20 @@ route around it.
 7. **Never commit a secret, a real environment value, or a credential.** Examples only.
 8. **Never import an adapter from the application layer, or a framework from the domain**
    (ADR-0001). `pnpm test:architecture` enforces it.
-9. **Never adopt a UI framework, palette, or type scale** while `DESIGN_SYSTEM.md` reads
-   `NOT DECIDED` (ADR-0007). A scaffold default is not a decision.
+9. **Never adopt a UI framework, palette, or type scale** outside the accepted design system
+   (`DESIGN_SYSTEM.md`, ADR-0008). A scaffold default is not a decision.
 10. **Never provision a cloud resource, DNS record, GitHub remote, or deployment.** Those are
     human-authorized gates.
 
 ## Working on UI
 
-Blocked until [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) is `Accepted`.
+[DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) is `Accepted` (ADR-0008). Build UI from
+`apps/web/ui` and the generated tokens; screens import only from `apps/web/ui`.
 
-Permitted meanwhile: routes, landmarks, focus order, semantic markup, minimum target sizes,
-accessibility fixes — anything structural that expresses no visual language.
-
-Not permitted: color, type scale, spacing system, component styling, iconography, motion,
-chart styling, polished screens.
+Not permitted: a raw colour, size, duration, or layer value in component CSS; a new UI
+framework, component library, icon package, or font; `className` on a primitive; committing
+baselines outside an owner-approved visual-change PR; or claiming accessibility conformance,
+journey validation, or installability without the recorded evidence G-10 lists.
 
 ## Where a change belongs
 

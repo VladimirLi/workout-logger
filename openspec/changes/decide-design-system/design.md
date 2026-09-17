@@ -1,90 +1,114 @@
 ## Context
 
-`apps/web` currently exists as a structural shell: semantic HTML, routing, a manifest, a
-service-worker registration, landmarks, focus order, and a 44 px target floor. It has no
-palette, no type scale, and no spacing scale, and it says so on the page itself.
-
-That is a deliberate holding position, not an oversight. The question this change answers is
-what replaces it, and the question it must not answer prematurely is *what the answer is*.
+`apps/web` was a structural shell with no palette, type scale, or spacing scale, held there by
+ADR-0007 until the design system was decided. The owner has now decided it: 65 selections in a
+workbook whose options carried rendered previews, recommendations, and rationales, together
+with 146 defaults and 22 deferrals.
 
 ## Goals / Non-Goals
 
 **Goals:**
 
-- A decided, documented visual and interaction system covering every area currently pending.
-- Visual-regression baselines with deterministic fixtures.
-- An ADR recording what was chosen and what was rejected.
+- Record the decision normatively and traceably, with no substitution for any selection.
+- Encode it as tokens and components that make the decision the easy path and deviations
+  fail a gate.
+- Deterministic visual regression and automated accessibility evidence.
+- Keep acceptance and validation separate, so nothing claims what has not happened.
 
 **Non-Goals:**
 
-- Implementing any product feature. Features that consume the system are separate changes.
-- Deciding the outcome inside this planning document.
-- Relaxing any inherited constraint to accommodate an attractive candidate.
+- Implementing any product feature. The reference screens use fixtures.
+- Deciding the proposal review UX. The first vertical slice decides it.
+- Implementing charts (`data.charts-v1.defer`).
+- Provisioning anything, or adding a dependency.
 
 ## Decisions
 
-### The decision is made iteratively, as its own body of work
+### The owner decided through a workbook, not through competing prototypes
 
-Not as a side effect of the first feature. A design system arrived at incrementally while
-shipping features becomes whatever the first three screens needed, and the fourth screen
-then fights it.
+The original plan was two or more full prototypes compared against a checklist. The workbook
+did that work at a finer grain: every question had two to four rendered alternatives, a
+recommendation, and a rationale, and the owner chose per question. The payload is kept
+verbatim and pinned by digest, so the record is the owner's own input, not an agent summary.
 
-**Rejected:** folding the design decision into the first UI feature change. It produces a
-system shaped by one screen and gives the reviewer two unrelated things to judge at once.
+**Rejected:** re-running a prototype comparison after the owner decided. It would re-open
+settled questions and substitute agent judgement for the owner's.
 
-### The gate is a document status, not a convention
+### Acceptance and validation are different states
 
-`DESIGN_SYSTEM.md` has a machine-checked status, and a test asserts it still reads
-`NOT DECIDED`. That test is updated in the same change that records acceptance — deliberately,
-so acceptance cannot happen quietly.
+`Accepted` means the owner decided and the decision is encoded. It unblocks UI work built on
+the system. Validation — the target user using the journeys (R-022), the manual accessibility
+matrix (R-007), the proposal review UX, Linux baselines in CI, owner approval of baselines —
+is tracked separately and keeps gate G-10 open. The policy test refuses a closed G-10 that
+does not mention that evidence.
 
-**Rejected:** a checklist in a contributing guide. Conventions decay; an assertion does not.
+**Rejected:** holding `NOT DECIDED` until validation. It would block the very feature work
+through which R-022 validation happens. **Rejected:** closing G-10 on acceptance. It would
+assert journey use and conformance nobody has performed.
 
-### Structural and accessibility work is explicitly carved out
+The spec's baseline coverage for proposal review therefore applies at G-10 closure, not at
+acceptance: the proposal review UX is explicitly not part of this decision, so its baselines
+cannot exist yet. The requirement itself is unchanged.
 
-Otherwise the gate blocks route structure, landmarks, and focus-order fixes that have nothing
-to do with visual language, and contributors learn to route around it.
+### The gate stays a document status, checked by a guardrail test
 
-### Inherited constraints are inputs
+The status assertion in `scripts/policy-consistency.test.ts` was changed in a separate
+guardrail commit before the product commits. Once the status is `Accepted` it demands the
+verbatim payload, its digest in `DESIGN_SYSTEM.md`, a matrix row for every selection, no
+unselected option, ADR-0008 superseding ADR-0007, and a visual gate that never writes
+baselines.
 
-Phone width, the single primary action, WCAG 2.2 AA plus 44 px, three non-color-coded sync
-states, metric defaults, RIR-by-default: already normative. A candidate system that fails one
-is rejected, rather than the constraint being relaxed to fit the candidate. Recording them as
-requirements in the spec makes that non-negotiable rather than a matter of taste.
+### Tokens: DTCG JSON, two tiers, generated output committed
 
-### Baselines come after the decision, not before
+A small generator in the repo, not a token platform. Output is committed so the build needs no
+extra step, and a test fails when it drifts. Only semantic tokens become custom properties.
 
-Capturing visual-regression baselines against the unstyled shell would produce artifacts
-discarded on the first day of real design work, and would create a false sense that visual
-regression is covered.
+**Rejected:** hand-written custom properties (no source of truth to check contrast against);
+Style Dictionary (a dependency for a few hundred lines of work).
 
-### No candidate is named here
+### Components: closed variants, CSS Modules, no library
 
-Not Tailwind, not shadcn/ui, not Material, not plain CSS with custom properties. Naming a
-front-runner in the planning document is how a default sneaks back in through the side door.
-Plain CSS with custom properties remains in the shell as an explicitly provisional baseline
-and re-enters the decision on equal footing with everything else.
+Primitives accept no `className` or `style`; `Stack` is the layout escape hatch. Tests enforce
+tokens-only CSS, logical properties, and screens importing only from `apps/web/ui`.
+
+**Rejected:** a headless component library (dependency and licence review for what native
+elements already provide: `dialog`, radios, `inputmode`).
+
+### Icons vendored, not installed
+
+Lucide geometry is copied unmodified with its full ISC and MIT notices, listed in a ledger a
+test checks. **Rejected:** `lucide-react` — permissible under the licence policy but a
+dependency change the owner's licence decision asks to avoid without review.
+
+### Storybook is blocked, not substituted
+
+`governance.lab.storybook` was selected. Installing it needs an esbuild build permission in
+guardrail files and adds 196 packages, a material dependency change under LIC-2026-09-16. It
+is recorded as blocked. `/lab` exists because `docs.source.repo-md-lab` names it; it is not
+presented as a Storybook replacement.
+
+### Visual regression: per-platform baselines, repeatability proven separately
+
+System fonts render differently per OS, so baselines are stored per platform. `toHaveScreenshot`
+passes on a first matching shot, which does not prove determinism, so a separate test renders
+every page twice in fresh contexts and requires identical bytes. The large phone and 200 % text
+projects are added to the owner's two viewports because R-007 requires them.
+
+**Rejected:** a bundled test-only font. It would not remove per-platform differences and would
+stop the baselines showing the accepted system-font rendering.
 
 ## Risks / Trade-offs
 
-**UI feature work is blocked until this lands.** Accepted. The alternative is building
-components on an undecided foundation and unwinding them later.
+**CI's visual gate fails until Linux baselines exist.** Accepted and recorded rather than
+skipped; fixing it is a guardrail change to run CI in the pinned Playwright container.
 
-**The shell looks unfinished in the meantime.** It is unfinished, and it says so. Making it
-look finished before the decision exists is the failure this change prevents.
+**A lab of fixtures can look finished.** Every lab page says it uses fixture data, and the
+validation status says the journeys have not met a real workout.
 
-**A human must decide.** Gate G-10. An agent can prepare candidates, prototypes, and contrast
-analysis, but cannot accept the system. Acceptance also requires the target user to have
-actually used the critical journeys (R-022) — which cannot happen until the first slice runs,
-so this change and `first-vertical-slice` will interleave rather than strictly sequence.
-
-**Scope creep into feature work.** The spec draws the substantive-UI line explicitly so that
-"while we're in here" additions are visible in review.
+**Owner selections that trade coverage for speed** (`accessibility.testing.auto-only`) are
+honoured as routine CI scope without being read as waiving R-007's manual checks.
 
 ## Open Questions
 
-- Does acceptance require the first vertical slice to be usable first, given R-022's
-  requirement that the target user actually use critical journeys? Current reading: the two
-  changes interleave, and journeys are marked validated only after real use.
-- Does the product need charts at all in the first horizon, or is data display limited to
-  tables and summaries? Affects how much of the charts area must be decided now.
+- Which change decides the proposal review UX, and when does its baseline land?
+- Does the owner approve the Storybook dependency change, or revise that selection?

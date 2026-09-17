@@ -24,4 +24,5 @@ never edited to change its decision — it is superseded by a new one.
 | [0004](0004-typed-measurement-profiles.md) | Typed, discriminated measurement profiles | Accepted |
 | [0005](0005-supabase-behind-adapters.md) | Supabase as the first-slice platform, behind adapters | Accepted |
 | [0006](0006-ci-is-the-authoritative-gate.md) | CI is the authoritative gate | Accepted |
-| [0007](0007-design-system-deferred.md) | The design system is a deliberate, separate decision | Accepted |
+| [0007](0007-design-system-deferred.md) | The design system is a deliberate, separate decision | Superseded by 0008 |
+| [0008](0008-quiet-performance-design-system.md) | Quiet Performance is the design system | Accepted |
