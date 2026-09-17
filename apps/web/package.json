@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "license": "UNLICENSED",
-  "description": "Phone-first PWA shell. Structural only: manifest and service-worker plumbing, not yet installable (no icons until DESIGN_SYSTEM.md is accepted).",
+  "description": "Phone-first PWA shell built on the accepted design system. Installation on a real phone is not yet verified (docs/external-gates.md, G-10).",
   "scripts": {
     "dev": "next dev --port 3000",
     "build": "next build",

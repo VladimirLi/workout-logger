@@ -25,9 +25,8 @@ test('the shell fits a 375x667 phone viewport with no horizontal scrolling', asy
 });
 
 test('the web app manifest route is served and well formed', async ({ request }) => {
-  // Plumbing only. This does NOT assert the app is installable: a browser will not
-  // offer to install a PWA without icons, and icons wait on DESIGN_SYSTEM.md
-  // (gate G-10). See installability-claims.spec.ts for the guard on that coupling.
+  // Served and well formed. Identity and icons are checked in installability-claims.spec.ts;
+  // whether a phone offers installation is verified only on a device (G-10).
   const response = await request.get('/manifest.webmanifest');
   expect(response.ok()).toBe(true);
 

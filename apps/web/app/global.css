@@ -1,21 +1,35 @@
 /*
- * PROVISIONAL, PROVIDER-NEUTRAL BASELINE ONLY.
+ * Document base for the accepted design system (DESIGN_SYSTEM.md, ADR-0008).
  *
- * This file is not a design system and must not become one. See DESIGN_SYSTEM.md:
- * tokens, color, typography, spacing, motion, and components are all still
- * undecided (ADR-0007).
- *
- * What is allowed here: a reset, system font stack, respect for the user's colour
- * scheme and reduced-motion preference, and the 44x44px touch-target floor that
- * R-007 already requires. Nothing that expresses a visual language: no palette,
- * no type scale, no spacing scale.
+ * Values come only from the generated tokens (ui/tokens/tokens.css, imported first by the
+ * root layout). Components style themselves in CSS Modules; this file sets document
+ * defaults, the focus ring, forced-colours and increased-contrast behaviour, and the
+ * reduced-motion reset.
  */
 
-:root {
-  /* Deliberately system values, not brand values. */
-  --font-stack: system-ui, -apple-system, "Segoe UI", sans-serif;
-  --touch-target-min: 44px;
-  color-scheme: light dark;
+html {
+  /* Never suppress user text scaling; 200% text is a required check (R-007). */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-family-ui);
+  font-size: 100%;
+  line-height: var(--line-height-body);
+  /* Workout numbers line up (typography.numerals.tabular). */
+  font-variant-numeric: tabular-nums;
+  /* Focus is never hidden under the sticky action bar (WCAG 2.4.11). */
+  scroll-padding-block-end: calc(var(--target-workout) + var(--space-8));
+}
+
+/* iOS: follow the Dynamic Type body size (typography.family.system). */
+@supports (font: -apple-system-body) and (-webkit-touch-callout: none) {
+  html {
+    /* biome-ignore lint/a11y/useGenericFontNames: a system font keyword; the family stack is restored on the next line */
+    font: -apple-system-body;
+    font-family: var(--font-family-ui);
+    font-variant-numeric: tabular-nums;
+  }
 }
 
 *,
@@ -24,42 +38,43 @@
   box-sizing: border-box;
 }
 
-html {
-  /* Never suppress user text scaling; 200% zoom is a required check (R-007). */
-  -webkit-text-size-adjust: 100%;
-}
-
 body {
   margin: 0;
-  font-family: var(--font-stack);
-  line-height: 1.5;
-  /* Phone-first: usable at 375x667 with no horizontal scrolling (R-004). */
-  min-width: 320px;
+  min-inline-size: 320px;
+  min-block-size: 100dvh;
+  background: var(--color-bg);
 }
 
-/* A visible focus indicator is a baseline accessibility requirement, not styling. */
 :focus-visible {
-  outline: 2px solid currentColor;
-  outline-offset: 2px;
+  outline: var(--focus-width) solid var(--color-focus);
+  outline-offset: var(--focus-offset);
 }
 
-/*
- * R-007: primary in-workout controls meet a 44x44 CSS-pixel target. Applied to
- * every interactive element here because the shell has no component layer yet.
- */
-button,
-a[role="button"],
-input[type="button"],
-input[type="submit"] {
-  min-height: var(--touch-target-min);
-  min-inline-size: var(--touch-target-min);
-  font: inherit;
+a {
+  color: var(--color-accent);
+  text-underline-offset: var(--space-1);
+}
+
+/* prefers-contrast: more — muted ink becomes ink, hairlines become strong borders. */
+@media (prefers-contrast: more) {
+  :root,
+  :root[data-theme] {
+    --color-ink-muted: var(--color-ink);
+    --color-border: var(--color-border-strong);
+  }
+}
+
+@media (forced-colors: active) {
+  :focus-visible {
+    outline-color: Highlight;
+  }
 }
 
 /*
  * !important is deliberate here and only here. The reduced-motion reset must beat any
- * author animation, which is the standard accessibility pattern (R-007). biome.json scopes
- * the noImportantStyles rule off for this file alone; it stays on everywhere else.
+ * author animation, which is the standard accessibility pattern (R-007). With reduced
+ * motion, transitions become instant; the rest timer still steps, because its steps are
+ * state changes, not animation. biome.json scopes noImportantStyles off for this file alone.
  */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -72,32 +87,31 @@ input[type="submit"] {
   }
 }
 
-/* Screen-reader-only text. Structural, not decorative. */
+/* Screen-reader-only text. */
 .visually-hidden {
   position: absolute;
-  width: 1px;
-  height: 1px;
+  inline-size: 1px;
+  block-size: 1px;
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
 }
 
-/*
- * Skip link. Visible only on focus. Structural accessibility, not decoration.
- */
+/* Skip link. Visible only on focus. */
 .skip-link {
   position: absolute;
-  inset-inline-start: 0;
+  inset-inline-start: var(--space-2);
   inset-block-start: -100%;
-  padding: 0.5rem 1rem;
-  background: Canvas;
-  color: CanvasText;
-  min-height: var(--touch-target-min);
+  z-index: var(--layer-toast);
   display: inline-flex;
   align-items: center;
+  min-block-size: var(--target-min);
+  padding-inline: var(--space-4);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-raised);
+  color: var(--color-ink);
 }
 
 .skip-link:focus-visible {
-  inset-block-start: 0;
-  z-index: 1;
+  inset-block-start: var(--space-2);
 }
