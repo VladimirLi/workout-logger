@@ -8,6 +8,12 @@
  *
  * Legitimate guardrail changes are still possible - they are submitted as their own
  * change, reviewed under the existing gates.
+ *
+ * `--range <rev-range>` classifies each commit in the range separately instead. Before a
+ * remote exists there is no merge base and no pull request, so the branch comparison above
+ * reports "not applicable" and the separation is carried by the commits themselves: each one
+ * is guardrail-only, product-only, or neither. That is what a reviewer reads, and
+ * scripts/guardrail-separation.test.ts holds it for every commit since the recorded start.
  */
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -46,6 +52,65 @@ function changedFiles() {
   return { files: output ? output.split('\n') : [] };
 }
 
+const isGuardrail = (file) =>
+  config.guardrailPaths.some((path) =>
+    path.endsWith('/') ? file.startsWith(path) : file === path,
+  );
+
+/** Splits a file list into the two categories the rule is about. Anything else is neither. */
+function classify(files) {
+  const guardrails = files.filter(isGuardrail);
+  const product = files.filter(
+    (file) =>
+      !isGuardrail(file) &&
+      !generatedPaths.has(file) &&
+      productPatterns.some((pattern) => pattern.test(file)),
+  );
+  return { guardrails, product, mixed: guardrails.length > 0 && product.length > 0 };
+}
+
+const SPLIT_ADVICE =
+  'Split these into two changes (D-035/D-036). The guardrail change is reviewed\n' +
+  'independently, under the gates as they stand today.';
+
+const rangeIndex = process.argv.indexOf('--range');
+if (rangeIndex !== -1) {
+  const range = process.argv[rangeIndex + 1];
+  if (!range) {
+    console.error('check-guardrails: --range needs a git rev-range, for example A..HEAD.');
+    process.exit(2);
+  }
+  // --no-merges: a merge commit's own diff is the union of its parents' work, so classifying
+  // it would report a co-change that no author ever made. The parents are in the range.
+  const listed = git(['rev-list', '--reverse', '--no-merges', range]);
+  const commits = listed ? listed.split('\n') : [];
+  const mixed = [];
+  for (const commit of commits) {
+    const output = git(['show', '--name-only', '--format=', commit]);
+    const result = classify(output ? output.split('\n').filter(Boolean) : []);
+    if (result.mixed) mixed.push({ commit, ...result });
+  }
+  if (mixed.length > 0) {
+    console.error(
+      `check-guardrails: FAILED — ${mixed.length} of ${commits.length} commits in ${range} ` +
+        'modify guardrails AND product code.',
+    );
+    for (const entry of mixed) {
+      const subject = git(['log', '-1', '--format=%s', entry.commit]);
+      console.error(`\n  ${entry.commit.slice(0, 7)} ${subject}`);
+      for (const file of entry.guardrails.slice(0, 10)) console.error(`    guardrail: ${file}`);
+      for (const file of entry.product.slice(0, 10)) console.error(`    product:   ${file}`);
+    }
+    console.error(`\n${SPLIT_ADVICE}`);
+    process.exit(1);
+  }
+  console.log(
+    `check-guardrails: OK — each of ${commits.length} commits in ${range} is guardrail-only, ` +
+      'product-only, or neither.',
+  );
+  process.exit(0);
+}
+
 const { files, reason } = changedFiles();
 
 if (files === null) {
@@ -64,29 +129,15 @@ if (files.length === 0) {
   process.exit(0);
 }
 
-const isGuardrail = (file) =>
-  config.guardrailPaths.some((path) =>
-    path.endsWith('/') ? file.startsWith(path) : file === path,
-  );
+const { guardrails: touchedGuardrails, product: touchedProduct, mixed } = classify(files);
 
-const touchedGuardrails = files.filter(isGuardrail);
-const touchedProduct = files.filter(
-  (file) =>
-    !isGuardrail(file) &&
-    !generatedPaths.has(file) &&
-    productPatterns.some((pattern) => pattern.test(file)),
-);
-
-if (touchedGuardrails.length > 0 && touchedProduct.length > 0) {
+if (mixed) {
   console.error('check-guardrails: FAILED — this change modifies guardrails AND product code.');
   console.error('\nGuardrail files changed:');
   for (const file of touchedGuardrails) console.error(`  ${file}`);
   console.error('\nProduct files changed:');
   for (const file of touchedProduct.slice(0, 20)) console.error(`  ${file}`);
-  console.error(
-    '\nSplit these into two changes (D-035/D-036). The guardrail change is reviewed\n' +
-      'independently, under the gates as they stand today.',
-  );
+  console.error(`\n${SPLIT_ADVICE}`);
   process.exit(1);
 }
 
