@@ -3,6 +3,7 @@
 **Status:** Accepted
 **Date:** 2026-09-17
 **Supersedes:** [0007](0007-design-system-deferred.md)
+**Amended by:** [0010](0010-storybook-is-the-only-design-system-lab.md) (the `/lab` route)
 **Discovery:** D-002, D-021, R-004, R-007, R-010, R-022
 
 ## Context
@@ -56,24 +57,38 @@ The workbook recorded the alternatives for each decision. The consequential ones
 - **Storybook was selected, approved, and implemented.** On 2026-09-17 the owner approved the
   reviewed dependency change and the separate esbuild build-permission guardrail change; it
   was then installed at exact versions, with esbuild's postinstall as the only allowed build
-  script. `/lab` remains alongside it for the coded reference screens.
+  script. The `/lab` routes this ADR originally kept alongside it were removed the same day:
+  Storybook is the only lab, and the reference screens are stories
+  ([0010](0010-storybook-is-the-only-design-system-lab.md)).
 - **Automated accessibility testing as the routine baseline** was selected over manual passes
   per PR. It does not waive R-007's manual checks before a conformance claim.
 
 ## Consequences
 
 **Good.** UI work has a single, tested vocabulary. Contrast, target sizes, focus, reflow, and
-theme flash are checked on every `pnpm verify`; visual drift is checked on macOS now, and in CI
-once Linux baselines exist. No dependency or licence
-exposure was added.
+theme flash are checked on every `pnpm verify`. Visual drift is checked on both platforms the
+project builds on: darwin baselines for local runs and Linux baselines for CI, each generated
+only after every target rendered identically twice in every project. Storybook was reviewed as
+a dependency change and is the only lab, so there is one place where a component's states are
+seen and checked.
 
-**Bad.** Only darwin baselines exist, so the visual gate fails in CI until Linux baselines are
-generated in the pinned Playwright container and CI runs there; that needs a guardrail change.
-A permanently red CI gate invites being ignored, so this is the first follow-up. The guardrail
-commit that added `test:visual` also fails that gate on its own, because the visual specs
-arrive in the product commits after it; the two phases must merge together or in order.
-Storybook, a selected decision, is not delivered. The reference screens use fixtures, so the
-system has not yet met a real workout.
+**Bad.** Two baseline sets must be kept in step: a UI change that is only rebaselined on darwin
+fails in CI, and rebaselining Linux needs the pinned container, which most contributors will
+not run casually. Per-platform baselines are the price of system fonts (decision 1). The
+guardrail commit that added `test:visual` also fails that gate on its own, because the visual
+specs arrive in the product commits after it; the two phases must merge together or in order.
+The reference screens use fixtures, so the system has not yet met a real workout.
+
+**Update (2026-09-17, after implementation).** Linux baselines exist and are committed: 270
+screenshots and 12 accessibility-tree snapshots per platform, identical file sets, the
+accessibility snapshots byte-identical across platforms. `CI=1 pnpm verify` passed all 18 gates
+inside `mcr.microsoft.com/playwright:v1.63.0-noble` (linux/amd64), and
+`.github/workflows/verify.yml` runs in that image pinned by digest, with a guardrail test tying
+the pin to the catalogued `@playwright/test` version. Two determinism defects were found by the
+repeatability proof under load and fixed at the root: Chromium's per-paint choice of LCD
+subpixel antialiasing (now `--disable-lcd-text`) and a reduced-motion reset that left stale
+theme colours for one frame. This does not close gate G-10: no GitHub Actions run has happened
+(no remote, G-1), and the owner has not yet approved the exact committed baseline set.
 
 **Accepted cost.** Some defaults describe feature behaviour (wake lock, install prompt, sync
 back-off). They bind the features that build them rather than being implemented speculatively.

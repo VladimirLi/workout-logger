@@ -48,15 +48,25 @@ Serves: D-002, D-021, R-004, R-007, R-010, R-022. See
 ## Impact
 
 **Affected:** `apps/web`, `DESIGN_SYSTEM.md`, `docs/design-system/`, `docs/adr/`,
-`docs/external-gates.md`, and — in a separate guardrail commit — `playwright.config.ts`,
-`vitest.config.ts`, `scripts/verify.mjs`, `scripts/policy-consistency.test.ts`, and
-`ENGINEERING.md`. No shared package below the presentation layer changes; dependency direction
-is unchanged. No dependency is added.
+`docs/external-gates.md`, and — in separate guardrail commits — `playwright.config.ts`,
+`vitest.config.ts`, `scripts/verify.mjs`, `scripts/serve-static.mjs`,
+`scripts/policy-consistency.test.ts`, `.github/workflows/verify.yml`, and `ENGINEERING.md`. No
+shared package below the presentation layer changes; dependency direction is unchanged. One
+dependency was added: Storybook, at exact versions, as the reviewed dependency change the owner
+approved on 2026-09-17 (ADR-0010).
 
 **Unblocks:** changes that implement substantive UI, which now build on `apps/web/ui`.
 
+**Delivered since acceptance (2026-09-17).** Storybook is the only design-system lab: the
+separate `/lab` routes are gone, and every primitive, pattern, state, and reference screen is a
+categorised story served from the static build (ADR-0010). The proposal review UX and its
+baselines are in place (task 5.6). Linux baselines are generated and committed, verified in
+`mcr.microsoft.com/playwright:v1.63.0-noble` (linux/amd64) only after every target rendered
+identically twice in every project, and `.github/workflows/verify.yml` runs in that image pinned
+by digest, so the visual gate is expected to pass in CI rather than fail there.
+
 **Still open (gate G-10):** the canonical list is `DESIGN_SYSTEM.md`, Validation status. It
-includes target-user use of the critical journeys (R-022), the manual accessibility matrix,
-the proposal review UX and its baselines, Linux baselines in CI (the visual gate fails in CI
-until then), final owner approval of the complete baselines, and device checks. Storybook was approved and
-implemented on 2026-09-17.
+includes target-user use of the critical journeys (R-022), the manual accessibility matrix with
+real assistive technology and a human colour-vision review, a GitHub Actions run of the verify
+workflow (no remote exists, gate G-1), final owner approval of the exact committed baseline set,
+and the real-device install, vibration, and tone checks.
