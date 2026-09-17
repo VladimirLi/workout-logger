@@ -119,7 +119,7 @@ function diffItems(
       );
     case 'correct_completed_session':
       return diff.corrections.map((correction) => (
-        <Change key={correction.setId} title={messages.proposal.correction(diff.sessionId)}>
+        <Change key={correction.setId} title={messages.proposal.correction}>
           {messages.proposal.correctedSet(
             correction.setId,
             formatMeasurement(correction.measurement),

@@ -6,9 +6,22 @@
  * These are presentation fixtures, not product behaviour.
  */
 import type { PlanDiff, ScheduledSession } from '@workout/domain';
+import type { Route } from 'next';
+import type { TabHrefs } from '../patterns/Bars';
 import type { SetRow } from '../patterns/SetTable';
 
 export const FIXED_NOW = Date.UTC(2026, 8, 14, 10, 0, 0);
+
+/**
+ * In-page anchors for reference screens. Product routes pass real hrefs; these screens are
+ * examples in Storybook and link nowhere.
+ */
+export const REFERENCE_TAB_HREFS: TabHrefs = {
+  today: '#today' as Route,
+  history: '#history' as Route,
+  settings: '#settings' as Route,
+};
+export const REFERENCE_WORKOUT_HREF = '#workout' as Route;
 export const FIXTURE_TIME_ZONE = 'UTC';
 
 export const REST = { durationSeconds: 90, startedAt: FIXED_NOW - 30_000 } as const;

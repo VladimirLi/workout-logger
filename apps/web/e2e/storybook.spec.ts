@@ -1,85 +1,63 @@
-import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
-import { createServer, type Server } from 'node:http';
-import type { AddressInfo } from 'node:net';
-import { extname, join, normalize } from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
+import { openStory, stories } from './routes';
 
 /**
- * The Storybook lab (governance.lab.storybook) must not only build: every story must render
- * without an error and pass axe. `pnpm storybook:build` runs before this in `pnpm verify`;
- * a missing build fails here rather than being skipped.
+ * The Storybook lab (governance.lab.storybook, ADR-0010) is the only design-system lab. Every
+ * story must be filed in the agreed hierarchy, render without an error, pass every axe rule in
+ * both themes at a phone and a wide viewport, and its interactive patterns must work from the
+ * keyboard. `pnpm storybook:build` runs before this in `pnpm verify`.
  */
 
-const STATIC = join(__dirname, '..', 'storybook-static');
-const TYPES: Record<string, string> = {
-  '.html': 'text/html',
-  '.js': 'text/javascript',
-  '.css': 'text/css',
-  '.json': 'application/json',
-  '.svg': 'image/svg+xml',
-  '.png': 'image/png',
-  '.woff2': 'font/woff2',
-};
+const CATEGORY =
+  /^(Foundations\/[A-Z][A-Za-z]+|Primitives\/[A-Z][A-Za-z]+|Patterns\/(Navigation|Workout|Feedback|Data|Settings|Proposals|Layout)\/[A-Z][A-Za-z]+|Reference screens\/[A-Z][A-Za-z ]+)$/;
 
-let server: Server;
-let origin = '';
-
-test.beforeAll(async () => {
-  expect(existsSync(join(STATIC, 'index.json')), 'run pnpm storybook:build first').toBe(true);
-  server = createServer((request, response) => {
-    const path = normalize(decodeURIComponent((request.url ?? '/').split('?')[0] ?? '/'));
-    const file = join(STATIC, path === '/' ? 'index.html' : path);
-    if (!file.startsWith(STATIC) || !existsSync(file) || statSync(file).isDirectory()) {
-      response.writeHead(404).end();
-      return;
-    }
-    response.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream' });
-    createReadStream(file).pipe(response);
-  });
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
-  origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-});
-
-test.afterAll(async () => {
-  await new Promise((resolve) => server.close(resolve));
-});
-
-function storyIds(): string[] {
-  const index = JSON.parse(readFileSync(join(STATIC, 'index.json'), 'utf8')) as {
-    entries: Record<string, { id: string; type: string }>;
-  };
-  return Object.values(index.entries)
-    .filter((entry) => entry.type === 'story')
-    .map((entry) => entry.id)
-    .sort();
-}
-
-test('the Storybook lab has stories for primitives and patterns', () => {
-  const ids = storyIds();
-  expect(ids.length).toBeGreaterThanOrEqual(15);
-  expect(ids.some((id) => id.startsWith('primitives-'))).toBe(true);
-  expect(ids.some((id) => id.startsWith('patterns-'))).toBe(true);
+test('every story is filed under the agreed component-level hierarchy', () => {
+  const all = stories();
+  expect(all.length).toBeGreaterThanOrEqual(80);
+  expect(all.filter((story) => !CATEGORY.test(story.title)).map((story) => story.title)).toEqual(
+    [],
+  );
+  const titles = new Set(all.map((story) => story.title));
+  for (const required of [
+    'Foundations/Colour',
+    'Foundations/Icons',
+    'Primitives/Button',
+    'Primitives/Stepper',
+    'Primitives/Segmented',
+    'Primitives/Sheet',
+    'Patterns/Navigation/WorkoutBar',
+    'Patterns/Workout/RestTimer',
+    'Patterns/Feedback/SyncIndicator',
+    'Patterns/Feedback/StatusMessage',
+    'Patterns/Data/SetTable',
+    'Patterns/Settings/ThemeSetting',
+    'Patterns/Proposals/ProposalReview',
+    'Reference screens/Set focus',
+    'Reference screens/Rest',
+    'Reference screens/History',
+    'Reference screens/Settings',
+    'Reference screens/Empty history',
+    'Reference screens/Sync error',
+    'Reference screens/Proposal review',
+    'Reference screens/Stale proposal',
+    'Reference screens/State matrix',
+  ]) {
+    expect(titles.has(required), required).toBe(true);
+  }
 });
 
 test('every story renders without an error', async ({ page }) => {
-  test.setTimeout(120_000);
+  test.setTimeout(180_000);
   const failures: string[] = [];
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   page.on('console', (message) => {
     if (message.type() === 'error') errors.push(message.text().split('\n')[0] ?? '');
   });
-  for (const id of storyIds()) {
+  for (const { id } of stories()) {
     errors.length = 0;
-    await page.goto(`${origin}/iframe.html?id=${id}&viewMode=story`);
-    // The body passes through a preparing state; a render error arrives after it.
-    await page.waitForFunction(
-      () =>
-        !document.body.classList.contains('sb-show-preparing-story') &&
-        (document.body.classList.contains('sb-show-errordisplay') ||
-          (document.querySelector('#storybook-root')?.childElementCount ?? 0) > 0),
-    );
+    await openStory(page, id);
     await page.waitForLoadState('networkidle');
     const shown = await page.evaluate(() => document.body.className);
     if (shown.includes('sb-show-errordisplay') || errors.length > 0) {
@@ -89,25 +67,126 @@ test('every story renders without an error', async ({ page }) => {
   expect(failures).toEqual([]);
 });
 
-test('@a11y every story has no detectable WCAG 2.2 A/AA violations in either theme', async ({
-  page,
-}) => {
-  test.setTimeout(180_000);
-  // Colour transitions would otherwise be measured mid-way after the theme switches.
-  await page.emulateMedia({ reducedMotion: 'reduce' });
-  const violations: string[] = [];
-  for (const theme of ['light', 'dark']) {
-    for (const id of storyIds()) {
-      await page.goto(`${origin}/iframe.html?id=${id}&viewMode=story&globals=theme:${theme}`);
-      await page.waitForFunction(() => document.body.classList.contains('sb-show-main'));
-      await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
-      const results = await new AxeBuilder({ page })
-        .include('#storybook-root')
-        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
-        .analyze();
-      for (const violation of results.violations)
-        violations.push(`${theme} ${id}: ${violation.id}`);
+for (const width of [375, 1280]) {
+  test(`@a11y every story passes every axe rule in both themes at ${width} px`, async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    await page.setViewportSize({ width, height: width === 375 ? 667 : 800 });
+    // Colour transitions would otherwise be measured part-way through a theme change.
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    const violations: string[] = [];
+    for (const theme of ['light', 'dark'] as const) {
+      for (const { id } of stories()) {
+        await openStory(page, id, theme);
+        await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+        const results = await new AxeBuilder({ page }).analyze();
+        for (const violation of results.violations) {
+          violations.push(`${theme} ${id}: ${violation.id} (${violation.nodes.length})`);
+        }
+      }
     }
-  }
-  expect(violations).toEqual([]);
+    expect(violations).toEqual([]);
+  });
+}
+
+test.describe('keyboard operation of interactive stories', () => {
+  test('Stepper: arrow keys and Page keys step the value, typing a comma decimal works', async ({
+    page,
+  }) => {
+    await openStory(page, 'primitives-stepper--load');
+    const load = page.getByRole('spinbutton', { name: 'Load' });
+    await load.focus();
+    await page.keyboard.press('ArrowUp');
+    await expect(load).toHaveAttribute('aria-valuenow', '82.5');
+    await page.keyboard.press('PageDown');
+    await expect(load).toHaveAttribute('aria-valuenow', '70');
+    await load.fill('81,3');
+    await page.keyboard.press('Enter');
+    await expect(load).toHaveAttribute('aria-valuenow', '81.25');
+    await page.keyboard.press('Tab');
+    await expect(page.getByRole('button', { name: 'Increase load' })).toBeFocused();
+  });
+
+  test('Segmented: arrow keys move the choice and its check', async ({ page }) => {
+    await openStory(page, 'primitives-segmented--with-selection');
+    await page.getByRole('radio', { name: '2' }).focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(page.getByRole('radio', { name: '3' })).toBeChecked();
+    await expect(page.locator('label:has(input:checked) svg[data-icon="check"]')).toBeVisible();
+  });
+
+  test('Sheet: Enter opens it, Tab stays inside, Escape closes it and returns focus', async ({
+    page,
+  }) => {
+    await openStory(page, 'primitives-sheet--closed');
+    const trigger = page.getByRole('button', { name: 'What is RIR?' });
+    await trigger.focus();
+    await page.keyboard.press('Enter');
+    const sheet = page.getByRole('dialog', { name: 'RIR: reps in reserve' });
+    await expect(sheet).toBeVisible();
+    for (let index = 0; index < 3; index += 1) {
+      await page.keyboard.press('Tab');
+      expect(await sheet.evaluate((dialog) => dialog.contains(document.activeElement))).toBe(true);
+    }
+    await page.keyboard.press('Escape');
+    await expect(sheet).toBeHidden();
+    await expect(trigger).toBeFocused();
+  });
+
+  test('ConfirmDialog: Enter opens it, Escape keeps the data and returns focus', async ({
+    page,
+  }) => {
+    await openStory(page, 'primitives-confirmdialog--permanent-action');
+    const trigger = page.getByRole('button', { name: 'Delete history' });
+    await trigger.focus();
+    await page.keyboard.press('Enter');
+    const dialog = page.getByRole('dialog', { name: 'Delete all history?' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Keep history' })).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await expect(trigger).toBeFocused();
+  });
+
+  test('Switch: Space toggles it and the words change with it', async ({ page }) => {
+    await openStory(page, 'primitives-switch--off');
+    const toggle = page.getByRole('switch', { name: 'Rest end sound' });
+    await toggle.focus();
+    await expect(page.getByText('Off', { exact: true })).toBeVisible();
+    await page.keyboard.press('Space');
+    await expect(toggle).toBeChecked();
+    await expect(page.getByText('On', { exact: true })).toBeVisible();
+  });
+
+  test('ThemeSetting: arrow keys choose a theme and it applies', async ({ page }) => {
+    await openStory(page, 'patterns-settings-themesetting--light-dark-system');
+    await page.getByRole('radio', { name: 'Light' }).focus();
+    await page.keyboard.press('ArrowDown');
+    await expect(page.getByRole('radio', { name: 'Dark' })).toBeChecked();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  });
+
+  test('RirPicker: the help button opens the RPE sheet from the keyboard', async ({ page }) => {
+    await openStory(page, 'patterns-workout-rirpicker--with-helper');
+    await page.getByRole('button', { name: 'What is RIR?' }).focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('dialog', { name: 'RIR: reps in reserve' })).toBeVisible();
+  });
+
+  test('UndoToast: Undo is reachable with Tab and Enter dismisses the toast', async ({ page }) => {
+    await openStory(page, 'patterns-feedback-undotoast--set-deleted');
+    await page.keyboard.press('Tab');
+    const undo = page.getByRole('button', { name: 'Undo' });
+    await expect(undo).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(undo).toHaveCount(0);
+  });
+
+  test('LogToRest: Enter on Log set moves focus to the rest heading', async ({ page }) => {
+    await openStory(page, 'patterns-workout-logtorest--before-logging');
+    await page.getByRole('button', { name: 'Log set' }).focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('heading', { name: 'Rest', exact: true })).toBeFocused();
+  });
 });

@@ -1,4 +1,7 @@
-import { Screen, StatusMessage, Text, TopBar } from '../../ui';
+import type { Metadata } from 'next';
+import { messages, Screen, StatusMessage, Text, TopBar } from '../../ui';
+
+export const metadata: Metadata = { title: messages.documentTitle('Offline') };
 
 /**
  * Offline fallback.

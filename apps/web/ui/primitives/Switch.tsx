@@ -12,7 +12,7 @@ const styles = moduleStyles as Record<
 
 type SwitchProps = {
   label: string;
-  helper?: string;
+  helper?: string | undefined;
   checked: boolean;
   onChange: (checked: boolean) => void;
 };

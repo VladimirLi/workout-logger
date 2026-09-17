@@ -5,10 +5,8 @@
 export { formatDate, formatLoad, formatLoadReps, speakLoad } from './i18n/format';
 export { messages } from './i18n/messages';
 export { Icon, type IconName } from './icons/Icon';
-export * as fixtures from './lab/fixtures';
-export { FIXED_NOW, FIXTURE_TIME_ZONE } from './lab/fixtures';
 export { AgentTag, Delta } from './patterns/Annotations';
-export { BottomTabs, StickyActionBar, TopBar, WorkoutBar } from './patterns/Bars';
+export { BottomTabs, StickyActionBar, type TabHrefs, TopBar, WorkoutBar } from './patterns/Bars';
 export { FeedbackSettings } from './patterns/FeedbackSettings';
 export { LogToRest } from './patterns/LogToRest';
 export { ProposalReview, type ProposalView } from './patterns/ProposalReview';
@@ -33,4 +31,6 @@ export { Stepper } from './primitives/Stepper';
 export { Surface } from './primitives/Surface';
 export { Switch } from './primitives/Switch';
 export { Heading, Text, Value, VisuallyHidden } from './primitives/Text';
+export * as fixtures from './reference/fixtures';
+export { FIXED_NOW, FIXTURE_TIME_ZONE } from './reference/fixtures';
 export { THEME_BOOTSTRAP, THEME_COLOR } from './theme/theme';
