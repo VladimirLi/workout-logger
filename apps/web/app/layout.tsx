@@ -53,7 +53,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <a href="#main" className="skip-link">
           {messages.skipToContent}
         </a>
-        <main id="main">{children}</main>
+        {children}
         <ServiceWorkerRegistration />
       </body>
     </html>

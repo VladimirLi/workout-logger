@@ -166,9 +166,11 @@ test('@a11y the skip link is the first focusable element', async ({ page }) => {
   await expect(page.locator(':focus')).toHaveText('Skip to main content');
 });
 
-test('@a11y every page has exactly one h1', async ({ page }) => {
+test('@a11y every page has one h1, one main, and a page header', async ({ page }) => {
   for (const route of ALL_ROUTES) {
     await page.goto(route);
-    expect(await page.locator('h1').count(), route).toBe(1);
+    expect(await page.locator('h1').count(), `${route} h1`).toBe(1);
+    expect(await page.getByRole('main').count(), `${route} main`).toBe(1);
+    expect(await page.getByRole('banner').count(), `${route} header`).toBe(1);
   }
 });

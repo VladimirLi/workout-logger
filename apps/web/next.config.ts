@@ -3,9 +3,9 @@ import type { NextConfig } from 'next';
 /**
  * Deliberately minimal.
  *
- * No CSS framework, no UI library, no bundler plugins beyond what Next.js ships.
- * The visual design system is an open decision (DESIGN_SYSTEM.md, ADR-0007) and
- * nothing here may pre-empt it.
+ * No CSS framework, no UI library, no bundler plugins beyond what Next.js ships. The
+ * accepted design system (DESIGN_SYSTEM.md, ADR-0008) is plain CSS custom properties and
+ * CSS Modules, which Next.js supports natively.
  */
 const nextConfig: NextConfig = {
   reactStrictMode: true,

@@ -145,7 +145,7 @@ test.describe('controls', () => {
     expect(await page.evaluate(() => window.localStorage.getItem('wl-rest-sound'))).toBe('on');
   });
 
-  test('a permanent action asks first, with a clear Cancel that returns focus', async ({
+  test('a permanent action asks first, with a clear way out that returns focus', async ({
     page,
   }) => {
     await page.goto('/lab/screens/settings');
@@ -153,7 +153,7 @@ test.describe('controls', () => {
     await trigger.click();
     const dialog = page.getByRole('dialog', { name: 'Delete all history?' });
     await expect(dialog).toBeVisible();
-    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await dialog.getByRole('button', { name: 'Keep history' }).click();
     await expect(dialog).toBeHidden();
     await expect(trigger).toBeFocused();
   });
