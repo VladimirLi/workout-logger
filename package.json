@@ -26,7 +26,7 @@
     "test:architecture": "depcruise --config .dependency-cruiser.cjs apps packages",
     "test:licenses": "node scripts/license-check.mjs",
     "test:deps": "node scripts/audit-check.mjs",
-    "test:secrets": "secretlint --secretlintrc .secretlintrc.json --maskSecrets \"**/*\" \"**/.*\" \"**/.*/**/*\"",
+    "test:secrets": "secretlint --secretlintrc .secretlintrc.json --maskSecrets \"**/*\" \"**/.*\" \"**/.*/**/*\" && node scripts/bundle-secrets.mjs",
     "test:migrations": "node scripts/validate-migrations.mjs",
     "test:guardrails": "node scripts/check-guardrails.mjs",
     "build": "pnpm typecheck && pnpm --filter \"./packages/**\" --filter \"./apps/**\" build",
