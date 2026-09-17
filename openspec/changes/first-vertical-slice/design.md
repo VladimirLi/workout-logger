@@ -103,8 +103,9 @@ ambiguity ADR-0004 exists to prevent, reintroduced at the last step.
 
 ## Risks / Trade-offs
 
-**Three external gates block most of this.** G-2 (Supabase), G-3 (domain and relying-party
-ID), G-4 (hosting). Sections 2 onward cannot start until G-2 closes. Section 1 (domain and
+**Three external gates block most of this.** G-2 (Supabase; Free for development is decided,
+nothing is provisioned), G-3 (domain and DNS; the relying-party ID is decided), G-4 (hosting;
+Vercel for the web app is decided, MCP hosting is not). Sections 2 onward cannot start until G-2 closes. Section 1 (domain and
 application) can.
 
 **The relying-party ID is a one-way door.** Changing it invalidates every enrolled passkey.
@@ -123,8 +124,9 @@ blocking requirement has emerged. That check has not been run.
 
 ## Open Questions
 
-- Does the relying-party ID bind to `gym.vladimirli.com` or to the apex? Decide before any
-  enrollment. (G-3)
+- ~~Does the relying-party ID bind to `gym.vladimirli.com` or to the apex?~~ Decided
+  2026-09-17: `gym.vladimirli.com` (ADR-0009). Enrollment still waits on G-3.
+- Which host runs the MCP server? Decided after a compatibility spike (ADR-0009, G-4).
 - What is the proposal expiry lifetime? Too short wastes agent work; too long makes staleness
   the normal outcome. Needs a starting value and a review after real use.
 - Does an idempotency record ever expire? If it does, replay after expiry can duplicate. If it
