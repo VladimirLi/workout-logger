@@ -27,7 +27,8 @@ context: |
     agent rationale.
 
   Conventional commits with a scope from: domain, application, contracts, observability,
-  adapters-supabase, test-support, web, mcp, spec, guardrail, deps, release, repo.
+  adapters-supabase, adapters-browser, test-support, web, mcp, spec, guardrail, deps, release,
+  repo.
 
 rules:
   proposal:
