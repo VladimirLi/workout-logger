@@ -1,4 +1,5 @@
 import {
+  clearLocalDataAfterExport,
   exportArchive,
   exportHistoryCsv,
   HISTORY_CSV_COLUMNS,
@@ -223,5 +224,56 @@ describe('the CSV history export (task 8.2)', () => {
   it('is empty but still self-describing when there is no history', async () => {
     const csv = await exportHistoryCsv({ source: new InMemoryLocalWorkoutStore() }, user);
     expect(csv).toBe(`${HISTORY_CSV_COLUMNS.join(',')}\r\n`);
+  });
+});
+
+describe('the pre-destructive export (task 4.9)', () => {
+  it('produces the export before anything is cleared, and returns it', async () => {
+    const { ports, sessionId } = await aDeviceWithHistory();
+    const queued = await ports.store.outbox(user);
+    expect(queued.length).toBeGreaterThan(0);
+
+    const result = await clearLocalDataAfterExport(
+      { source: ports.store, outbox: ports.store, eraser: ports.store, clock: ports.clock },
+      user,
+    );
+
+    // The export is in the caller's hands, and it contains the session that had not synced.
+    expect(result.archive.sessions.map((session) => session.id)).toEqual([sessionId]);
+    expect(result.archive.sessions[0]?.sets).toHaveLength(3);
+    expect(result.historyCsv.trimEnd().split('\r\n')).toHaveLength(4);
+    expect(result.unsynchronized).toBe(queued.length);
+
+    // And only then is the device empty.
+    expect(await ports.store.sessions(user)).toEqual([]);
+    expect(await ports.store.plans(user)).toEqual([]);
+    expect(await ports.store.outbox(user)).toEqual([]);
+  });
+
+  it('round-trips the export it took, so the clear was not a loss', async () => {
+    const { ports } = await aDeviceWithHistory();
+    const { archive } = await clearLocalDataAfterExport(
+      { source: ports.store, outbox: ports.store, eraser: ports.store, clock: ports.clock },
+      user,
+    );
+
+    const restored = new InMemoryLocalWorkoutStore();
+    const imported = await importArchive({ sink: restored, source: restored }, user, archive);
+    expect(imported.ok).toBe(true);
+    expect(await exportArchive({ source: restored, clock: new FixedClock(T0) }, user)).toEqual(
+      archive,
+    );
+  });
+
+  it('leaves another user untouched', async () => {
+    const { ports } = await aDeviceWithHistory();
+    const other = 'someone-else';
+    await ports.store.putPlan(other, aPlan('plan-other'));
+
+    await clearLocalDataAfterExport(
+      { source: ports.store, outbox: ports.store, eraser: ports.store, clock: ports.clock },
+      user,
+    );
+    expect((await ports.store.plans(other)).map((plan) => plan.id)).toEqual(['plan-other']);
   });
 });

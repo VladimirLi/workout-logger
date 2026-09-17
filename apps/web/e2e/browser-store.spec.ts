@@ -11,8 +11,10 @@ import type {
 import {
   type ArchiveSink,
   type ArchiveSource,
+  clearLocalDataAfterExport,
   exportArchive,
   importArchive,
+  type LocalDataEraser,
 } from '@workout/application';
 import { ARCHIVE_SCHEMA_VERSION } from '@workout/contracts';
 import type { ActiveSession, Plan, WorkoutSession } from '@workout/domain';
@@ -198,7 +200,10 @@ function pagePlanReader(
  * domain factories; only the reads and writes happen in the browser. That is the same split as
  * the contract cases: the code under test is the real one, and the storage is real IndexedDB.
  */
-function pageArchive(page: Page, databaseName: string): ArchiveSource & ArchiveSink {
+function pageArchive(
+  page: Page,
+  databaseName: string,
+): ArchiveSource & ArchiveSink & LocalDataEraser {
   const call = <T>(method: string, args: unknown[]): Promise<T> =>
     page.evaluate((input) => window.__archiveCall(input.databaseName, input.method, input.args), {
       databaseName,
@@ -211,6 +216,7 @@ function pageArchive(page: Page, databaseName: string): ArchiveSource & ArchiveS
     putPlan: (userId: string, plan: Plan) => call<void>('putPlan', [userId, plan]),
     putSession: (userId: string, session: WorkoutSession) =>
       call<void>('putSession', [userId, session]),
+    clearAll: (userId: string) => call<void>('clearAll', [userId]),
   };
 }
 
@@ -304,6 +310,52 @@ test.describe('the IndexedDB device store', () => {
     // The import did not queue anything for delivery: the data came from a device the server
     // has already heard from, and queueing it would deliver every set twice.
     expect(await pageStore(page, second).outbox(SYNTHETIC_USER_ID)).toEqual([]);
+  });
+
+  test('clearing the device hands over the export first', async ({ page }) => {
+    // Task 4.9 against a real database: the export is produced and returned before anything is
+    // erased, and what comes back restores into a clean device.
+    await injectAdapter(page);
+    const databaseName = nextDatabase();
+    const store = pageStore(page, databaseName);
+    const archiveStore = pageArchive(page, databaseName);
+
+    await archiveStore.putPlan(SYNTHETIC_USER_ID, aPlan());
+    const session = aStartedSession('workout-1');
+    await store.commit({
+      userId: SYNTHETIC_USER_ID,
+      session,
+      mutation: { kind: 'start_session', session },
+      idempotencyKey: '00000000-0000-4000-8000-000000000001' as never,
+      enqueuedAt: new Date('2026-09-14T10:00:00Z'),
+    });
+
+    const clock = { now: () => new Date('2026-09-14T11:00:00Z') };
+    const taken = await clearLocalDataAfterExport(
+      { source: archiveStore, outbox: store, eraser: archiveStore, clock },
+      SYNTHETIC_USER_ID,
+    );
+
+    expect(taken.unsynchronized).toBe(1);
+    expect(taken.archive.sessions).toHaveLength(1);
+    expect(taken.archive.plans).toHaveLength(1);
+
+    // The device is empty afterwards - sessions, plans, and the queue.
+    expect(await archiveStore.sessions(SYNTHETIC_USER_ID)).toEqual([]);
+    expect(await archiveStore.plans(SYNTHETIC_USER_ID)).toEqual([]);
+    expect(await store.outbox(SYNTHETIC_USER_ID)).toEqual([]);
+
+    // And the export that was handed over is enough to get everything back.
+    const restored = pageArchive(page, nextDatabase());
+    const imported = await importArchive(
+      { sink: restored, source: restored },
+      SYNTHETIC_USER_ID,
+      taken.archive,
+    );
+    expect(imported.ok, JSON.stringify(imported.ok === false && imported.error)).toBe(true);
+    expect(await exportArchive({ source: restored, clock }, SYNTHETIC_USER_ID)).toEqual(
+      taken.archive,
+    );
   });
 
   test('a queued mutation survives a database version upgrade', async ({ page }) => {

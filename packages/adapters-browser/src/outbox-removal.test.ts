@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -32,15 +32,56 @@ function methodBodies(source: string): Map<string, string> {
   return bodies;
 }
 
+/**
+ * The application source, read from here because the rule spans the two packages: the adapter
+ * can erase, and what makes that safe is which use case is allowed to ask it to.
+ */
+const APPLICATION = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'application', 'src');
+
 describe('removing a queued mutation', () => {
-  it('happens in acknowledge and nowhere else', () => {
+  it('happens in acknowledge and in the pre-destructive clear, nowhere else', () => {
     const bodies = methodBodies(SOURCE);
     expect([...bodies.keys()], 'the method scan found nothing to check').toContain('acknowledge');
 
     const removers = [...bodies]
       .filter(([, body]) => /\.(delete|clear)\(/.test(body))
-      .map(([name]) => name);
-    expect(removers).toEqual(['acknowledge']);
+      .map(([name]) => name)
+      .sort();
+    // `clearAll` erases everything for one user, including the queue. It is not a discard: it
+    // is the user asking, and the use case below cannot reach it without exporting first.
+    expect(removers).toEqual(['acknowledge', 'clearAll']);
+  });
+
+  it('keeps the eraser off the logging port, so a screen cannot reach it', () => {
+    // clearAll is on the archive class, not on the store the logging use cases are given.
+    const store = SOURCE.slice(
+      SOURCE.indexOf('export class IndexedDbWorkoutStore'),
+      SOURCE.indexOf('export class IndexedDbPlanStore'),
+    );
+    expect(store).not.toMatch(/clearAll/);
+    expect(SOURCE.indexOf('clearAll')).toBeGreaterThan(
+      SOURCE.indexOf('export class IndexedDbArchive'),
+    );
+  });
+
+  it('is asked for only by the use case that exports first', () => {
+    const files = readdirSync(APPLICATION).filter((name) => name.endsWith('.ts'));
+    expect(files.length, 'the application scan found no files').toBeGreaterThan(3);
+
+    for (const name of files) {
+      const source = readFileSync(join(APPLICATION, name), 'utf8');
+      const calls = [...source.matchAll(/\.clearAll\(/g)];
+      if (calls.length === 0) continue;
+      expect(name, 'clearAll is called outside archive.ts').toBe('archive.ts');
+      // In archive.ts it may appear only inside the pre-destructive export use case.
+      const useCase = source.slice(
+        source.indexOf('export async function clearLocalDataAfterExport'),
+      );
+      expect(
+        [...useCase.matchAll(/\.clearAll\(/g)].length,
+        'clearAll is called outside clearLocalDataAfterExport',
+      ).toBe(calls.length);
+    }
   });
 
   it('is what acknowledge actually does, so the check above is not vacuous', () => {

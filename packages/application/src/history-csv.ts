@@ -1,5 +1,5 @@
 import type { Measurement, RecordedSet, WorkoutSession } from '@workout/domain';
-import type { ArchiveSource } from './archive.js';
+import type { ArchiveSource } from './archive-ports.js';
 
 /**
  * Workout history as CSV (data-portability spec, task 8.2).
