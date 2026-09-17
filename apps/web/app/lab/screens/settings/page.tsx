@@ -27,6 +27,7 @@ export default function SettingsScreen() {
           title={messages.confirm.deleteHistory}
           body={messages.confirm.deleteHistoryBody}
           confirm={messages.confirm.deleteHistoryAction}
+          cancel={messages.confirm.keepHistory}
         />
       </Stack>
     </Screen>

@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useId, useRef, useState } from 'react';
-import { messages } from '../i18n/messages';
 import { Button } from './Button';
 import moduleStyles from './ConfirmDialog.module.css';
 
@@ -10,9 +9,13 @@ const styles = moduleStyles as Record<'actions' | 'body' | 'dialog' | 'title', s
 
 type ConfirmDialogProps = {
   trigger: string;
+  /** A question naming the object (content.def.confirm). */
   title: string;
   body: string;
+  /** The result, e.g. "Delete history". */
   confirm: string;
+  /** The clear cancel, also naming the result, e.g. "Keep history". */
+  cancel: string;
 };
 
 /**
@@ -20,7 +23,7 @@ type ConfirmDialogProps = {
  * ask first, in a dialog with a clear Cancel. Reversible ones act at once with Undo. The
  * confirming button is secondary: the safe choice is never the visually loudest.
  */
-export function ConfirmDialog({ trigger, title, body, confirm }: ConfirmDialogProps) {
+export function ConfirmDialog({ trigger, title, body, confirm, cancel }: ConfirmDialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const [open, setOpen] = useState(false);
   const titleId = useId();
@@ -52,7 +55,7 @@ export function ConfirmDialog({ trigger, title, body, confirm }: ConfirmDialogPr
         </p>
         <div className={styles.actions}>
           <Button variant="primary" onClick={() => setOpen(false)}>
-            {messages.confirm.cancel}
+            {cancel}
           </Button>
           <Button variant="secondary" onClick={() => setOpen(false)}>
             {confirm}

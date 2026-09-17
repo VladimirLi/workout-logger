@@ -12,12 +12,18 @@ type ScreenProps = {
   bottom?: ReactNode;
 };
 
-/** layout.wide-screen.centered-column: one 520 px column, centred, with responsive gutters. */
+/**
+ * layout.wide-screen.centered-column: one 520 px column, centred, with responsive gutters.
+ * Landmarks (accessibility.def.landmarks): the bar is the page header, the content is main,
+ * and the tabs, when shown, are the navigation.
+ */
 export function Screen({ children, bar, bottom }: ScreenProps) {
   return (
     <div className={styles.screen}>
       {bar}
-      <div className={styles.content}>{children}</div>
+      <main id="main" className={styles.content}>
+        {children}
+      </main>
       {bottom}
     </div>
   );

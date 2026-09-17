@@ -20,7 +20,7 @@ export const messages = {
     logSet: 'Log set',
     saving: 'Saving…',
     undo: 'Undo',
-    retry: 'Try again',
+    retry: 'Retry',
     startWorkout: 'Start workout',
     skipRest: 'Skip rest',
     addTime: 'Add 30 seconds',
@@ -98,7 +98,7 @@ export const messages = {
   },
 
   confirm: {
-    cancel: 'Cancel',
+    keepHistory: 'Keep history',
     deleteHistory: 'Delete all history?',
     deleteHistoryBody: 'This removes every workout from this device and cannot be undone.',
     deleteHistoryAction: 'Delete history',
