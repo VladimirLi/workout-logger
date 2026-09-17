@@ -1,0 +1,262 @@
+{
+  "$description": "Theme-independent semantic tokens. Components use these and the themed colour tokens only.",
+  "space": {
+    "0": {
+      "$value": "{dimension.0}"
+    },
+    "1": {
+      "$value": "{dimension.4}"
+    },
+    "2": {
+      "$value": "{dimension.8}"
+    },
+    "3": {
+      "$value": "{dimension.12}"
+    },
+    "4": {
+      "$value": "{dimension.16}"
+    },
+    "5": {
+      "$value": "{dimension.24}"
+    },
+    "6": {
+      "$value": "{dimension.32}"
+    },
+    "7": {
+      "$value": "{dimension.48}"
+    },
+    "8": {
+      "$value": "{dimension.64}"
+    },
+    "$type": "dimension",
+    "$description": "4 px base scale (layout.base-unit.four, layout.def.scale)."
+  },
+  "radius": {
+    "$type": "dimension",
+    "$description": "shape.radius.soft",
+    "control": {
+      "$value": "{dimension.10}"
+    },
+    "card": {
+      "$value": "{dimension.14}"
+    },
+    "sheet": {
+      "$value": "{dimension.20}"
+    },
+    "pill": {
+      "$value": "{dimension.9999}"
+    }
+  },
+  "border": {
+    "$type": "dimension",
+    "width": {
+      "$value": "{dimension.1}"
+    }
+  },
+  "focus": {
+    "$type": "dimension",
+    "$description": "accessibility.def.focus: 3 px ring, 2 px offset.",
+    "width": {
+      "$value": "{dimension.3}"
+    },
+    "offset": {
+      "$value": "{dimension.2}"
+    }
+  },
+  "target": {
+    "$type": "dimension",
+    "$description": "accessibility.targets.tiered",
+    "min": {
+      "$value": "{dimension.44}"
+    },
+    "workout": {
+      "$value": "{dimension.48}"
+    },
+    "gap": {
+      "$value": "{dimension.8}"
+    },
+    "rir-segment": {
+      "$value": "{dimension.56}"
+    },
+    "row": {
+      "$value": "{dimension.56}"
+    }
+  },
+  "icon": {
+    "$type": "dimension",
+    "$description": "iconography.def.sizes",
+    "inline": {
+      "$value": "{dimension.16}"
+    },
+    "body": {
+      "$value": "{dimension.20}"
+    },
+    "button": {
+      "$value": "{dimension.24}"
+    },
+    "stroke": {
+      "$type": "number",
+      "$value": "{number.1-75}",
+      "$description": "iconography.style.outline-lucide and iconography.def.weight"
+    }
+  },
+  "layout": {
+    "$type": "dimension",
+    "content-max": {
+      "$value": "{dimension.520}",
+      "$description": "layout.wide-screen.centered-column"
+    },
+    "dialog-max": {
+      "$value": "{dimension.420}",
+      "$description": "shape.def.overlays"
+    },
+    "gutter-sm": {
+      "$value": "{dimension.16}",
+      "$description": "layout.def.gutters below 400 px"
+    },
+    "gutter-md": {
+      "$value": "{dimension.20}",
+      "$description": "layout.def.gutters from 400 px"
+    },
+    "gutter-lg": {
+      "$value": "{dimension.24}",
+      "$description": "layout.def.gutters from 600 px"
+    },
+    "breakpoint-sm": {
+      "$value": "{dimension.400}",
+      "$description": "layout.def.breakpoints"
+    },
+    "breakpoint-md": {
+      "$value": "{dimension.600}"
+    },
+    "breakpoint-lg": {
+      "$value": "{dimension.1024}"
+    }
+  },
+  "font": {
+    "family": {
+      "$type": "fontFamily",
+      "ui": {
+        "$value": "{font-family.system}"
+      },
+      "mono": {
+        "$value": "{font-family.mono}"
+      }
+    },
+    "weight": {
+      "$type": "fontWeight",
+      "$description": "typography.def.weights",
+      "body": {
+        "$value": "{font-weight.400}"
+      },
+      "label": {
+        "$value": "{font-weight.500}"
+      },
+      "heading": {
+        "$value": "{font-weight.600}"
+      },
+      "display": {
+        "$value": "{font-weight.700}"
+      }
+    },
+    "size": {
+      "$type": "dimension",
+      "$description": "typography.scale.two-tier: fixed UI tier in rem, fluid display tier.",
+      "label": {
+        "$value": "{font-size.13}"
+      },
+      "body": {
+        "$value": "{font-size.16}"
+      },
+      "title": {
+        "$value": "{font-size.18}"
+      },
+      "heading": {
+        "$value": "{font-size.22}"
+      },
+      "display-min": {
+        "$value": "{font-size.40}"
+      },
+      "display-max": {
+        "$value": "{font-size.64}"
+      }
+    },
+    "line-height": {
+      "$type": "number",
+      "$description": "typography.def.line-height",
+      "body": {
+        "$value": "{number.1-5}"
+      },
+      "label": {
+        "$value": "{number.1-3}"
+      },
+      "heading": {
+        "$value": "{number.1-2}"
+      },
+      "display": {
+        "$value": "{number.1-05}"
+      }
+    },
+    "tracking": {
+      "$type": "number",
+      "$description": "typography.def.tracking, in em.",
+      "body": {
+        "$value": "{number.0}"
+      },
+      "heading": {
+        "$value": "{number.-0-01}"
+      },
+      "display": {
+        "$value": "{number.-0-03}"
+      }
+    }
+  },
+  "motion": {
+    "duration": {
+      "$type": "duration",
+      "$description": "motion.def.tokens",
+      "fast": {
+        "$value": "{duration.100}"
+      },
+      "base": {
+        "$value": "{duration.200}"
+      },
+      "slow": {
+        "$value": "{duration.300}"
+      },
+      "skeleton-delay": {
+        "$value": "{duration.300}",
+        "$description": "feedback.loading.skeleton-delayed"
+      }
+    },
+    "easing": {
+      "$type": "cubicBezier",
+      "$description": "motion.def.easing",
+      "standard": {
+        "$value": "{cubic-bezier.standard}"
+      },
+      "exit": {
+        "$value": "{cubic-bezier.exit}"
+      }
+    }
+  },
+  "layer": {
+    "$type": "number",
+    "$description": "shape.def.layers: named order only. Components never use raw z-index numbers.",
+    "base": {
+      "$value": 0
+    },
+    "sticky": {
+      "$value": 10
+    },
+    "sheet": {
+      "$value": 20
+    },
+    "dialog": {
+      "$value": 30
+    },
+    "toast": {
+      "$value": 40
+    }
+  }
+}

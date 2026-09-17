@@ -1,0 +1,148 @@
+{
+  "$description": "Semantic colour and elevation tokens for the light theme (theme.dark-surfaces.tonal-lift for dark). Value sourced from the accepted Quiet Performance workbook (wl-ds-workbook/v1).",
+  "color": {
+    "$type": "color",
+    "bg": {
+      "default": {
+        "$value": "{color.neutral.75}"
+      }
+    },
+    "surface": {
+      "default": {
+        "$value": "{color.neutral.25}"
+      },
+      "raised": {
+        "$value": "{color.white}"
+      },
+      "sunken": {
+        "$value": "{color.neutral.100}"
+      }
+    },
+    "ink": {
+      "default": {
+        "$value": "{color.neutral.900}"
+      },
+      "muted": {
+        "$value": "{color.neutral.650}"
+      }
+    },
+    "border": {
+      "default": {
+        "$value": "{color.neutral.150}"
+      },
+      "strong": {
+        "$value": "{color.neutral.450}"
+      }
+    },
+    "accent": {
+      "default": {
+        "$value": "{color.green.700}"
+      },
+      "hover": {
+        "$value": "{color.green.750}"
+      },
+      "pressed": {
+        "$value": "{color.green.800}"
+      },
+      "soft": {
+        "$value": "{color.green.75}"
+      },
+      "soft-ink": {
+        "$value": "{color.green.775}"
+      }
+    },
+    "on-accent": {
+      "default": {
+        "$value": "{color.white}"
+      }
+    },
+    "focus": {
+      "default": {
+        "$value": "{color.blue.600}"
+      }
+    },
+    "success": {
+      "default": {
+        "$value": "{color.green.650}"
+      },
+      "soft": {
+        "$value": "{color.green.50}"
+      }
+    },
+    "warning": {
+      "default": {
+        "$value": "{color.amber.650}"
+      },
+      "soft": {
+        "$value": "{color.amber.50}"
+      }
+    },
+    "danger": {
+      "default": {
+        "$value": "{color.red.650}"
+      },
+      "soft": {
+        "$value": "{color.red.50}"
+      }
+    },
+    "info": {
+      "default": {
+        "$value": "{color.blue.650}"
+      },
+      "soft": {
+        "$value": "{color.blue.50}"
+      }
+    },
+    "offline": {
+      "default": {
+        "$value": "{color.neutral.675}"
+      },
+      "soft": {
+        "$value": "{color.neutral.125}"
+      }
+    },
+    "scrim": {
+      "default": {
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [0.0941, 0.1255, 0.1059],
+          "alpha": 0.45,
+          "hex": "#18201B"
+        },
+        "$description": "shape.def.overlays: 45% ink."
+      }
+    }
+  },
+  "shadow": {
+    "$type": "shadow",
+    "overlay": {
+      "default": {
+        "$description": "shape.elevation.tonal: shadow on overlays only.",
+        "$value": {
+          "color": {
+            "colorSpace": "srgb",
+            "components": [0.0784, 0.1255, 0.0941],
+            "alpha": 0.18,
+            "hex": "#142018"
+          },
+          "offsetX": {
+            "value": 0,
+            "unit": "px"
+          },
+          "offsetY": {
+            "value": 12,
+            "unit": "px"
+          },
+          "blur": {
+            "value": 32,
+            "unit": "px"
+          },
+          "spread": {
+            "value": 0,
+            "unit": "px"
+          }
+        }
+      }
+    }
+  }
+}

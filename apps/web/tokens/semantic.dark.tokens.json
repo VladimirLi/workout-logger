@@ -1,0 +1,148 @@
+{
+  "$description": "Semantic colour and elevation tokens for the dark theme (theme.dark-surfaces.tonal-lift for dark). Value sourced from the accepted Quiet Performance workbook (wl-ds-workbook/v1).",
+  "color": {
+    "$type": "color",
+    "bg": {
+      "default": {
+        "$value": "{color.neutral.950}"
+      }
+    },
+    "surface": {
+      "default": {
+        "$value": "{color.neutral.925}"
+      },
+      "raised": {
+        "$value": "{color.neutral.875}"
+      },
+      "sunken": {
+        "$value": "{color.neutral.975}"
+      }
+    },
+    "ink": {
+      "default": {
+        "$value": "{color.neutral.50}"
+      },
+      "muted": {
+        "$value": "{color.neutral.300}"
+      }
+    },
+    "border": {
+      "default": {
+        "$value": "{color.neutral.800}"
+      },
+      "strong": {
+        "$value": "{color.neutral.500}"
+      }
+    },
+    "accent": {
+      "default": {
+        "$value": "{color.green.250}"
+      },
+      "hover": {
+        "$value": "{color.green.200}"
+      },
+      "pressed": {
+        "$value": "{color.green.300}"
+      },
+      "soft": {
+        "$value": "{color.green.850}"
+      },
+      "soft-ink": {
+        "$value": "{color.green.100}"
+      }
+    },
+    "on-accent": {
+      "default": {
+        "$value": "{color.green.950}"
+      }
+    },
+    "focus": {
+      "default": {
+        "$value": "{color.blue.300}"
+      }
+    },
+    "success": {
+      "default": {
+        "$value": "{color.green.250}"
+      },
+      "soft": {
+        "$value": "{color.green.875}"
+      }
+    },
+    "warning": {
+      "default": {
+        "$value": "{color.amber.250}"
+      },
+      "soft": {
+        "$value": "{color.amber.900}"
+      }
+    },
+    "danger": {
+      "default": {
+        "$value": "{color.red.200}"
+      },
+      "soft": {
+        "$value": "{color.red.900}"
+      }
+    },
+    "info": {
+      "default": {
+        "$value": "{color.blue.250}"
+      },
+      "soft": {
+        "$value": "{color.blue.900}"
+      }
+    },
+    "offline": {
+      "default": {
+        "$value": "{color.neutral.250}"
+      },
+      "soft": {
+        "$value": "{color.neutral.850}"
+      }
+    },
+    "scrim": {
+      "default": {
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [0, 0, 0],
+          "alpha": 0.68,
+          "hex": "#000000"
+        },
+        "$description": "Dark scrim as rendered by the workbook dark preview. 45% of the dark-theme ink would brighten content; see the reconciliation log in DESIGN_SYSTEM.md."
+      }
+    }
+  },
+  "shadow": {
+    "$type": "shadow",
+    "overlay": {
+      "default": {
+        "$description": "shape.elevation.tonal: shadow on overlays only.",
+        "$value": {
+          "color": {
+            "colorSpace": "srgb",
+            "components": [0, 0, 0],
+            "alpha": 0.5,
+            "hex": "#000000"
+          },
+          "offsetX": {
+            "value": 0,
+            "unit": "px"
+          },
+          "offsetY": {
+            "value": 12,
+            "unit": "px"
+          },
+          "blur": {
+            "value": 32,
+            "unit": "px"
+          },
+          "spread": {
+            "value": 0,
+            "unit": "px"
+          }
+        }
+      }
+    }
+  }
+}
