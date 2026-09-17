@@ -1,4 +1,6 @@
 import type {
+  ArchiveSink,
+  ArchiveSource,
   Delivery,
   IdempotencyKey,
   LocalCommitOutcome,
@@ -35,6 +37,7 @@ const PLANS = 'plans';
 const BY_USER = 'by-user';
 const BY_KEY = 'by-key';
 const BY_USER_STATUS = 'by-user-status';
+const PLAN_BY_USER_STATUS = 'plan-by-user-status';
 
 const DEFAULT_DATABASE = 'workout';
 const VERSION = 1;
@@ -81,6 +84,9 @@ interface SequenceRecord {
 
 interface PlanRecord {
   readonly userId: string;
+  readonly id: string;
+  /** Duplicated out of the plan so the active one is an index lookup. */
+  readonly status: Plan['status'];
   readonly plan: Plan;
 }
 
@@ -133,7 +139,11 @@ function openDatabase(
       outbox.createIndex(BY_KEY, ['userId', 'idempotencyKey'], { unique: true });
       db.createObjectStore(KEYS, { keyPath: ['userId', 'idempotencyKey'] });
       db.createObjectStore(SEQUENCES, { keyPath: ['userId', 'entityId'] });
-      db.createObjectStore(PLANS, { keyPath: 'userId' });
+      // Keyed per plan, not per user: a superseded plan is history and is kept until the
+      // user deletes it (data-portability spec), so it cannot be overwritten by its successor.
+      const plans = db.createObjectStore(PLANS, { keyPath: ['userId', 'id'] });
+      plans.createIndex(PLAN_BY_USER_STATUS, ['userId', 'status']);
+      plans.createIndex(BY_USER, 'userId');
     };
     request.onsuccess = () => {
       const database = request.result;
@@ -345,7 +355,9 @@ export class IndexedDbPlanStore implements PlanReader {
 
   async activePlan(userId: string): Promise<Plan | undefined> {
     const record = await this.#db.transaction([PLANS], 'readonly', (transaction) =>
-      promise<PlanRecord | undefined>(transaction.objectStore(PLANS).get(userId)),
+      promise<PlanRecord | undefined>(
+        transaction.objectStore(PLANS).index(PLAN_BY_USER_STATUS).get([userId, 'active']),
+      ),
     );
     // A superseded plan is kept for history but is not the active one.
     return record?.plan.status === 'active' ? record.plan : undefined;
@@ -353,7 +365,68 @@ export class IndexedDbPlanStore implements PlanReader {
 
   async save(userId: string, plan: Plan): Promise<void> {
     await this.#db.transaction([PLANS], 'readwrite', (transaction) => {
-      transaction.objectStore(PLANS).put({ userId, plan } satisfies PlanRecord);
+      transaction
+        .objectStore(PLANS)
+        .put({ userId, id: plan.id, status: plan.status, plan } satisfies PlanRecord);
+    });
+  }
+}
+
+/**
+ * Everything on the device, for export and for restoring an export (tasks 8.1 and 8.2).
+ *
+ * A separate class over the same database: exporting reads all of history, which is a
+ * different concern from logging a set, and the outbox port deliberately has no way to do it.
+ */
+export class IndexedDbArchive implements ArchiveSource, ArchiveSink {
+  readonly #db: Database;
+
+  constructor(options: IndexedDbOptions = {}) {
+    this.#db = new Database(options);
+  }
+
+  async plans(userId: string): Promise<readonly Plan[]> {
+    const records = await this.#db.transaction([PLANS], 'readonly', (transaction) =>
+      promise<PlanRecord[]>(
+        transaction.objectStore(PLANS).index(BY_USER).getAll(IDBKeyRange.only(userId)),
+      ),
+    );
+    return records.map((record) => record.plan);
+  }
+
+  async sessions(userId: string): Promise<readonly WorkoutSession[]> {
+    const records = await this.#db.transaction([SESSIONS], 'readonly', (transaction) =>
+      promise<SessionRecord[]>(
+        transaction
+          .objectStore(SESSIONS)
+          .index(BY_USER_STATUS)
+          .getAll(IDBKeyRange.bound([userId, ''], [userId, '\uffff'])),
+      ),
+    );
+    return records.map((record) => record.session);
+  }
+
+  async putPlan(userId: string, plan: Plan): Promise<void> {
+    await this.#db.transaction([PLANS], 'readwrite', (transaction) => {
+      transaction
+        .objectStore(PLANS)
+        .put({ userId, id: plan.id, status: plan.status, plan } satisfies PlanRecord);
+    });
+  }
+
+  /**
+   * Restores a session without an outbox entry, because an import is not a change the server
+   * has yet to hear about: the data came from an export of data it already has, or from a
+   * device the user is replacing. Queueing it would deliver everything twice.
+   */
+  async putSession(userId: string, session: WorkoutSession): Promise<void> {
+    await this.#db.transaction([SESSIONS], 'readwrite', (transaction) => {
+      transaction.objectStore(SESSIONS).put({
+        userId,
+        id: session.id,
+        status: session.status,
+        session,
+      } satisfies SessionRecord);
     });
   }
 }

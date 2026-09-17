@@ -8,8 +8,16 @@ import type {
   OutboxEntry,
   PlanReader,
 } from '@workout/application';
+import {
+  type ArchiveSink,
+  type ArchiveSource,
+  exportArchive,
+  importArchive,
+} from '@workout/application';
+import { ARCHIVE_SCHEMA_VERSION } from '@workout/contracts';
 import type { ActiveSession, Plan, WorkoutSession } from '@workout/domain';
 import {
+  aPlan,
   aStartedSession,
   LOCAL_WORKOUT_STORE_CASES,
   PLAN_READER_CASES,
@@ -46,6 +54,7 @@ declare global {
     __storeCall(databaseName: string, method: string, args: unknown[]): Promise<unknown>;
     __planCall(databaseName: string, method: string, args: unknown[]): Promise<unknown>;
     __failNextWrite(databaseName: string): void;
+    __archiveCall(databaseName: string, method: string, args: unknown[]): Promise<unknown>;
   }
 }
 
@@ -127,8 +136,14 @@ const plan = (name) => {
   if (!plans.has(name)) plans.set(name, new IndexedDbPlanStore({ databaseName: name }));
   return plans.get(name);
 };
+const archives = new Map();
+const archive = (name) => {
+  if (!archives.has(name)) archives.set(name, new IndexedDbArchive({ databaseName: name }));
+  return archives.get(name);
+};
 window.__storeCall = (name, method, args) => store(name)[method](...args);
 window.__planCall = (name, method, args) => plan(name)[method](...args);
+window.__archiveCall = (name, method, args) => archive(name)[method](...args);
 window.__failNextWrite = (name) => {
   failing.add(name);
 };
@@ -177,6 +192,29 @@ function pagePlanReader(
 }
 
 /**
+ * An ArchiveSource and ArchiveSink backed by the page's IndexedDB.
+ *
+ * The export and import use cases themselves run here in Node, because they need zod and the
+ * domain factories; only the reads and writes happen in the browser. That is the same split as
+ * the contract cases: the code under test is the real one, and the storage is real IndexedDB.
+ */
+function pageArchive(page: Page, databaseName: string): ArchiveSource & ArchiveSink {
+  const call = <T>(method: string, args: unknown[]): Promise<T> =>
+    page.evaluate((input) => window.__archiveCall(input.databaseName, input.method, input.args), {
+      databaseName,
+      method,
+      args,
+    }) as Promise<T>;
+  return {
+    plans: (userId: string) => call<readonly Plan[]>('plans', [userId]),
+    sessions: (userId: string) => call<readonly WorkoutSession[]>('sessions', [userId]),
+    putPlan: (userId: string, plan: Plan) => call<void>('putPlan', [userId, plan]),
+    putSession: (userId: string, session: WorkoutSession) =>
+      call<void>('putSession', [userId, session]),
+  };
+}
+
+/**
  * Makes the device full.
  *
  * Chromium's `Storage.overrideQuotaForOrigin` was tried first and does not serve here: with the
@@ -202,6 +240,7 @@ test.describe('the IndexedDB device store', () => {
     ).toEqual([]);
     expect(source).toContain('IndexedDbWorkoutStore');
     expect(source).toContain('IndexedDbPlanStore');
+    expect(source).toContain('IndexedDbArchive');
   });
 
   for (const testCase of LOCAL_WORKOUT_STORE_CASES) {
@@ -223,6 +262,49 @@ test.describe('the IndexedDB device store', () => {
       await testCase.run({ reader, seed: (userId, plan) => reader.save(userId, plan) });
     });
   }
+
+  test('an export from one device imports into a clean one and matches', async ({ page }) => {
+    // Task 8.1's round trip, across two real IndexedDB databases rather than two objects in
+    // one process: the export is written from a device that logged the sets, and read back
+    // into a device that has never seen them.
+    await injectAdapter(page);
+    const first = nextDatabase();
+    const store = pageStore(page, first);
+    const source = pageArchive(page, first);
+
+    const plan = aPlan();
+    await source.putPlan(SYNTHETIC_USER_ID, plan);
+    const session = aStartedSession('workout-1');
+    await store.commit({
+      userId: SYNTHETIC_USER_ID,
+      session,
+      mutation: { kind: 'start_session', session },
+      idempotencyKey: '00000000-0000-4000-8000-000000000001' as never,
+      enqueuedAt: new Date('2026-09-14T10:00:00Z'),
+    });
+
+    const clock = { now: () => new Date('2026-09-14T11:00:00Z') };
+    const archive = await exportArchive({ source, clock }, SYNTHETIC_USER_ID);
+    expect(archive.schemaVersion).toBe(ARCHIVE_SCHEMA_VERSION);
+    expect(archive.plans).toHaveLength(1);
+    expect(archive.sessions).toHaveLength(1);
+
+    const second = nextDatabase();
+    const clean = pageArchive(page, second);
+    const imported = await importArchive(
+      { sink: clean, source: clean },
+      SYNTHETIC_USER_ID,
+      archive,
+    );
+    expect(imported.ok, JSON.stringify(imported.ok === false && imported.error)).toBe(true);
+
+    const again = await exportArchive({ source: clean, clock }, SYNTHETIC_USER_ID);
+    expect(again).toEqual(archive);
+
+    // The import did not queue anything for delivery: the data came from a device the server
+    // has already heard from, and queueing it would deliver every set twice.
+    expect(await pageStore(page, second).outbox(SYNTHETIC_USER_ID)).toEqual([]);
+  });
 
   test('a queued mutation survives a database version upgrade', async ({ page }) => {
     // The third condition the offline-sync spec names for never discarding a queued mutation

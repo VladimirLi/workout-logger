@@ -1,4 +1,6 @@
 import type {
+  ArchiveSink,
+  ArchiveSource,
   Delivery,
   IdempotencyKey,
   IdempotencyKeys,
@@ -19,12 +21,14 @@ import { FixedClock } from './in-memory-ports.js';
  * The browser adapter (IndexedDB) must pass the same contract suite. Atomicity here comes from
  * applying the session and the entry in one synchronous step, with no await in between.
  */
-export class InMemoryLocalWorkoutStore implements LocalWorkoutStore {
+export class InMemoryLocalWorkoutStore implements LocalWorkoutStore, ArchiveSource, ArchiveSink {
   readonly #sessions = new Map<string, WorkoutSession>();
   readonly #outbox = new Map<string, OutboxEntry[]>();
   /** Every key ever committed, with the mutation it named, including acknowledged ones. */
   readonly #keys = new Map<string, string>();
   readonly #sequences = new Map<string, number>();
+  /** Plans held for export and import; the reader below is the port screens use. */
+  readonly #plans = new Map<string, Plan[]>();
   #failNext: 'storage_full' | undefined;
 
   #sessionKey(userId: string, sessionId: string): string {
@@ -111,6 +115,32 @@ export class InMemoryLocalWorkoutStore implements LocalWorkoutStore {
     const queue = this.#queue(userId);
     const index = queue.findIndex((entry) => entry.idempotencyKey === key);
     if (index >= 0) queue.splice(index, 1);
+    return Promise.resolve();
+  }
+
+  // The archive ports (tasks 8.1 and 8.2). Reading all history is a different concern from
+  // logging, so it is a separate port that this reference also happens to satisfy.
+
+  sessions(userId: string): Promise<readonly WorkoutSession[]> {
+    const prefix = `${userId}::`;
+    return Promise.resolve(
+      [...this.#sessions].filter(([key]) => key.startsWith(prefix)).map(([, session]) => session),
+    );
+  }
+
+  plans(userId: string): Promise<readonly Plan[]> {
+    return Promise.resolve([...(this.#plans.get(userId) ?? [])]);
+  }
+
+  putSession(userId: string, session: WorkoutSession): Promise<void> {
+    this.#sessions.set(this.#sessionKey(userId, session.id), session);
+    return Promise.resolve();
+  }
+
+  putPlan(userId: string, plan: Plan): Promise<void> {
+    const plans = this.#plans.get(userId) ?? [];
+    plans.push(plan);
+    this.#plans.set(userId, plans);
     return Promise.resolve();
   }
 }
