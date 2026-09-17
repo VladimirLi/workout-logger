@@ -32,31 +32,50 @@
 
 ## 2. Persistence and authorization
 
-- [ ] 2.1 **[G-2]** Write the initial schema migration and verify `pnpm test:migrations`
-      passes on it
-- [ ] 2.2 **[G-2]** Enable row-level security and explicit grants on every exposed relation,
-      and verify a relation without them fails the authorization suite
+- [x] 2.1 Write the initial schema migration and verify `pnpm test:migrations`
+      passes on it (`pnpm test:migrations`: supabase/migrations/20260917120000_initial_schema.sql
+      — plans, workout sessions, recorded sets, corrections, proposals, and idempotency
+      records, with typed measurements as jsonb. Never applied: no database exists, G-2)
+- [x] 2.2 Enable row-level security and explicit grants on every exposed relation,
+      and verify a relation without them fails the authorization suite (`pnpm test:migrations`
+      enables, forces, revokes from anon, and requires a policy on every reachable table;
+      `pnpm test`: scripts/validate-migrations.test.ts removes each of those in turn from a
+      throwaway migration and requires the gate to fail. Running the checks against a live
+      database is task 2.3, G-2)
 - [ ] 2.3 **[G-2]** Write deny-by-default tests for unauthenticated and wrong-user identities
       across every operation, and verify each denial
-- [ ] 2.4 **[G-2]** Index every column used by a row-level security predicate, and verify the
-      migration gate reports none missing
+- [x] 2.4 Index every column used by a row-level security predicate, and verify the
+      migration gate reports none missing (`pnpm test:migrations`: every column a policy
+      compares must be the LEADING column of an index; `user_id` leads every primary key, so
+      no extra index is needed. `pnpm test`: a policy on a non-leading column fails the gate)
 - [ ] 2.5 **[G-2]** Implement the Supabase adapters and verify they pass the existing port
       contract suites unchanged
 - [ ] 2.6 **[G-2]** Implement the server-side idempotency record committed in the same
       transaction as the mutation, and verify replay returns the original result with no
       duplicate row
-- [ ] 2.7 **[G-2]** Verify the built client bundle contains no service-role credential
+- [x] 2.7 Verify the built client bundle contains no service-role credential
+      (`pnpm test:secrets`: scripts/bundle-secrets.mjs scans apps/web/.next after the build and
+      fails when there is no bundle rather than reporting a clean one; `pnpm test`:
+      scripts/bundle-secrets.test.ts plants a service-role reference, the variable name, a
+      token whose payload claims the role, and a private key, and requires each to be found)
 
 ## 3. Authentication
 
 - [ ] 3.1 **[G-3]** Record the WebAuthn relying-party identifier explicitly in deployment
-      configuration, and verify it is not inferred from the request
+      configuration, and verify it is not inferred from the request (PARTIAL: the identifier is
+      decided and recorded as a value in SECURITY.md (ADR-0009, `gym.vladimirli.com`), and
+      `pnpm test`: scripts/credential-policy.test.ts requires it never to be derived from a
+      host, header, or origin and asserts no passkey enrollment exists yet. OPEN: there is no
+      deployment configuration to record it in, G-3/G-4)
 - [ ] 3.2 Implement email one-time-code authentication and verify a full sign-in round trip
 - [ ] 3.3 Verify the email code path works end to end BEFORE any passkey is enrolled, so a
       relying-party mistake stays recoverable
 - [ ] 3.4 **[G-3]** Implement optional passkey sign-in and verify enrollment is refused from a
       non-production preview origin
-- [ ] 3.5 Verify no password credential is stored or accepted anywhere
+- [x] 3.5 Verify no password credential is stored or accepted anywhere
+      (`pnpm test`: scripts/credential-policy.test.ts scans every tracked source file and
+      migration for a password column, field, or hashing function, and requires SECURITY.md to
+      record the passwordless decision so the absence is deliberate)
 
 ## 4. Offline durability
 
@@ -83,8 +102,14 @@
 - [x] 4.6 Implement retry classification and verify 408, 429, and 5xx retry while other 4xx
       become permanent failures (`pnpm test:integration`: delivery.integration.test.ts,
       "retry classification (task 4.6)")
-- [ ] 4.7 Implement flush on foreground, connectivity restoration, authentication refresh, and
+- [x] 4.7 Implement flush on foreground, connectivity restoration, authentication refresh, and
       explicit user action, and verify the queue drains with Background Sync unavailable
+      (`pnpm test`: packages/adapters-browser/src/flush-triggers.test.ts — all four triggers,
+      plus pageshow for a back/forward-cache restore, and a static check that nothing reaches
+      for Background Sync; `pnpm test:e2e`: apps/web/e2e/flush-triggers.spec.ts deletes
+      ServiceWorkerRegistration.prototype.sync, dispatches a real online event, and requires
+      the real IndexedDB queue to drain. The authentication trigger is a method the credential
+      layer will call; no code calls it yet, section 3)
 - [ ] 4.8 Implement quota-exhaustion handling and verify queued mutations are retained while
       new writes stop (PARTIAL: the store maps the browser's QuotaExceededError to
       `storage_full` and writes nothing — `pnpm test:e2e`: browser-store.spec.ts, "writes
@@ -92,8 +117,11 @@
       write and leaves the queue intact — `pnpm test:integration`:
       outbox-durability.integration.test.ts. OPEN: the spec also requires a clear recovery
       action, which is user-facing and lands with section 5)
-- [ ] 4.9 Implement the pre-destructive export and verify it is offered before any local data
-      is cleared
+- [x] 4.9 Implement the pre-destructive export and verify it is offered before any local data
+      is cleared (`pnpm test:integration`: archive.integration.test.ts —
+      `clearLocalDataAfterExport` takes the archive and CSV, returns them, and only then
+      erases, so no caller can clear first; `pnpm test:e2e`: browser-store.spec.ts clears a
+      real database and restores it from the export that was handed over)
 - [ ] 4.10 Request persistent storage and verify diagnostics report the granted or denied state
 - [x] 4.11 Verify no code path discards a queued workout mutation automatically
       (`pnpm test:integration`: outbox-durability.integration.test.ts — a 422 leaves the entry
@@ -155,9 +183,16 @@
 
 ## 8. Export and deletion
 
-- [ ] 8.1 Implement versioned full JSON export and verify a round trip into a clean instance
-      reproduces the data
-- [ ] 8.2 Implement CSV history export and verify every quantity column names its unit
+- [x] 8.1 Implement versioned full JSON export and verify a round trip into a clean instance
+      reproduces the data (`pnpm test:integration`: archive.integration.test.ts;
+      `pnpm test:e2e`: browser-store.spec.ts round-trips between two real IndexedDB databases.
+      The document declares its schema version, refuses an unknown field rather than dropping
+      it, and rebuilds every measurement through the domain factories so a tampered RPE is
+      refused)
+- [x] 8.2 Implement CSV history export and verify every quantity column names its unit
+      (`pnpm test:integration`: archive.integration.test.ts — load_kg, duration_s, distance_m,
+      incline_percent, the exertion scale per row, and a check that no bare quantity name
+      appears in the header)
 - [ ] 8.3 **[UI]** Implement 30-day recoverable deletion and verify recovery within the window
 - [ ] 8.4 Implement verified hard deletion after the window and verify the data is gone
 - [ ] 8.5 **[UI]** Verify the deletion interface explains when backup copies stop containing
