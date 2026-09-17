@@ -99,6 +99,20 @@ light and dark themes.
 - **WHEN** the on-accent color on the accent measures 6.9:1 in either theme
 - **THEN** `pnpm test` fails and names the pair and theme
 
+### Requirement: Storybook is the only design-system lab
+The design system's live examples SHALL be Storybook stories only: every exported component has a
+component-level story filed under Foundations, Primitives, Patterns by category, or Reference
+screens, and no product route exists only to show fixtures. Every story MUST render without
+error and pass every axe rule in both themes.
+
+#### Scenario: A component is added without a story
+- **WHEN** a new exported component in `apps/web/ui/primitives` has no story file
+- **THEN** `pnpm test` fails and names the component
+
+#### Scenario: A story fails an accessibility rule
+- **WHEN** a story has an axe violation in the dark theme at 375 px
+- **THEN** `pnpm test:a11y` fails and names the story and rule
+
 ### Requirement: Components have closed APIs
 Presentation primitives SHALL accept only closed variant and size props and MUST NOT accept a
 `className` or `style` prop. Screens MUST import presentation only from the design system.
@@ -158,7 +172,8 @@ installation has been verified on a real phone and recorded.
 - **THEN** `pnpm test:e2e` fails
 
 ### Requirement: Visual regression coverage
-Once accepted, the system SHALL have visual-regression baselines for every lab page and
+Once accepted, the system SHALL have visual-regression baselines for every Storybook reference
+screen and
 reference screen — including the plan view, the active set, the rest state, the completion
 summary, and every offline and synchronization failure state — at representative small and
 large phone viewports and a wide viewport, light and dark themes, and 200 percent text.
@@ -167,7 +182,7 @@ platform because the accepted system font is the platform's own. Before gate G-1
 proposal review view MUST also have baselines.
 
 #### Scenario: A baseline is missing for a required state
-- **WHEN** the baseline for the state matrix page is absent in any visual project
+- **WHEN** the baseline for the state matrix story is absent in any visual project
 - **THEN** `pnpm test:visual` fails without writing a baseline
 
 #### Scenario: A fixture leaves a source of variation unpinned

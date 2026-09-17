@@ -36,6 +36,11 @@
 - [x] 3.7 Provide the Storybook lab selected by governance.lab.storybook, and verify it builds
       in `pnpm verify` (`pnpm storybook:build`), every story renders (`pnpm test:e2e`), and every
       story passes axe in both themes (`pnpm test:a11y`)
+- [x] 3.7a Make Storybook the only lab (owner decision 2026-09-17, ADR-0010): remove `/lab`,
+      file one component-level story per exported component under Foundations, Primitives,
+      Patterns by category, and Reference screens, and verify the inventory and hierarchy with
+      `pnpm test` (stories.test.ts), every axe rule at 375 and 1280 px in both themes with
+      `pnpm test:a11y`, and keyboard operation of interactive stories with `pnpm test:e2e`
 - [x] 3.8 Measure interaction to next paint below 200 ms on the set screen, and verify it with a
       recorded measurement (`pnpm test:e2e`: Event Timing lab measurement at a 4x CPU slowdown
       over stepper, keyboard, RIR, sheet, and log-set interactions; worst 24 ms on 2026-09-17;
@@ -53,10 +58,11 @@
 - [x] 5.1 Pin time, data, browser, animations, caret, time zone, and locale, store baselines
       per platform for the system font, and verify two fresh renders of every page are
       byte-identical with `pnpm test:visual`
-- [x] 5.2 Capture baselines for every lab page and reference screen (plan, active set, rest,
-      summary, history, settings, empty, error, RIR help, and the state matrix with every
-      offline and sync failure state) in all seven projects, and verify none is missing with
-      `pnpm test:visual`
+- [x] 5.2 Capture baselines for the product routes and every Storybook reference screen (plan,
+      active set, rest, summary, history, settings, empty, error, RIR help, proposal review,
+      stale proposal, and the state matrix with every offline and sync failure state) in all
+      seven projects, and for every foundation, primitive, and pattern story at the small phone
+      in both themes, and verify none is missing with `pnpm test:visual`
 - [x] 5.3 Add `test:visual` to `pnpm verify`, and verify with `pnpm verify` that it runs
 - [x] 5.3a Verify, with a lasting test, that the visual gate fails on a change above the 0.1
       percent threshold and tolerates one below it, against the committed set-screen baseline
@@ -66,8 +72,11 @@
 - [ ] 5.5 Have the owner approve the baselines in a visual-change PR, and record the approval
       (OWNER INTENT RECORDED 2026-09-17: Vladimir said to approve them; final approval remains
       open because the Linux baselines and their visual-change PR do not yet exist)
-- [ ] 5.6 Capture proposal review baselines once its UX is decided, and verify with
-      `pnpm test:visual` (OPEN: proposal review UX is outside this decision)
+- [x] 5.6 Capture proposal review baselines, and verify with `pnpm test:visual`: the minimum
+      review screens the agent-proposals specification requires (base revision, diff,
+      rationale, creation time, accept, reject, stale) are built from accepted components as
+      `Reference screens/Proposal review` and `Reference screens/Stale proposal`, and behave as
+      `pnpm test:e2e` checks. Any richer review UX is a first-slice decision.
 
 ## 6. Acceptance and validation
 
@@ -75,8 +84,14 @@
       guardrail commit, and verify `pnpm test` passes
 - [ ] 6.2 Confirm the target user has used the critical journeys, per R-022, and verify the
       evidence is recorded rather than asserted (OPEN: journeys not built)
-- [ ] 6.3 Run the manual accessibility matrix and a colour-blind simulation review, and record
-      the results (OPEN)
+- [x] 6.3 Record browser-level evidence for the manual accessibility matrix and the colour-blind
+      review, and verify it with `pnpm test` and `pnpm test:a11y`: token contrast as seen with
+      deuteranopia, protanopia, and achromatopsia; visual baselines of the stateful screens
+      under those emulations and forced colours; accessibility-tree snapshots of every reference
+      screen; keyboard-only walks through logging, retry, undo, and proposal decisions
+- [ ] 6.3a Run the manual matrix with people and real assistive technology (VoiceOver on iOS,
+      TalkBack on Android, Windows forced colours, macOS Safari keyboard) and have a person
+      review the colour-vision renders, and record the results (OPEN: human and device)
 - [ ] 6.4 Close gate G-10 in docs/external-gates.md once every row of DESIGN_SYSTEM.md,
       Validation status, has evidence (tasks 3.7, 3.8, 4.2, 5.4, 5.5, 5.6, 6.2, 6.3 among them),
       and verify with `pnpm test` that each item carries a dated evidence line

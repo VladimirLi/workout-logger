@@ -11,7 +11,7 @@ design pass.
 
 That pass has now happened. The owner decided all 65 questions of a design-system workbook
 and submitted the payload on 2026-09-17 (0 unresolved, 0 deferred). This change records that
-decision normatively and implements it as tokens, components, a lab, identity assets, and
+decision normatively and implements it as tokens, components, a Storybook lab, identity assets, and
 gates.
 
 Serves: D-002, D-021, R-004, R-007, R-010, R-022. See
@@ -29,8 +29,9 @@ Serves: D-002, D-021, R-004, R-007, R-010, R-022. See
   with a licence ledger, an English catalogue with ICU plurals, the theme bootstrap, and
   device feedback preferences. No UI framework, component library, icon package, or font file
   is added.
-- Restyles the shell, adds `/lab` with the inventory, the state matrix, and coded reference
-  screens, and ships the accepted identity: manifest, icons, and theme colour.
+- Restyles the shell and ships the accepted identity: manifest, icons, and theme colour. The
+  inventory, state matrix, and coded reference screens are Storybook stories; by owner decision
+  on 2026-09-17 Storybook is the only lab and the earlier `/lab` routes are removed (ADR-0010).
 - Adds the `test:visual` gate with per-platform baselines, and extends the accessibility and
   behaviour gates.
 - Implements **no product feature**. The reference screens run on fixtures.
