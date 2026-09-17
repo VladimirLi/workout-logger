@@ -193,3 +193,108 @@ test('@a11y every route and reference screen has one h1, one main, and a page he
     await check(story.id);
   }
 });
+
+/**
+ * Browser-level evidence for the manual testing matrix (R-007). These do not replace VoiceOver,
+ * TalkBack, Windows forced colours, or a person; they record what the browser exposes so a
+ * regression in it fails a gate.
+ */
+test.describe('@a11y manual-matrix evidence', () => {
+  for (const [name, id] of Object.entries(SCREEN)) {
+    test(`@a11y ${name}: the accessibility tree matches its reviewed snapshot`, async ({
+      page,
+    }) => {
+      await page.clock.setFixedTime(new Date('2026-09-14T10:00:00Z'));
+      await openStory(page, id);
+      await expect(page.locator('body')).toMatchAriaSnapshot({ name: `${name}.aria.yml` });
+    });
+  }
+
+  test('@a11y every control on a reference screen is inside a landmark', async ({ page }) => {
+    const outside: string[] = [];
+    for (const id of Object.values(SCREEN)) {
+      await openStory(page, id);
+      const stray = await page
+        .locator('#storybook-root button, #storybook-root a[href], #storybook-root input')
+        .evaluateAll((elements) =>
+          elements
+            .filter(
+              (element) =>
+                !element.closest(
+                  'main, header, nav, footer, aside, section[aria-label], form[aria-label]',
+                ),
+            )
+            .map(
+              (element) =>
+                element.getAttribute('aria-label') ??
+                element.textContent?.trim() ??
+                element.tagName,
+            ),
+        );
+      outside.push(...stray.map((name) => `${id}: ${name}`));
+    }
+    expect(outside).toEqual([]);
+  });
+
+  test('@a11y keyboard only: adjust load, pick RIR, log the set, and reach rest', async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(new Date('2026-09-14T10:00:00Z'));
+    await openStory(page, SCREEN.setFocus);
+    const visit: string[] = [];
+    for (let index = 0; index < 12; index += 1) {
+      await page.keyboard.press('Tab');
+      visit.push(
+        await page.evaluate(() => {
+          const element = document.activeElement as HTMLElement | null;
+          return element?.getAttribute('aria-label') ?? element?.textContent?.trim() ?? '';
+        }),
+      );
+    }
+    // Every control of the flow is reachable, in reading order.
+    expect(visit).toEqual(
+      expect.arrayContaining([
+        'Close',
+        'Decrease load',
+        'Increase load',
+        'Decrease reps',
+        'Increase reps',
+        'What is RIR?',
+        'Log set',
+      ]),
+    );
+    await page.getByRole('button', { name: 'Increase load' }).focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('spinbutton', { name: 'Load' })).toHaveAttribute(
+      'aria-valuenow',
+      '82.5',
+    );
+    await page.getByRole('radio', { name: '2' }).focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(page.getByRole('radio', { name: '3' })).toBeChecked();
+    await page.getByRole('button', { name: 'Log set' }).focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('heading', { level: 1, name: 'Rest' })).toBeFocused();
+  });
+
+  test('@a11y keyboard only: the plan start, sync retry, undo, and proposal decisions are reachable', async ({
+    page,
+  }) => {
+    const reachable = async (id: string, name: string) => {
+      await openStory(page, id);
+      for (let index = 0; index < 25; index += 1) {
+        await page.keyboard.press('Tab');
+        const focused = await page.evaluate(
+          () => document.activeElement?.textContent?.trim() ?? '',
+        );
+        if (focused === name) return true;
+      }
+      return false;
+    };
+    expect(await reachable(SCREEN.plan, 'Start workout')).toBe(true);
+    expect(await reachable(SCREEN.error, 'Retry')).toBe(true);
+    expect(await reachable(SCREEN.stateMatrix, 'Undo')).toBe(true);
+    expect(await reachable(SCREEN.proposalReview, 'Accept change')).toBe(true);
+    expect(await reachable(SCREEN.proposalReview, 'Reject')).toBe(true);
+  });
+});

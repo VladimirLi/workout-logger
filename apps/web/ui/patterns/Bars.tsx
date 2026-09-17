@@ -86,7 +86,17 @@ export function BottomTabs({ current, hrefs }: { current: Tab; hrefs: TabHrefs }
   );
 }
 
-/** layout.primary-action.sticky-bottom: the one primary action, above the safe area. */
+/**
+ * layout.primary-action.sticky-bottom: the one primary action, above the safe area.
+ *
+ * A labelled region, so a screen-reader user moving by landmarks reaches the screen's actions
+ * even where the bar sits after the main content (found by the accessibility-tree evidence,
+ * 2026-09-17).
+ */
 export function StickyActionBar({ children }: { children: ReactNode }) {
-  return <div className={styles.actionBar}>{children}</div>;
+  return (
+    <section className={styles.actionBar} aria-label={messages.actions.label}>
+      {children}
+    </section>
+  );
 }

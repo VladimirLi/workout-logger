@@ -14,6 +14,7 @@ export const messages = {
 
   nav: { label: 'Primary', today: 'Today', history: 'History', settings: 'Settings' },
   actions: {
+    label: 'Actions',
     back: 'Back',
     close: 'Close',
     more: 'More',

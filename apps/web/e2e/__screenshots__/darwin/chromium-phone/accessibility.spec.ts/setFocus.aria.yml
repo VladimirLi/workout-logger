@@ -1,0 +1,37 @@
+- banner:
+  - button "Close"
+  - paragraph: Exercise 2 of 5
+  - text: On device
+- main:
+  - heading "Back squat" [level=1]
+  - list:
+    - listitem: Set 1, done
+    - listitem: Set 2, not done
+    - listitem: Set 3, not done
+    - listitem: Set 4, not done
+  - paragraph: Target
+  - text: /\d+ kilograms, 8 reps \+2\.5 kg vs last Load/
+  - button "Decrease load"
+  - spinbutton "Load": /\d+/
+  - button "Increase load"
+  - text: Reps
+  - button "Decrease reps"
+  - spinbutton "Reps": "8"
+  - button "Increase reps"
+  - group "RIR":
+    - text: ""
+    - radio "0"
+    - text: "0"
+    - radio "1"
+    - text: "1"
+    - radio "2" [checked]
+    - text: "2"
+    - radio "3"
+    - text: "3"
+    - radio "4+"
+    - text: 4+
+    - paragraph: Reps you could still do
+  - button "What is RIR?"
+  - region "Actions":
+    - button "Log set"
+  - status

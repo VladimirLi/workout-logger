@@ -1,0 +1,24 @@
+- banner:
+  - heading "History" [level=1]
+- main:
+  - list "Workouts":
+    - listitem:
+      - link /Upper body B 5 exercises · \d+ sets Sat \d+ Sept/:
+        - /url: "#workout"
+    - listitem:
+      - link /Lower body A 5 exercises · \d+ sets Thu \d+ Sept/:
+        - /url: "#workout"
+    - listitem:
+      - link /Upper body A 4 exercises · \d+ sets Mon 7 Sept/:
+        - /url: "#workout"
+- navigation "Primary":
+  - list:
+    - listitem:
+      - link "Today":
+        - /url: "#today"
+    - listitem:
+      - link "History":
+        - /url: "#history"
+    - listitem:
+      - link "Settings":
+        - /url: "#settings"

@@ -86,6 +86,36 @@ for (const target of TARGETS) {
   });
 }
 
+/**
+ * Evidence for the colour-blind review (color.def.colorblind) and forced colours
+ * (color.def.forced): the screens that carry state, rendered through Chromium's own vision
+ * deficiency emulation and Windows-style forced colours, kept as reviewable baselines. They show
+ * what a person with that vision sees; they do not replace review by such a person.
+ */
+const CONDITION_SCREENS = [SCREEN.stateMatrix, SCREEN.setFocus, SCREEN.proposalReview] as const;
+const CONDITIONS = ['deuteranopia', 'protanopia', 'achromatopsia', 'forced-colors'] as const;
+
+for (const condition of CONDITIONS) {
+  for (const screen of CONDITION_SCREENS) {
+    test(`@visual ${screen} as seen with ${condition}`, async ({ page }, testInfo) => {
+      test.skip(
+        testInfo.project.name !== 'visual-phone-small-light',
+        'conditions are captured once',
+      );
+      await prepare(page, testInfo);
+      if (condition === 'forced-colors') {
+        await page.emulateMedia({ forcedColors: 'active' });
+      } else {
+        const cdp = await page.context().newCDPSession(page);
+        await cdp.send('Emulation.setEmulatedVisionDeficiency', { type: condition });
+      }
+      await openStory(page, screen);
+      await settle(page);
+      await expect(page).toHaveScreenshot(`${screen}--${condition}.png`);
+    });
+  }
+}
+
 test('@visual the gate tolerates changes under 0.1 percent and fails above it', async ({
   page,
 }, testInfo) => {
