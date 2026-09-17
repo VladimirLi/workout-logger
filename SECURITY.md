@@ -29,9 +29,10 @@ result (R-023).
 
 - Managed passwordless authentication. Email OTP is the guaranteed recovery path;
   passkeys are an optional daily-convenience sign-in.
-- The production apex domain is `gym.vladimirli.com`. The WebAuthn relying-party ID binds
-  to `gym.vladimirli.com` unless the origin policy intentionally allows sibling
-  subdomains.
+- The production apex domain is `gym.vladimirli.com`. The WebAuthn relying-party ID is
+  **`gym.vladimirli.com`**, decided by Vladimir on 2026-09-17 (ADR-0009). It is never the
+  apex `vladimirli.com` and never inferred from a request origin. The decision does not
+  authorize DNS changes, deployment, or any enrollment.
 - **Never enroll production credentials against a provider preview domain.** Changing the
   RP ID invalidates every enrolled credential. DNS and origin configuration must be
   confirmed before the first production passkey enrollment. This is an external gate —
