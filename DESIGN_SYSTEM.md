@@ -143,7 +143,7 @@ workbook's recommendation; the owner chose them deliberately.
 
 ### Governance
 
-- `governance.lab.storybook` ¹: Storybook as the component lab. **Blocked**, see [Validation status](#validation-status).
+- `governance.lab.storybook` ¹: Storybook as the component lab, with the accessibility addon; viewport and interaction tools are built in. Stories live beside the components in `apps/web/ui`.
 - `governance.visual-regression.two-viewport`: 375 × 667 and 1280 × 800, light and dark, lab states and key screens, 0.1 % threshold.
 - `governance.change-control.tiered`: foundation changes need an ADR and OpenSpec; component API changes need OpenSpec; fixes need a PR note and baseline.
 
@@ -499,7 +499,7 @@ test enforces that.
 | Proposal review UX and its baselines | **Not decided.** Out of scope here; the first vertical slice decides it. | A separate OpenSpec change with baselines |
 | Linux baselines for CI | **Missing.** Only darwin baselines exist, so `test:visual` fails in CI until they are generated in the pinned Playwright container. | Baselines generated in `mcr.microsoft.com/playwright:v1.63.0-noble` and CI run in that image (a guardrail change) |
 | Owner approval of baselines | **Pending artifact.** On 2026-09-17 Vladimir said to approve them, but Linux baselines and their visual-change PR do not exist yet, so there is no final artifact to approve. | Vladimir approves the complete Darwin and Linux baseline set in its visual-change PR |
-| Storybook (`governance.lab.storybook`) | **Approved, not implemented.** On 2026-09-17 Vladimir approved the reviewed Storybook dependency change and the separate esbuild build-permission guardrail change. `/lab` renders the inventory meanwhile; it is not a substitute. | Pin and install the approved Storybook toolchain, record its exact licence and build-script consequences, update the guardrails, and make its build part of `pnpm verify` |
+| Storybook (`governance.lab.storybook`) | **Implemented.** Implemented 2026-09-17 from the owner-approved change: storybook, @storybook/nextjs-vite, and @storybook/addon-a11y 10.6.0 with vite 8.3.0. esbuild@0.28.2 is the only lifecycle script allowed. The licence gate passes (541 components, no new exception) and the audit gate reports no advisories. `pnpm storybook:build` runs in `pnpm verify`; `test:e2e` renders every story and fails on a render error, and `test:a11y` runs axe on every story in both themes. | Nothing further; kept here until G-10 closes |
 | Installation offered on a real phone | **Not verified.** | iOS and Android device check, recorded |
 | Vibration and rest tone on a device | **Not verified.** | Device check, recorded |
 | Interaction to Next Paint under 200 ms | **Not measured.** Layout shift is measured (under 0.05). | Field or lab measurement, recorded |

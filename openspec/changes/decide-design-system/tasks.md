@@ -33,9 +33,9 @@
       0.05 with `pnpm test:e2e` and `pnpm test`
 - [x] 3.6 Verify the centred column and the landscape two-pane with no scrolling at 667 x 375
       with `pnpm test:e2e`
-- [ ] 3.7 Provide the Storybook lab selected by governance.lab.storybook, and verify it builds
-      in `pnpm verify` (OWNER APPROVED 2026-09-17: the reviewed dependency change and a
-      separate guardrail change for the esbuild build permission; implementation remains open)
+- [x] 3.7 Provide the Storybook lab selected by governance.lab.storybook, and verify it builds
+      in `pnpm verify` (`pnpm storybook:build`), every story renders (`pnpm test:e2e`), and every
+      story passes axe in both themes (`pnpm test:a11y`)
 - [ ] 3.8 Measure interaction to next paint below 200 ms on the set screen, and verify it with a
       recorded measurement
 

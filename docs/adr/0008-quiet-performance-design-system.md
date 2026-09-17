@@ -53,10 +53,10 @@ The workbook recorded the alternatives for each decision. The consequential ones
 - **Tonal elevation over shadows.** Shadows only on overlays. Rejected: shadowed cards.
 - **Charts deferred.** v1 shows summaries, aligned tables, and text deltas. Rejected for v1:
   a chart library and its bundle cost.
-- **Storybook was selected and its prerequisite changes are approved.** On 2026-09-17 the
-  owner approved the reviewed dependency change and the separate esbuild build-permission
-  guardrail change. Installation and verification remain open. Until then `/lab` renders the
-  inventory, state matrix, and reference screens; it does not replace the decision.
+- **Storybook was selected, approved, and implemented.** On 2026-09-17 the owner approved the
+  reviewed dependency change and the separate esbuild build-permission guardrail change; it
+  was then installed at exact versions, with esbuild's postinstall as the only allowed build
+  script. `/lab` remains alongside it for the coded reference screens.
 - **Automated accessibility testing as the routine baseline** was selected over manual passes
   per PR. It does not waive R-007's manual checks before a conformance claim.
 
