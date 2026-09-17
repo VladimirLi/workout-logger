@@ -121,6 +121,21 @@ The canonical list is `scripts/guardrails.json`; a test asserts this document an
 file agree. Legitimate guardrail changes are submitted separately and reviewed by an
 independent agent under the gates as they currently stand (D-036).
 
+The rule is enforced at two units, because before a remote exists only one of them applies:
+
+- **The branch**, by `pnpm test:guardrails`, comparing against the merge base. This is the
+  reviewable unit once changes arrive as pull requests, and it reports "not applicable" until
+  a remote exists (G-1).
+- **Each commit**, by `scripts/guardrail-separation.test.ts` under `pnpm test`, which runs
+  `node scripts/check-guardrails.mjs --range HEAD` over the whole history. Every commit must be
+  guardrail-only, product-only, or neither.
+
+The commit check is strictly the stricter of the two: a history that passes it can still fail
+the branch check, and must. Note the consequence for reading history — a range of commits
+diffed **as one change** will show guardrail and product files together whenever it contains
+both kinds of commit. That is not a violation; the commits are the separation. Classify a range
+with `--range` rather than by its combined diff.
+
 ## Architecture
 
 ```text
