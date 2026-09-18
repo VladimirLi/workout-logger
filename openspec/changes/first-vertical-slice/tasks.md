@@ -248,7 +248,10 @@
       summary, then read the device's queue and require all four changes to be present. The
       webServer runs `next start` on the production build)
 - [ ] 9.2 Add end-to-end coverage of the proposal review journey including the stale path
-- [ ] 9.3 Run `pnpm verify` end to end and record the result
+- [x] 9.3 Run `pnpm verify` end to end and record the result (clean clone at 99030db on darwin:
+      18/18 gates, 296.8 s; and `CI=1 pnpm verify` in the pinned Playwright image
+      (mcr.microsoft.com/playwright:v1.63.0-noble, linux/amd64) on the same commit: 18/18
+      gates, 4843.5 s, with a clean worktree afterwards)
 - [ ] 9.4 Record the first-slice evidence from R-001: four real workouts over at least two
       weeks, one deliberately offline, one agent proposal, with no workout fact lost or
       duplicated
