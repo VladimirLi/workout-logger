@@ -35,15 +35,24 @@
 - [x] 2.1 Write the initial schema migration and verify `pnpm test:migrations`
       passes on it (`pnpm test:migrations`: supabase/migrations/20260917120000_initial_schema.sql
       — plans, workout sessions, recorded sets, corrections, proposals, and idempotency
-      records, with typed measurements as jsonb. Never applied: no database exists, G-2)
+      records, with typed measurements as jsonb. Applied to the development project on
+      2026-09-18 and verified by read-back: `supabase migration list --linked` reports the same
+      version locally and remotely, ADR-0011)
 - [x] 2.2 Enable row-level security and explicit grants on every exposed relation,
-      and verify a relation without them fails the authorization suite (`pnpm test:migrations`
+      and verify a relation without them fails the authorization suite (confirmed in the
+      running database on 2026-09-18: all six exposed tables have RLS enabled and forced with
+      an owner policy each, read back from the remote schema, ADR-0011. `pnpm test:migrations`
       enables, forces, revokes from anon, and requires a policy on every reachable table;
       `pnpm test`: scripts/validate-migrations.test.ts removes each of those in turn from a
       throwaway migration and requires the gate to fail. Running the checks against a live
       database is task 2.3, G-2)
 - [ ] 2.3 **[G-2]** Write deny-by-default tests for unauthenticated and wrong-user identities
-      across every operation, and verify each denial
+      across every operation, and verify each denial (PARTIAL: the unauthenticated half is
+      measured against the development database — `node --env-file=.env.local
+      scripts/check-rls.mjs` reads and writes all six exposed tables with the anonymous key and
+      every attempt is refused with 401, 2026-09-18, ADR-0011. OPEN: the wrong-user half needs
+      two signed-in identities, so it waits on authentication (3.2); and neither runs in CI
+      until repository secrets exist)
 - [x] 2.4 Index every column used by a row-level security predicate, and verify the
       migration gate reports none missing (`pnpm test:migrations`: every column a policy
       compares must be the LEADING column of an index; `user_id` leads every primary key, so
