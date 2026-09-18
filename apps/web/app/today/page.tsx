@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import {
   Button,
@@ -35,6 +36,7 @@ interface PlanView {
 }
 
 export default function TodayPage() {
+  const router = useRouter();
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [starting, setStarting] = useState(false);
 
@@ -68,7 +70,7 @@ export default function TodayPage() {
     const started = await startToday(scheduledSessionId);
     setStarting(false);
     if (started.ok) {
-      window.location.assign('/workout');
+      router.push('/workout');
       return;
     }
     // A session already active is not an error to report here: task 5.3 turns it into a
