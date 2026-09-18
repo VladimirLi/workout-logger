@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
-import { SHELL_ROUTES } from './routes';
+import { openRoute, SHELL_ROUTES } from './routes';
 
 /**
  * Guards the coupling between identity, installability declarations, and CLAIMS.
@@ -112,7 +112,7 @@ for (const route of SHELL_ROUTES) {
   test(`${route} renders the accepted identity metadata and no custom launch images`, async ({
     page,
   }) => {
-    await page.goto(route);
+    await openRoute(page, route);
     const found = await page.evaluate(
       ([required, forbidden]) => ({
         missing: required.filter((selector) => document.head.querySelector(selector) === null),

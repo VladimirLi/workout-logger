@@ -12,11 +12,12 @@
     "storybook:build": "storybook build --quiet --output-dir storybook-static"
   },
   "dependencies": {
+    "@workout/adapters-browser": "workspace:*",
+    "@workout/adapters-supabase": "workspace:*",
     "@workout/application": "workspace:*",
     "@workout/contracts": "workspace:*",
     "@workout/domain": "workspace:*",
     "@workout/observability": "workspace:*",
-    "@workout/adapters-supabase": "workspace:*",
     "next": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:"

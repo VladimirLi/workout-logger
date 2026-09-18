@@ -3,6 +3,7 @@ import { expect, type Page, type TestInfo, test } from '@playwright/test';
 import { FIXED_NOW } from '../../ui/reference/fixtures';
 import {
   isReferenceScreen,
+  openRoute,
   openStory,
   SCREEN,
   SHELL_ROUTES,
@@ -45,7 +46,7 @@ const routeTargets: Target[] = SHELL_ROUTES.map((route) => ({
   everyProject: true,
   open: async (page, dark) => {
     if (dark) await page.addInitScript(() => window.localStorage.setItem('wl-theme', 'dark'));
-    await page.goto(route);
+    await openRoute(page, route);
   },
 }));
 

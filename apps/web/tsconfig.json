@@ -29,6 +29,7 @@
     { "path": "../../packages/contracts" },
     { "path": "../../packages/application" },
     { "path": "../../packages/observability" },
-    { "path": "../../packages/adapters-supabase" }
+    { "path": "../../packages/adapters-supabase" },
+    { "path": "../../packages/adapters-browser" }
   ]
 }
