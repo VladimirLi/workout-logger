@@ -28,6 +28,15 @@ export interface ExercisePrescription {
   readonly exerciseId: string;
   /** The target for this exercise, typed by measurement profile. */
   readonly prescription: Measurement;
+  /**
+   * Whether a unilateral result for this exercise may record its load as a combined total
+   * rather than per side (owner decision 2026-09-18).
+   *
+   * Absent means no. "This load is what both sides moved together" is true of a trap-bar
+   * carry and false of a split squat, and which one an exercise is cannot be guessed from the
+   * number, so the plan says it or it is not available.
+   */
+  readonly combinedLoadPermitted?: boolean;
 }
 
 export interface ScheduledSession {

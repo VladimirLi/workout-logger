@@ -13,13 +13,17 @@ import { expect, type Page, test } from '@playwright/test';
 const ADAPTER = 'packages/adapters-browser/dist/local-workout-store.js';
 
 /** Seeds a downloaded plan before the app boots, so the first render already has one. */
-async function seedPlan(page: Page): Promise<void> {
+async function seedPlan(
+  page: Page,
+  options: { unilateral?: boolean; combinedLoad?: boolean } = {},
+): Promise<void> {
   // `export` is illegal inside a function body, so the keyword is stripped and the classes
   // are returned explicitly. The adapter has no runtime imports, which is what makes this
   // possible; browser-store.spec.ts asserts that and would fail first if it changed.
   const adapter = readFileSync(ADAPTER, 'utf8').replaceAll(/^export /gm, '');
   await page.addInitScript(
-    ({ source }) => {
+    (input: { source: string; unilateral: boolean; combinedLoad: boolean }) => {
+      const { source } = input;
       // The store's own code, running in the page before any route script does.
       const factory = new Function(`${source}\nreturn { IndexedDbPlanStore };`) as () => {
         IndexedDbPlanStore: new () => { save(userId: string, plan: unknown): Promise<void> };
@@ -56,29 +60,51 @@ async function seedPlan(page: Page): Promise<void> {
             {
               id: 'session-mon',
               scheduledFor: '2026-09-18',
-              exercises: [
-                {
-                  exerciseId: 'back-squat',
-                  prescription: {
-                    schemaVersion: 1,
-                    profile: 'strength',
-                    repetitions: 8,
-                    load: { unit: 'kg', value: 80 },
-                  },
-                },
-              ],
+              exercises: input.unilateral
+                ? [
+                    {
+                      exerciseId: 'split-squat',
+                      prescription: {
+                        schemaVersion: 1,
+                        profile: 'unilateral_strength',
+                        side: 'left',
+                        loadSemantics: 'per_side',
+                        repetitions: 10,
+                        load: { unit: 'kg', value: 22.5 },
+                      },
+                      ...(input.combinedLoad ? { combinedLoadPermitted: true } : {}),
+                    },
+                  ]
+                : [
+                    {
+                      exerciseId: 'back-squat',
+                      prescription: {
+                        schemaVersion: 1,
+                        profile: 'strength',
+                        repetitions: 8,
+                        load: { unit: 'kg', value: 80 },
+                      },
+                    },
+                  ],
             },
           ],
         });
       };
     },
-    { source: adapter },
+    {
+      source: adapter,
+      unilateral: options.unilateral === true,
+      combinedLoad: options.combinedLoad === true,
+    },
   );
 }
 
 /** Opens today, makes sure the device identity exists, then seeds and reloads. */
-async function openTodayWithPlan(page: Page): Promise<void> {
-  await seedPlan(page);
+async function openTodayWithPlan(
+  page: Page,
+  options: { unilateral?: boolean; combinedLoad?: boolean } = {},
+): Promise<void> {
+  await seedPlan(page, options);
   await page.goto('/today');
   await expect(page.getByRole('heading', { name: 'No plan on this device yet' })).toBeVisible();
   await page.evaluate(() => (window as unknown as { __seedPlan(): Promise<void> }).__seedPlan());
@@ -599,5 +625,116 @@ test.describe('a full device (task 4.8)', () => {
     // The session that was already on the device is in it: the export is a way out, not a
     // gesture.
     expect(archive.sessions).toHaveLength(1);
+  });
+});
+
+test.describe('unilateral entry (tasks 5.9 and 5.9a)', () => {
+  test('logs each side as its own result, per side by default', async ({ page }) => {
+    await openTodayWithPlan(page, { unilateral: true });
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForURL('**/workout');
+    await expect(page.getByRole('heading', { name: 'split-squat' })).toBeVisible();
+
+    // The side is asked for, and left is where it starts.
+    const side = page.getByRole('group', { name: 'Side' });
+    await expect(side).toBeVisible();
+    await expect(side.getByRole('radio', { name: 'Left' })).toBeChecked();
+    // Combined load is not offered: this exercise is not configured for it.
+    await expect(page.getByRole('group', { name: 'Load counts' })).toHaveCount(0);
+
+    await page.getByRole('button', { name: 'Log set' }).click();
+    await expect(page.getByRole('cell', { name: '22.5 kilograms' })).toBeVisible();
+
+    // The right side is a separate result, recorded after the rest.
+    await page.getByRole('button', { name: 'Next set' }).click();
+    await page.getByRole('radio', { name: 'Right' }).check();
+    await page.getByRole('button', { name: 'Log set' }).click();
+    // Both rows are in the table before the device is read, so the read cannot race the write.
+    await expect(page.getByRole('row', { name: /22.5 kilograms/ })).toHaveCount(2);
+
+    const stored = await page.evaluate(
+      () =>
+        new Promise<{ side: string; loadSemantics: string }[]>((resolve, reject) => {
+          const request = indexedDB.open('workout', 1);
+          request.onsuccess = () => {
+            const all = request.result
+              .transaction('sessions', 'readonly')
+              .objectStore('sessions')
+              .getAll();
+            all.onsuccess = () =>
+              resolve(
+                (all.result as { session: { sets: { measurement: Record<string, string> }[] } }[])
+                  .flatMap((record) => record.session.sets)
+                  .map((set) => ({
+                    side: set.measurement.side ?? '',
+                    loadSemantics: set.measurement.loadSemantics ?? '',
+                  })),
+              );
+            all.onerror = () => reject(all.error);
+          };
+          request.onerror = () => reject(request.error);
+        }),
+    );
+    expect(stored).toEqual([
+      { side: 'left', loadSemantics: 'per_side' },
+      { side: 'right', loadSemantics: 'per_side' },
+    ]);
+  });
+
+  test('offers combined load only where the plan permits it, and records the choice', async ({
+    page,
+  }) => {
+    await openTodayWithPlan(page, { unilateral: true, combinedLoad: true });
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForURL('**/workout');
+
+    const semantics = page.getByRole('group', { name: 'Load counts' });
+    await expect(semantics).toBeVisible();
+    await expect(semantics.getByRole('radio', { name: 'Per side' })).toBeChecked();
+
+    await semantics.getByRole('radio', { name: 'In total' }).check();
+    await page.getByRole('button', { name: 'Log set' }).click();
+    await expect(page.getByRole('cell', { name: '22.5 kilograms' })).toBeVisible();
+
+    const stored = await page.evaluate(
+      () =>
+        new Promise<string>((resolve, reject) => {
+          const request = indexedDB.open('workout', 1);
+          request.onsuccess = () => {
+            const all = request.result
+              .transaction('sessions', 'readonly')
+              .objectStore('sessions')
+              .getAll();
+            all.onsuccess = () => {
+              const sets = (
+                all.result as { session: { sets: { measurement: Record<string, string> }[] } }[]
+              ).flatMap((record) => record.session.sets);
+              resolve(sets[0]?.measurement.loadSemantics ?? '');
+            };
+            all.onerror = () => reject(all.error);
+          };
+          request.onerror = () => reject(request.error);
+        }),
+    );
+    expect(stored).toBe('total');
+  });
+
+  test('@a11y the side and load-semantics controls are grouped and keyboard-operable', async ({
+    page,
+  }) => {
+    await openTodayWithPlan(page, { unilateral: true, combinedLoad: true });
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForURL('**/workout');
+
+    // Native radio groups, so arrow keys and screen-reader semantics come from the platform.
+    const side = page.getByRole('group', { name: 'Side' });
+    await side.getByRole('radio', { name: 'Left' }).focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(side.getByRole('radio', { name: 'Right' })).toBeChecked();
+
+    const semantics = page.getByRole('group', { name: 'Load counts' });
+    await semantics.getByRole('radio', { name: 'Per side' }).focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(semantics.getByRole('radio', { name: 'In total' })).toBeChecked();
   });
 });

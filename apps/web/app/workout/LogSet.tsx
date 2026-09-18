@@ -2,11 +2,13 @@
 
 import { type FormEvent, useRef, useState } from 'react';
 import {
+  Button,
   Heading,
   LogToRest,
   messages,
   RestTimer,
   RirPicker,
+  Segmented,
   Stack,
   StatusMessage,
   Stepper,
@@ -40,6 +42,10 @@ export interface Prescription {
   readonly loadKg: number;
   readonly reps: number;
   readonly restSeconds: number;
+  /** A unilateral exercise is recorded one side at a time (owner decision 2026-09-18). */
+  readonly unilateral: boolean;
+  /** Combined load is offered only where the plan configured this exercise to permit it. */
+  readonly combinedLoadPermitted: boolean;
 }
 
 export interface LoggedSet {
@@ -48,16 +54,23 @@ export interface LoggedSet {
   readonly reps: number;
   /** Undefined when the user left RIR alone: exertion is optional, not assumed. */
   readonly rir: number | undefined;
+  /** Present for a unilateral exercise, absent otherwise. Never inferred. */
+  readonly side: 'left' | 'right' | undefined;
+  /** Present only where combined load was on offer; per side is the default. */
+  readonly loadSemantics: 'per_side' | 'total' | undefined;
 }
 
 export function LogSet({
   prescription,
   setNumber,
   onLog,
+  onNextSet,
 }: {
   prescription: Prescription;
   setNumber: number;
   onLog: (set: LoggedSet) => void;
+  /** Returns to the set view for the next set. A workout is more than one set. */
+  onNextSet: () => void;
 }) {
   const form = useRef<HTMLFormElement>(null);
   const [restStartedAt, setRestStartedAt] = useState<number | undefined>(undefined);
@@ -70,11 +83,19 @@ export function LogSet({
       const value = Number(raw);
       return Number.isFinite(value) ? value : undefined;
     };
+    const text = (name: string): string | undefined => {
+      const raw = data.get(name);
+      return typeof raw === 'string' && raw !== '' ? raw : undefined;
+    };
     return {
       exerciseId: prescription.exerciseId,
       loadKg: number('load') ?? prescription.loadKg,
       reps: number('reps') ?? prescription.reps,
       rir: number('rir'),
+      side: prescription.unilateral ? ((text('side') ?? 'left') as 'left' | 'right') : undefined,
+      loadSemantics: prescription.combinedLoadPermitted
+        ? ((text('loadSemantics') ?? 'per_side') as 'per_side' | 'total')
+        : undefined,
     };
   };
 
@@ -95,6 +116,9 @@ export function LogSet({
           <StatusMessage kind="success">
             {messages.set.saved(setNumber, prescription.restSeconds)}
           </StatusMessage>
+          <Button variant="secondary" size="lg" expand onClick={onNextSet}>
+            Next set
+          </Button>
           <Surface tone="card" aria-label="Rest timer">
             {/* Elapsed time comes from the timestamp, so a suspended tab does not drift (5.6). */}
             <RestTimer
@@ -131,8 +155,35 @@ export function LogSet({
             detail={
               <Surface tone="panel" aria-label="Actual">
                 <Stack gap={4}>
+                  {/* Each side is its own result, so the side is chosen before logging and
+                      never inferred from the last one. */}
+                  {prescription.unilateral && (
+                    <Segmented
+                      legend="Side"
+                      name="side"
+                      defaultValue="left"
+                      options={[
+                        { value: 'left', label: 'Left' },
+                        { value: 'right', label: 'Right' },
+                      ]}
+                    />
+                  )}
                   <Stepper quantity="load" name="load" defaultValue={prescription.loadKg} />
                   <Stepper quantity="reps" name="reps" defaultValue={prescription.reps} />
+                  {/* Offered only where the plan configured it. Where it is not offered, the
+                      load means per side, which is what gets stored. */}
+                  {prescription.unilateral && prescription.combinedLoadPermitted && (
+                    <Segmented
+                      legend="Load counts"
+                      name="loadSemantics"
+                      defaultValue="per_side"
+                      helper="Whether the load is what each side moved, or both together."
+                      options={[
+                        { value: 'per_side', label: 'Per side' },
+                        { value: 'total', label: 'In total' },
+                      ]}
+                    />
+                  )}
                   <RirPicker />
                 </Stack>
               </Surface>

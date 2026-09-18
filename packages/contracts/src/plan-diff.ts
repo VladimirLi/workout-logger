@@ -29,6 +29,12 @@ export const exercisePrescriptionSchema = z
   .object({
     exerciseId: identifierSchema,
     prescription: measurementSchema,
+    /**
+     * Whether a unilateral result for this exercise may record its load as a combined total
+     * (owner decision 2026-09-18). Absent means no, which is why it is optional rather than
+     * defaulted: an agent that omits it is not asking for combined load.
+     */
+    combinedLoadPermitted: z.boolean().optional(),
   })
   .strict();
 

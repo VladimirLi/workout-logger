@@ -37,6 +37,13 @@ interface SessionBase {
   readonly scheduledSessionId: string;
   /** The exercises the scheduled session prescribed when the session started. */
   readonly exerciseIds: readonly string[];
+  /**
+   * The exercises that were configured to permit combined load when the session started.
+   *
+   * Snapshotted rather than read from the plan at recording time: a plan edited mid-workout
+   * must not change what the set the user is about to record is allowed to mean.
+   */
+  readonly combinedLoadExercises: readonly string[];
   readonly startedAt: Date;
   readonly sets: readonly RecordedSet[];
 }
@@ -62,6 +69,7 @@ export type SessionError =
   | { readonly kind: 'scheduled_session_not_found'; readonly scheduledSessionId: string }
   | { readonly kind: 'session_not_active'; readonly sessionId: string }
   | { readonly kind: 'exercise_not_in_session'; readonly exerciseId: string }
+  | { readonly kind: 'combined_load_not_permitted'; readonly exerciseId: string }
   | { readonly kind: 'duplicate_set'; readonly setId: string }
   | { readonly kind: 'not_a_measurement'; readonly setId: string }
   | { readonly kind: 'recorded_before_start'; readonly setId: string }
@@ -91,6 +99,9 @@ export function startSession(
     planRevision: plan.revision,
     scheduledSessionId: scheduled.id,
     exerciseIds: scheduled.exercises.map((exercise) => exercise.exerciseId),
+    combinedLoadExercises: scheduled.exercises
+      .filter((exercise) => exercise.combinedLoadPermitted === true)
+      .map((exercise) => exercise.exerciseId),
     status: 'active',
     startedAt: input.startedAt,
     sets: [],
@@ -164,6 +175,15 @@ export function recordSet(
   }
   if (input.recordedAt.getTime() < session.startedAt.getTime()) {
     return err({ kind: 'recorded_before_start', setId: input.setId });
+  }
+  // Combined load is a claim about what the number means, so it is refused unless the plan
+  // said this exercise may make it (owner decision 2026-09-18).
+  if (
+    input.measurement.profile === 'unilateral_strength' &&
+    input.measurement.loadSemantics === 'total' &&
+    !session.combinedLoadExercises.includes(input.exerciseId)
+  ) {
+    return err({ kind: 'combined_load_not_permitted', exerciseId: input.exerciseId });
   }
   const recorded: RecordedSet = {
     setId: input.setId,

@@ -50,6 +50,10 @@ CREATE TABLE IF NOT EXISTS public.workout_sessions (
   plan_revision bigint NOT NULL CHECK (plan_revision > 0),
   scheduled_session_id text NOT NULL,
   exercise_ids text[] NOT NULL DEFAULT '{}',
+  -- The exercises that permitted combined load when the session started, snapshotted so a
+  -- plan edited mid-workout cannot change what a recorded load means (owner decision
+  -- 2026-09-18).
+  combined_load_exercises text[] NOT NULL DEFAULT '{}',
   started_at timestamptz NOT NULL,
   status text NOT NULL CHECK (status IN ('active', 'completed')),
   completed_at timestamptz,

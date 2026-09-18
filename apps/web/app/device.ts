@@ -21,7 +21,15 @@ import {
   startWorkout,
   type WorkoutPorts,
 } from '@workout/application';
-import { kilograms, type Result, strengthExertion, strengthMeasurement } from '@workout/domain';
+import {
+  kilograms,
+  type LoadSemantics,
+  type Result,
+  type Side,
+  strengthExertion,
+  strengthMeasurement,
+  unilateralStrengthMeasurement,
+} from '@workout/domain';
 
 /**
  * The browser composition root (ADR-0001): the only place that knows which adapter implements
@@ -134,6 +142,10 @@ export async function readActivePrescription() {
     // The rest length is a design-system default (feedback defaults); the plan does not carry
     // one, and inventing a per-exercise rest would be inventing product behaviour.
     restSeconds: 90,
+    unilateral: exercise.prescription.profile === 'unilateral_strength',
+    // Offered only where the plan says so, and the session's own snapshot is what the domain
+    // will check against (owner decision 2026-09-18).
+    combinedLoadPermitted: session.combinedLoadExercises.includes(exercise.exerciseId),
   };
 }
 
@@ -170,17 +182,28 @@ export async function logStrengthSet(command: {
   readonly loadKg: number;
   readonly reps: number;
   readonly rir: number | undefined;
+  /** Present for a unilateral exercise; the domain refuses one without a side. */
+  readonly side?: Side | undefined;
+  /** Only ever 'total' where the plan permitted it; the domain refuses it otherwise. */
+  readonly loadSemantics?: LoadSemantics | undefined;
 }): Promise<Result<unknown, unknown>> {
   const load = kilograms(command.loadKg);
   if (!load.ok) return load;
   const exertion = command.rir === undefined ? undefined : strengthExertion(command.rir);
   if (exertion && !exertion.ok) return exertion;
 
-  const measurement = strengthMeasurement({
+  const shared = {
     repetitions: command.reps,
     load: load.value,
     ...(exertion?.ok ? { exertion: exertion.value } : {}),
-  });
+  };
+  const measurement = command.side
+    ? unilateralStrengthMeasurement({
+        ...shared,
+        side: command.side,
+        ...(command.loadSemantics ? { loadSemantics: command.loadSemantics } : {}),
+      })
+    : strengthMeasurement(shared);
   if (!measurement.ok) return measurement;
 
   const { ports, userId } = deviceOf();

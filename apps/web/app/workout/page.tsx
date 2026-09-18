@@ -58,6 +58,8 @@ export default function WorkoutPage() {
   const [logFailure, setLogFailure] = useState<string | undefined>(undefined);
   /** A full device is not an error to report and forget; it needs a way out (task 4.8). */
   const [deviceFull, setDeviceFull] = useState(false);
+  /** Bumped to start the next set: remounting resets the controls to the prescription. */
+  const [setInProgress, setSetInProgress] = useState(0);
 
   const load = useCallback(async () => {
     try {
@@ -154,8 +156,10 @@ export default function WorkoutPage() {
 
           {state.session.prescription ? (
             <LogSet
+              key={setInProgress}
               prescription={state.session.prescription}
               setNumber={state.session.rows.length + 1}
+              onNextSet={() => setSetInProgress((n) => n + 1)}
               onLog={(logged) => {
                 // The write happens while the set view is fading to rest; the table catches up
                 // when the screen is next read, which is also what a refresh does.
@@ -165,6 +169,8 @@ export default function WorkoutPage() {
                   loadKg: logged.loadKg,
                   reps: logged.reps,
                   rir: logged.rir,
+                  side: logged.side,
+                  loadSemantics: logged.loadSemantics,
                 }).then(async (result) => {
                   if (!result.ok) {
                     const failure = result.error as { kind?: string } | undefined;
