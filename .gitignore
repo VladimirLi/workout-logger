@@ -30,3 +30,7 @@ artifacts/
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# Supabase CLI link state: the project ref and a local session, written by `supabase link`.
+# Generated, per-developer, and never part of the repository.
+supabase/.temp/

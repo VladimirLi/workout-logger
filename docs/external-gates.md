@@ -1,6 +1,8 @@
 # External setup gates
 
-**Status:** Normative checklist. No cloud resource, remote, DNS record, or deployment exists.
+**Status:** Normative checklist. One cloud resource exists: a Supabase **Free development**
+project, authorised on 2026-09-18 for development only (G-2, ADR-0011). No remote, no DNS
+record, no deployment, and nothing in production.
 Owner decisions recorded here (for example ADR-0009) do not perform any gate.
 
 Every item below requires the **user's authorization** and credentials for an external
@@ -39,7 +41,9 @@ enforced fact, until this gate closes.
 
 ## G-2 — Supabase project
 
-**Status:** not performed. No project, no keys, no schema.
+**Status:** partly performed. A Free **development** project exists with the schema applied
+and deny-by-default measured (2026-09-18, ADR-0011). Production is not performed: no Pro
+project, no production data, no CI secrets.
 
 **Decided 2026-09-17 (ADR-0009, D1).** Supabase **Free** for development only. The production
 decision is deferred, and the Pro requirement below still applies to production.
@@ -59,6 +63,23 @@ the RLS deny-by-default suite pass against it in CI with repository secrets.
 
 **Blocking check before relying on it.** Confirm no blocking requirement has emerged that
 makes Supabase unsuitable (D-025). Record the outcome in an ADR.
+Done: 2026-09-18, ADR-0011. No blocking requirement emerged. Checked against a running
+database rather than reasoned about: migrations apply, RLS is enabled and forced on all six
+exposed tables with an owner policy each, every anonymous read and write is refused with 401
+(`scripts/check-rls.mjs`), and the one security-definer function in `public` pins its
+`search_path`. One finding recorded for production: Supabase's default privileges grant future
+tables in `public` to anon, so deny-by-default there rests on RLS rather than on grants.
+
+**Development project, 2026-09-18.** Vladimir authorised one Supabase **Free** project for
+development only: `workout-logger-dev`, ref `vrhukqvrnlejvmpefmxl`, `eu-west-1`,
+`ACTIVE_HEALTHY`, Postgres 17.6.1, linked by Supabase CLI 2.117.0. The committed migration is
+applied and verified by read-back. Credentials live in a gitignored `.env.local` and have never
+been printed. Not authorised, and not done: production resources, any paid upgrade, production
+data, DNS, passkey enrollment, and any deployment.
+
+**Still open for this gate.** The Pro project, CI secrets, and therefore the adapter contract
+suite and the wrong-user denial suite running in CI. The anonymous half of deny-by-default is
+proved; the wrong-user half needs two signed-in identities, which needs authentication.
 
 ---
 
