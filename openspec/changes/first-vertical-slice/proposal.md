@@ -8,8 +8,8 @@ telemetry privacy, proposal staleness, and typed measurements. None of it is rea
 user. There is no persistence, no authentication, no offline queue, and no serving MCP
 endpoint.
 
-**This change is partly implemented.** 21 of 61 tasks are done, and none of them is
-user-reachable behaviour.
+**This change is partly implemented.** 24 of 63 tasks are done, and the first user-reachable
+behaviour now exists.
 
 Done: the domain and application layer (1.1–1.6); the device side of offline durability — the
 atomic IndexedDB outbox (4.1), client-generated idempotency keys (4.2), per-entity ordered
@@ -17,13 +17,15 @@ draining (4.4), capped backoff with full jitter (4.5), retry classification (4.6
 trigger the spec names (4.7), the pre-destructive export (4.9), and the guarantee that nothing
 discards a queued mutation (4.11); export and import (8.1, 8.2); the initial schema migration
 with row-level security, grants, and indexed policy predicates, checked statically (2.1, 2.2,
-2.4); and the credential policy checks that need no credential to run (2.7, 3.5).
+2.4); the credential policy checks that need no credential (2.7, 3.5); the device's own
+identity (3.6); and the plan, workout, and summary routes with session survival (5.1, 5.2).
 
-Not done, and not claimed: there is no server, no authentication, no screen, no route, no
-stored row, and no serving MCP endpoint. The schema has never been applied to a database. The
-flush trigger for an authentication refresh is a method nothing calls yet. Sections 5 and 7
-need a decision about identity before the device work can become a reachable product — see
-"Blocked" below.
+Not done, and not claimed: there is no server, so nothing has ever synced and no plan can
+reach a device except in a test that seeds one. There is no authentication, so nothing claims
+the device's data yet (3.7) and the authentication flush trigger is a method nothing calls.
+Logging a set, the rest timer, RIR entry, and the sync states are still only design-system
+stories, not reachable product behaviour (5.4–5.9). There is no serving MCP endpoint, and no
+proposal review (section 7). The schema has never been applied to a database.
 
 Serves: D-003, D-004, D-011, D-012, D-015, D-016, D-017, D-018, D-019, D-020, D-021, D-022,
 D-023, D-024, R-003, R-008, R-009, R-010, R-013, R-014, R-020, R-021.
