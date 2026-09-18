@@ -120,15 +120,14 @@
       ServiceWorkerRegistration.prototype.sync, dispatches a real online event, and requires
       the real IndexedDB queue to drain. The authentication trigger is a method the credential
       layer will call; no code calls it yet, section 3)
-- [ ] 4.8 Implement quota-exhaustion handling and verify queued mutations are retained while
-      new writes stop (PARTIAL: the store maps the browser's QuotaExceededError to
-      `storage_full` and writes nothing — `pnpm test:e2e`: browser-store.spec.ts, "writes
-      neither the session nor the entry when storage is full"; the application refuses the
+- [x] 4.8 Implement quota-exhaustion handling and verify queued mutations are retained while
+      new writes stop (the store maps the browser's QuotaExceededError to `storage_full` and
+      writes nothing — `pnpm test:e2e`: browser-store.spec.ts; the application refuses the
       write and leaves the queue intact — `pnpm test:integration`:
-      outbox-durability.integration.test.ts; a write that does not land now says so on the
-      workout screen rather than looking saved, and /diagnostics explains what may be evicted.
-      OPEN: the spec's recovery action for a full device specifically - offering the export at
-      the moment a write is refused - is not wired to the screen yet)
+      outbox-durability.integration.test.ts; and the workout screen says there is no room
+      left, that nothing recorded or queued was touched, and offers to export everything —
+      `pnpm test:e2e`: workout-journey.spec.ts, "a full device (task 4.8)", which parses the
+      exported archive)
 - [x] 4.9 Implement the pre-destructive export and verify it is offered before any local data
       is cleared (`pnpm test:integration`: archive.integration.test.ts —
       `clearLocalDataAfterExport` takes the archive and CSV, returns them, and only then
@@ -159,13 +158,13 @@
       process termination with every recorded result intact (`pnpm test:e2e`:
       workout-journey.spec.ts — restored after a reload, after navigating away and back, and
       after the page is destroyed outright and its address reopened in a new one)
-- [ ] 5.3 **[UI]** Implement the single-active-session rule and verify a second start offers
-      resume or discard, with confirmation before discarding (PARTIAL: at most one session is
-      active — the store enforces it and the application refuses a second start; /today offers
-      to continue the one in progress and shows no second start button, verified in
-      workout-journey.spec.ts. OPEN: discard. The spec says discarding loses recorded results,
-      so it is a destructive action that needs the export-first rule of task 4.9 applied to it
-      rather than a button added to the screen)
+- [x] 5.3 **[UI]** Implement the single-active-session rule and verify a second start offers
+      resume or discard, with confirmation before discarding (`pnpm test:e2e`:
+      workout-journey.spec.ts — at most one session is active and /today offers to continue it
+      or discard it; the confirmation names how many sets are lost, declining changes nothing,
+      confirming removes the session and its queued entries together and the plan is offered
+      again. `pnpm test:a11y`: the confirmation is a dialog named by its own title, reachable
+      and dismissable from the keyboard)
 - [x] 5.4 **[UI]** Implement one-primary-action logging of an unchanged prescribed set and
       verify it takes exactly one action (`pnpm test:e2e`: workout-journey.spec.ts — the
       controls open on the prescription, so one press of Log set records it; a second test
