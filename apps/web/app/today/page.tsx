@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import {
   Button,
+  ConfirmDialog,
   Heading,
   ListRow,
   messages,
@@ -15,7 +16,7 @@ import {
   Text,
   TopBar,
 } from '../../ui';
-import { readToday, startToday } from '../device';
+import { discardActiveWorkout, readToday, startToday } from '../device';
 
 /**
  * Today's plan (workout-logging spec, task 5.1).
@@ -27,8 +28,21 @@ import { readToday, startToday } from '../device';
 
 type State =
   | { readonly kind: 'loading' }
-  | { readonly kind: 'ready'; readonly plan: PlanView | undefined; readonly activeId?: string }
+  | {
+      readonly kind: 'ready';
+      readonly plan: PlanView | undefined;
+      readonly activeId?: string;
+      readonly activeSets?: number;
+    }
   | { readonly kind: 'failed'; readonly message: string };
+
+/** What the confirmation says is lost. The number is the reason the question is asked. */
+function setsLost(sets: number): string {
+  const recorded = sets === 1 ? '1 set' : `${sets} sets`;
+  return sets === 0
+    ? 'Nothing has been recorded yet. The workout itself, and the fact that it started, are removed from this device.'
+    : `${recorded} recorded on this device will be removed, along with anything waiting to sync. This cannot be undone.`;
+}
 
 interface PlanView {
   readonly id: string;
@@ -54,7 +68,7 @@ export default function TodayPage() {
               })),
             }
           : undefined,
-        ...(active ? { activeId: active.id } : {}),
+        ...(active ? { activeId: active.id, activeSets: active.sets.length } : {}),
       });
     } catch (error) {
       setState({ kind: 'failed', message: error instanceof Error ? error.message : String(error) });
@@ -98,6 +112,18 @@ export default function TodayPage() {
             <Stack as="ul" gap={1}>
               <ListRow href="/workout" title="Continue the workout" />
             </Stack>
+            {/* Destructive and permanent, so it asks first and names what is lost
+                (controls.destructive.undo-first). The confirming button is not the loud one. */}
+            <ConfirmDialog
+              trigger="Discard the workout"
+              title="Discard this workout?"
+              body={setsLost(state.activeSets ?? 0)}
+              confirm="Discard it"
+              cancel="Keep the workout"
+              onConfirm={() => {
+                void discardActiveWorkout(state.activeId ?? '').then(() => load());
+              }}
+            />
           </Stack>
         </Surface>
       )}

@@ -20,6 +20,7 @@ import {
 } from '../../ui';
 import {
   type DisplaySyncState,
+  downloadEverything,
   finishWorkout,
   logStrengthSet,
   readActivePrescription,
@@ -55,6 +56,8 @@ export default function WorkoutPage() {
   const [finishing, setFinishing] = useState(false);
   /** A write that did not land must say so: a silent failure looks exactly like a saved set. */
   const [logFailure, setLogFailure] = useState<string | undefined>(undefined);
+  /** A full device is not an error to report and forget; it needs a way out (task 4.8). */
+  const [deviceFull, setDeviceFull] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -164,10 +167,18 @@ export default function WorkoutPage() {
                   rir: logged.rir,
                 }).then(async (result) => {
                   if (!result.ok) {
-                    setLogFailure(JSON.stringify(result.error));
+                    const failure = result.error as { kind?: string } | undefined;
+                    if (failure?.kind === 'storage_full') {
+                      setDeviceFull(true);
+                      setLogFailure(undefined);
+                    } else {
+                      setLogFailure(JSON.stringify(result.error));
+                      setDeviceFull(false);
+                    }
                     return;
                   }
                   setLogFailure(undefined);
+                  setDeviceFull(false);
                   await load();
                 });
               }}
@@ -176,6 +187,22 @@ export default function WorkoutPage() {
             <StatusMessage kind="warning">
               This session has no prescription on this device, so there is nothing to log against.
               The plan it was started from is not here.
+            </StatusMessage>
+          )}
+
+          {deviceFull && (
+            <StatusMessage
+              kind="warning"
+              live="assertive"
+              action={
+                <Button variant="secondary" onClick={() => void downloadEverything()}>
+                  Export everything
+                </Button>
+              }
+            >
+              There is no room left on this device, so that set was not saved. Nothing already
+              recorded has been lost, and nothing waiting to sync has been touched. Export your
+              data, then free some space.
             </StatusMessage>
           )}
 

@@ -391,3 +391,213 @@ test.describe('the offline journey', () => {
     await context.setOffline(false);
   });
 });
+
+test.describe('discarding a workout (task 5.3)', () => {
+  test('asks before discarding, and says what is lost', async ({ page }) => {
+    await openTodayWithPlan(page);
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForURL('**/workout');
+    await page.getByRole('button', { name: 'Log set' }).click();
+    await expect(page.getByRole('cell', { name: '80 kilograms' })).toBeVisible();
+
+    await page.goto('/today');
+    await page.getByRole('button', { name: 'Discard the workout' }).click();
+
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toBeVisible();
+    // The count is the point: the spec asks for a confirmation because results are lost.
+    await expect(dialog).toContainText('1 set');
+    await expect(dialog.getByRole('button', { name: 'Keep the workout' })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Discard it' })).toBeVisible();
+  });
+
+  test('keeps the workout when the confirmation is declined', async ({ page }) => {
+    await openTodayWithPlan(page);
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForURL('**/workout');
+
+    await page.goto('/today');
+    await page.getByRole('button', { name: 'Discard the workout' }).click();
+    await page.getByRole('button', { name: 'Keep the workout' }).click();
+
+    await expect(page.getByRole('dialog')).toBeHidden();
+    await expect(page.getByRole('heading', { name: 'A workout is in progress' })).toBeVisible();
+    await page.goto('/workout');
+    await expect(page.getByRole('heading', { name: 'In progress' })).toBeVisible();
+  });
+
+  test('discards the workout and its queue once confirmed, and lets the next one start', async ({
+    page,
+  }) => {
+    await openTodayWithPlan(page);
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForURL('**/workout');
+    await page.getByRole('button', { name: 'Log set' }).click();
+    await expect(page.getByRole('cell', { name: '80 kilograms' })).toBeVisible();
+
+    await page.goto('/today');
+    await page.getByRole('button', { name: 'Discard the workout' }).click();
+    await page.getByRole('button', { name: 'Discard it' }).click();
+
+    // The plan is offered again, because nothing is active any more.
+    await expect(page.getByRole('button', { name: 'Start workout' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'A workout is in progress' })).toHaveCount(0);
+
+    // Nothing of it is left on the device, queue included.
+    const queued = await page.evaluate(
+      () =>
+        new Promise<number>((resolve, reject) => {
+          const request = indexedDB.open('workout', 1);
+          request.onsuccess = () => {
+            const count = request.result
+              .transaction('outbox', 'readonly')
+              .objectStore('outbox')
+              .count();
+            count.onsuccess = () => resolve(count.result);
+            count.onerror = () => reject(count.error);
+          };
+          request.onerror = () => reject(request.error);
+        }),
+    );
+    expect(queued).toBe(0);
+
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForURL('**/workout');
+    await expect(page.getByRole('heading', { name: 'In progress' })).toBeVisible();
+  });
+
+  test('@a11y the confirmation is a dialog that keyboard and screen readers can use', async ({
+    page,
+  }) => {
+    await openTodayWithPlan(page);
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForURL('**/workout');
+    await page.goto('/today');
+
+    await page.getByRole('button', { name: 'Discard the workout' }).press('Enter');
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toBeVisible();
+    // Named by its own title, so a screen reader announces what is being asked.
+    await expect(dialog).toHaveAccessibleName(/discard/i);
+
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await expect(page.getByRole('heading', { name: 'A workout is in progress' })).toBeVisible();
+  });
+});
+
+test.describe('a full device (task 4.8)', () => {
+  /**
+   * Makes the next write meet a full device, using the browser's own error.
+   *
+   * Chromium's quota override does not reject a small IndexedDB write even with the quota at
+   * one byte (see browser-store.spec.ts), so the store is given a factory that raises the real
+   * QuotaExceededError from the next put. Nothing in the application is modified for the test.
+   */
+  async function failTheNextWrite(page: Page): Promise<void> {
+    await page.addInitScript(() => {
+      const forward = (target: object, prop: string | symbol) => {
+        const value = Reflect.get(target, prop, target);
+        return typeof value === 'function' ? (value as () => unknown).bind(target) : value;
+      };
+      const setOnTarget = (target: object, prop: string | symbol, value: unknown) => {
+        Reflect.set(target, prop, value, target);
+        return true;
+      };
+      let armed = false;
+      (window as unknown as { __failNextWrite(): void }).__failNextWrite = () => {
+        armed = true;
+      };
+
+      const wrapStore = (store: IDBObjectStore) =>
+        new Proxy(store, {
+          set: setOnTarget,
+          get(target, prop) {
+            if (prop === 'put' && armed) {
+              armed = false;
+              return () => {
+                throw new DOMException('the device is full', 'QuotaExceededError');
+              };
+            }
+            return forward(target, prop);
+          },
+        });
+      const wrapTransaction = (transaction: IDBTransaction) =>
+        new Proxy(transaction, {
+          set: setOnTarget,
+          get: (target, prop) =>
+            prop === 'objectStore'
+              ? (name: string) => wrapStore(target.objectStore(name))
+              : forward(target, prop),
+        });
+      const wrapDatabase = (database: IDBDatabase) =>
+        new Proxy(database, {
+          set: setOnTarget,
+          get: (target, prop) =>
+            prop === 'transaction'
+              ? (...args: unknown[]) =>
+                  wrapTransaction(
+                    (target.transaction as (...a: unknown[]) => IDBTransaction)(...args),
+                  )
+              : forward(target, prop),
+        });
+
+      const open = indexedDB.open.bind(indexedDB);
+      Object.defineProperty(indexedDB, 'open', {
+        configurable: true,
+        value: (name: string, version?: number) => {
+          const request = open(name, version);
+          return new Proxy(request, {
+            set: setOnTarget,
+            get: (target, prop) =>
+              prop === 'result' ? wrapDatabase(target.result) : forward(target, prop),
+          });
+        },
+      });
+    });
+  }
+
+  test('refuses the set, says the device is full, and offers the export', async ({ page }) => {
+    await failTheNextWrite(page);
+    await openTodayWithPlan(page);
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForURL('**/workout');
+    await expect(page.getByRole('heading', { name: 'back-squat' })).toBeVisible();
+
+    await page.evaluate(() => (window as unknown as { __failNextWrite(): void }).__failNextWrite());
+    await page.getByRole('button', { name: 'Log set' }).click();
+
+    // The write stopped, and the screen says so rather than looking as though it saved.
+    await expect(page.getByText('There is no room left on this device')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Export everything' })).toBeVisible();
+    // Nothing was recorded, and what was already queued is untouched.
+    await expect(page.getByRole('cell', { name: '80 kilograms' })).toHaveCount(0);
+  });
+
+  test('the export the offer produces is the whole archive', async ({ page }) => {
+    await failTheNextWrite(page);
+    await openTodayWithPlan(page);
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForURL('**/workout');
+    await page.evaluate(() => (window as unknown as { __failNextWrite(): void }).__failNextWrite());
+    await page.getByRole('button', { name: 'Log set' }).click();
+    await expect(page.getByRole('button', { name: 'Export everything' })).toBeVisible();
+
+    const download = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Export everything' }).click();
+    const file = await download;
+    expect(file.suggestedFilename()).toMatch(/\.json$/);
+
+    const stream = await file.createReadStream();
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) chunks.push(chunk as Buffer);
+    const archive = JSON.parse(Buffer.concat(chunks).toString('utf8')) as {
+      schemaVersion: number;
+      sessions: unknown[];
+    };
+    expect(archive.schemaVersion).toBe(1);
+    // The session that was already on the device is in it: the export is a way out, not a
+    // gesture.
+    expect(archive.sessions).toHaveLength(1);
+  });
+});

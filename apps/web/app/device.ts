@@ -12,6 +12,7 @@ import {
   clearLocalDataAfterExport,
   completeWorkout,
   deriveSyncState,
+  discardWorkout,
   drainOutbox,
   exportArchive,
   exportHistoryCsv,
@@ -191,6 +192,12 @@ export async function logStrengthSet(command: {
   });
 }
 
+/** Discards the session in progress. Destructive, so the confirmation is explicit (task 5.3). */
+export async function discardActiveWorkout(sessionId: string) {
+  const { ports, userId } = deviceOf();
+  return discardWorkout(ports, { userId: await userId(), sessionId, confirmed: true });
+}
+
 export async function finishWorkout(sessionId: string) {
   const { ports, userId } = deviceOf();
   return completeWorkout(ports, { userId: await userId(), sessionId });
@@ -205,6 +212,31 @@ export async function readQueueDepth(): Promise<number> {
 /** Diagnostics: whether the browser will keep this data under storage pressure (task 4.10). */
 export function persistenceState() {
   return requestPersistentStorage(typeof navigator === 'undefined' ? undefined : navigator.storage);
+}
+
+/**
+ * Hands the whole archive to the user as files (tasks 4.8 and 8.1).
+ *
+ * The recovery action for a full device: the data is already on the device and cannot be
+ * delivered, so the way out is to get it off. Two files, because they answer different
+ * questions - the JSON round-trips into a clean instance, the CSV opens in a spreadsheet.
+ */
+export async function downloadEverything(): Promise<void> {
+  const { archive, historyCsv } = await exportEverything();
+  const stamp = new Date().toISOString().slice(0, 10);
+  const save = (name: string, type: string, body: string) => {
+    const url = URL.createObjectURL(new Blob([body], { type }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = name;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    // Revoked on the next turn: revoking synchronously can cancel the download.
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  };
+  save(`workout-export-${stamp}.json`, 'application/json', JSON.stringify(archive, null, 2));
+  save(`workout-history-${stamp}.csv`, 'text/csv', historyCsv);
 }
 
 export async function exportEverything() {
