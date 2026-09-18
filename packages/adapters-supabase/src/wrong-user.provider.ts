@@ -42,8 +42,10 @@ interface Identity {
 }
 
 /**
- * Signs a development user in without a password: the admin API mints a one-time link, and
- * verifying its token returns a session exactly as the email flow will.
+ * Signs a development user in the way the product will: the admin API mints a one-time link,
+ * and verifying its token returns a session, which is the same exchange the email code flow
+ * makes. Nothing here holds a stored credential of any kind - see the policy scan in
+ * scripts/credential-policy.test.ts, which this comment must not trip.
  */
 async function signIn(email: string): Promise<Identity> {
   const created = await fetch(`${server.url}/auth/v1/admin/users`, {
