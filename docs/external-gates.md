@@ -241,6 +241,13 @@ remains can only be done by a person or on a device, and an agent must not asser
    container. Linux baselines are committed and `CI=1 pnpm verify` passes in that image locally;
    the workflow runs in it by digest. A GitHub Actions run has not happened (no remote, G-1).
 5. The owner approves the baselines in a visual-change PR.
+   Evidence: 2026-09-18, Vladimir, having visually reviewed the baseline artifact, approved the
+   56 product-route baselines committed through `edf4c1b`
+   (`edf4c1b756769ceb0e0190e2a61df851904b9592`): today, workout, summary and
+   diagnostics, across the seven visual projects, on darwin and Linux. Bound to that exact set
+   and that candidate; it does not extend to a later change to any of them.
+   Still open: the other 564 tracked baselines are not covered by it, and no visual-change PR
+   exists to approve anything in (no remote, G-1).
 6. Storybook (`governance.lab.storybook`) is reviewed as a dependency change under
    LIC-2026-09-16 and its build permission is decided in a guardrail change, or the owner
    changes that decision.

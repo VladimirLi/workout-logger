@@ -149,6 +149,11 @@
 
 ## 5. Web experience
 
+> Baselines: the 56 product-route baselines for these screens (today, workout, summary,
+> diagnostics, across seven visual projects, darwin and Linux) were approved by Vladimir on
+> 2026-09-18 after a visual review, bound to the set committed through `edf4c1b`. A later
+> change to any of them needs its own approval.
+
 - [x] 5.1 **[UI]** Build separately addressable plan, active-workout, and completed-summary
       routes, and verify each is directly reopenable (`pnpm test:e2e`:
       apps/web/e2e/workout-journey.spec.ts — /today, /workout and /summary/[id], each opened
