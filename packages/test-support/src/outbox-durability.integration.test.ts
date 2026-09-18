@@ -1,5 +1,7 @@
 import {
   classifyDelivery,
+  completeWorkout,
+  discardWorkout,
   drainOutbox,
   logSet,
   startWorkout,
@@ -158,5 +160,55 @@ describe('nothing discards a queued mutation (task 4.11)', () => {
     const classification = classifyDelivery({ kind: 'response', status: 401 }, T0);
     expect(classification.kind).toBe('permanent');
     expect(classification.kind === 'permanent' && classification.failure).toBe('http_401');
+  });
+});
+
+describe('discarding a workout (task 5.3)', () => {
+  it('refuses without a confirmation, and changes nothing', async () => {
+    const { ports, sessionId } = await aSessionWithOneSet();
+    const before = await ports.store.outbox(user);
+
+    const refused = await discardWorkout(ports, { userId: user, sessionId, confirmed: false });
+
+    expect(refused.ok === false && refused.error).toEqual({ kind: 'not_confirmed' });
+    expect(await ports.store.outbox(user)).toEqual(before);
+    expect(await ports.store.findSession(user, sessionId)).toBeDefined();
+  });
+
+  it('discards the session and its queue once confirmed', async () => {
+    // The one path where a queued mutation goes without the server having accepted it. The
+    // spec asks for exactly this, in as many words, behind a confirmation.
+    const { ports, sessionId } = await aSessionWithOneSet();
+    const discarded = await discardWorkout(ports, { userId: user, sessionId, confirmed: true });
+
+    expect(discarded.ok).toBe(true);
+    expect(discarded.ok && discarded.value.discarded.id).toBe(sessionId);
+    expect(await ports.store.findSession(user, sessionId)).toBeUndefined();
+    expect(await ports.store.outbox(user)).toEqual([]);
+  });
+
+  it('refuses to discard a session that is already finished', async () => {
+    // A completed session is a recorded fact. It leaves through export and deletion, not here.
+    const { ports, sessionId } = await aSessionWithOneSet();
+    await completeWorkout(ports, { userId: user, sessionId });
+
+    const refused = await discardWorkout(ports, { userId: user, sessionId, confirmed: true });
+
+    expect(refused.ok === false && refused.error).toEqual({
+      kind: 'session_not_active',
+      sessionId,
+    });
+    expect(await ports.store.findSession(user, sessionId)).toBeDefined();
+  });
+
+  it('lets the next workout start once the active one is discarded', async () => {
+    const { ports, sessionId } = await aSessionWithOneSet();
+    const blocked = await startWorkout(ports, { userId: user, scheduledSessionId: 'session-mon' });
+    expect(blocked.ok === false && blocked.error.kind).toBe('session_already_active');
+
+    await discardWorkout(ports, { userId: user, sessionId, confirmed: true });
+
+    const started = await startWorkout(ports, { userId: user, scheduledSessionId: 'session-mon' });
+    expect(started.ok).toBe(true);
   });
 });

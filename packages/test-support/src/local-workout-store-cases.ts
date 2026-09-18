@@ -251,6 +251,48 @@ export const LOCAL_WORKOUT_STORE_CASES: readonly Case<LocalWorkoutStoreHarness>[
     },
   },
   {
+    name: 'discards a session and everything queued for it, and nothing else',
+    async run({ store }) {
+      await store.commit(startRequest(aStartedSession('workout-1'), 1));
+      await store.commit(startRequest(aStartedSession('workout-2'), 2));
+
+      await store.discardSession(user, 'workout-1');
+
+      strictEqual(await store.findSession(user, 'workout-1'), undefined);
+      deepStrictEqual(
+        (await store.outbox(user)).map((entry) => entry.entityId),
+        ['workout-2'],
+      );
+      // The other session is untouched. (The one-active-session rule belongs to the
+      // application, not the store, so committing two directly leaves two active.)
+      strictEqual((await store.findSession(user, 'workout-2'))?.id, 'workout-2');
+      strictEqual((await store.activeSession(user))?.id, 'workout-2');
+    },
+  },
+  {
+    name: 'still refuses a key reused after a discard, because the change was once made',
+    async run({ store }) {
+      await store.commit(startRequest(aStartedSession('workout-1'), 1));
+      await store.discardSession(user, 'workout-1');
+      // Dropping the key record would let a replay of it look like a new change.
+      deepStrictEqual(await store.commit(startRequest(aStartedSession('workout-2'), 1)), {
+        kind: 'idempotency_key_reused',
+      });
+    },
+  },
+  {
+    name: 'leaves another user alone when a session is discarded',
+    async run({ store }) {
+      await store.commit(startRequest(aStartedSession('workout-1'), 1));
+      await store.commit(startRequest(aStartedSession('workout-1'), 2, 'someone-else'));
+
+      await store.discardSession(user, 'workout-1');
+
+      strictEqual((await store.findSession('someone-else', 'workout-1'))?.id, 'workout-1');
+      strictEqual((await store.outbox('someone-else')).length, 1);
+    },
+  },
+  {
     name: "keeps one user's sessions and outbox from another",
     async run({ store }) {
       await store.commit(startRequest(aStartedSession('workout-1'), 1));

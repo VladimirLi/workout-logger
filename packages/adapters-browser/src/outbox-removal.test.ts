@@ -39,7 +39,7 @@ function methodBodies(source: string): Map<string, string> {
 const APPLICATION = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'application', 'src');
 
 describe('removing a queued mutation', () => {
-  it('happens in acknowledge, the pre-destructive clear, and the rekey, nowhere else', () => {
+  it('happens in four named places and nowhere else', () => {
     const bodies = methodBodies(SOURCE);
     expect([...bodies.keys()], 'the method scan found nothing to check').toContain('acknowledge');
 
@@ -47,11 +47,13 @@ describe('removing a queued mutation', () => {
       .filter(([, body]) => /\.(delete|clear)\(/.test(body))
       .map(([name]) => name)
       .sort();
-    // `clearAll` erases everything for one user, including the queue: not a discard, but the
-    // user asking, and unreachable without the export that precedes it. `rekey` removes a
-    // record only to write it back under the claiming account's identity, in the same
-    // transaction, and a browser test requires the queue to come out the same length.
-    expect(removers).toEqual(['acknowledge', 'clearAll', 'rekey']);
+    // Each is a decision someone made, not a cleanup that happens on its own:
+    // - acknowledge: the server accepted the entry.
+    // - clearAll: the user asked, and the export was taken first (task 4.9).
+    // - discardSession: the user confirmed, having been told what is lost (task 5.3).
+    // - rekey: the record is written back under the claiming account's identity, in the same
+    //   transaction, and a browser test requires the queue to come out the same length.
+    expect(removers).toEqual(['acknowledge', 'clearAll', 'discardSession', 'rekey']);
   });
 
   it('keeps the eraser off the logging port, so a screen cannot reach it', () => {
@@ -65,6 +67,25 @@ describe('removing a queued mutation', () => {
     expect(SOURCE.indexOf('clearAll')).toBeGreaterThan(
       SOURCE.indexOf('export class IndexedDbArchive'),
     );
+  });
+
+  it('discards a session only through the use case that requires a confirmation', () => {
+    const files = readdirSync(APPLICATION).filter((name) => name.endsWith('.ts'));
+    for (const name of files) {
+      const source = readFileSync(join(APPLICATION, name), 'utf8');
+      const calls = [...source.matchAll(/\.discardSession\(/g)];
+      if (calls.length === 0) continue;
+      expect(name, 'discardSession is called outside log-workout.ts').toBe('log-workout.ts');
+      const useCase = source.slice(source.indexOf('export async function discardWorkout'));
+      expect(
+        [...useCase.matchAll(/\.discardSession\(/g)].length,
+        'discardSession is called outside discardWorkout',
+      ).toBe(calls.length);
+      // And that use case refuses unless the user confirmed.
+      expect(useCase).toMatch(
+        /if \(!command\.confirmed\) return err\(\{ kind: 'not_confirmed' \}\)/,
+      );
+    }
   });
 
   it('is asked for only by the use case that exports first', () => {

@@ -361,6 +361,27 @@ export class IndexedDbWorkoutStore implements LocalWorkoutStore {
     });
   }
 
+  /**
+   * Discards a session and everything queued for it, in one transaction (task 5.3).
+   *
+   * The idempotency keys are kept. They are the record that those changes were once made, and
+   * dropping them would let a replay of the same key look like a new change.
+   */
+  async discardSession(userId: string, sessionId: string): Promise<void> {
+    await this.#db.transaction([SESSIONS, OUTBOX], 'readwrite', async (transaction) => {
+      transaction.objectStore(SESSIONS).delete([userId, sessionId]);
+      const outbox = transaction.objectStore(OUTBOX);
+      const entries = await promise<OutboxRecord[]>(
+        outbox.index(BY_USER).getAll(IDBKeyRange.only(userId)),
+      );
+      for (const entry of entries) {
+        if (entry.entityId === sessionId && entry.ordinal !== undefined) {
+          outbox.delete(entry.ordinal);
+        }
+      }
+    });
+  }
+
   async acknowledge(userId: string, key: IdempotencyKey): Promise<void> {
     await this.#db.transaction([OUTBOX], 'readwrite', async (transaction) => {
       const store = transaction.objectStore(OUTBOX);

@@ -172,6 +172,8 @@ function pageStore(page: Page, databaseName: string): LocalWorkoutStore {
     updateDelivery: (userId: string, key: IdempotencyKey, delivery: Delivery) =>
       call<void>('updateDelivery', [userId, key, delivery]),
     acknowledge: (userId: string, key: IdempotencyKey) => call<void>('acknowledge', [userId, key]),
+    discardSession: (userId: string, sessionId: string) =>
+      call<void>('discardSession', [userId, sessionId]),
   };
 }
 
