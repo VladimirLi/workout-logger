@@ -21,6 +21,33 @@ MAY be offered as a daily convenience.
 - **WHEN** the authentication configuration is inspected
 - **THEN** no password credential is stored or accepted
 
+### Requirement: The device records under its own identity until an account claims it
+The application SHALL be usable before any sign-in. The device SHALL generate one durable
+local identity on first use, and every local workout fact SHALL be recorded under it. When an
+account is used on that device for the first time, the local data recorded under the device
+identity SHALL be claimed by that account, and MUST NOT be discarded, duplicated, or left
+unreachable.
+
+Decided by the owner on 2026-09-18, because authentication depends on a provisioned service
+(gates G-2 and G-4) and a workout cannot wait for one: the device is already the first place a
+fact is saved (ADR-0003), and that only works if the device can name who it is saving for.
+
+#### Scenario: Logging before any account exists
+- **WHEN** the user records a set before signing in
+- **THEN** it is stored under the device identity and queued for delivery like any other
+
+#### Scenario: The same device on a later visit
+- **WHEN** the application is reopened on a device that already has a local identity
+- **THEN** the same identity is used, and the earlier data is still reachable
+
+#### Scenario: An account is used for the first time
+- **WHEN** the user signs in on a device holding data recorded under the device identity
+- **THEN** that data is claimed by the account, with every queued mutation preserved
+
+#### Scenario: A second account on the same device
+- **WHEN** a different account signs in on a device whose local data was already claimed
+- **THEN** the already-claimed data stays with the account that claimed it
+
 ### Requirement: Relying-party identifier is fixed before enrollment
 The WebAuthn relying-party identifier SHALL be decided and recorded before the first
 production passkey enrollment. Production credentials MUST NOT be enrolled against a provider

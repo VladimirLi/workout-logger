@@ -77,6 +77,13 @@
       migration for a password column, field, or hashing function, and requires SECURITY.md to
       record the passwordless decision so the absence is deliberate)
 
+- [ ] 3.6 Implement the durable device identity and verify the same identity is used after a
+      reload, with every local fact recorded under it (owner decision 2026-09-18)
+- [ ] 3.7 Implement claiming device-recorded data for an account on first sign-in, and verify
+      no queued mutation is lost or duplicated (BLOCKED on 3.2: there is no sign-in to claim
+      from, G-2/G-4. The device half — rekeying local data to another identity — is
+      implemented and verified on its own)
+
 ## 4. Offline durability
 
 - [x] 4.1 Implement the IndexedDB outbox writing mutation and outbox entry in one transaction,
