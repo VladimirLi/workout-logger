@@ -8,15 +8,17 @@ telemetry privacy, proposal staleness, and typed measurements. None of it is rea
 user. There is no persistence, no authentication, no offline queue, and no serving MCP
 endpoint.
 
-**This change is partly implemented.** 29 of 63 tasks are done. A person can now open the
+**This change is partly implemented.** 30 of 63 tasks are done. A person can now open the
 application, follow a plan that has reached the device, log sets against it, rest, finish, and
-reopen any of it later — all without a network, and none of it on a server.
+reopen any of it later — with the network off from start to finish, and none of it on a
+server.
 
 Done: the domain and application layer (1.1–1.6); the device side of offline durability (4.1,
 4.2, 4.4–4.7, 4.9–4.11); export and import (8.1, 8.2); the initial schema migration with its
 static authorization checks (2.1, 2.2, 2.4); the credential policy that needs no credential
-(2.7, 3.5); the device's own identity (3.6); and the web experience that does not need a
-server (5.1, 5.2, 5.4–5.6, 5.8).
+(2.7, 3.5); the device's own identity (3.6); the web experience that does not need a server
+(5.1, 5.2, 5.4–5.6, 5.8); and end-to-end coverage of the offline journey against the
+production build (9.1).
 
 Not done, and not claimed: there is no server, so nothing has ever synced, no plan can reach a
 device except in a test that seeds one, and the sync state the product can show is always "on

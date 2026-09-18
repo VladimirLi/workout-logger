@@ -242,8 +242,11 @@
 
 ## 9. Evidence
 
-- [ ] 9.1 Add end-to-end coverage of the offline logging journey and verify it passes against
-      a production build
+- [x] 9.1 Add end-to-end coverage of the offline logging journey and verify it passes against
+      a production build (`pnpm test:e2e`: apps/web/e2e/workout-journey.spec.ts, "the offline
+      journey" — with the network off: start a session, log two sets, reload, finish, open the
+      summary, then read the device's queue and require all four changes to be present. The
+      webServer runs `next start` on the production build)
 - [ ] 9.2 Add end-to-end coverage of the proposal review journey including the stale path
 - [ ] 9.3 Run `pnpm verify` end to end and record the result
 - [ ] 9.4 Record the first-slice evidence from R-001: four real workouts over at least two
