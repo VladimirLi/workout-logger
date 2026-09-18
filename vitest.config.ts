@@ -43,6 +43,18 @@ export default defineConfig({
           environment: 'node',
         },
       },
+      {
+        test: {
+          // Adapter contract suites against a real provider. NOT part of `pnpm verify`: they
+          // need a network and a credential, and the aggregate gate stays hermetic and
+          // secret-free. `pnpm test:provider` runs them with .env.local loaded.
+          name: 'provider',
+          include: ['packages/adapters-supabase/src/**/*.provider.ts'],
+          environment: 'node',
+          testTimeout: 30_000,
+          hookTimeout: 60_000,
+        },
+      },
     ],
     coverage: {
       provider: 'v8',

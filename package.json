@@ -35,7 +35,8 @@
     "openspec": "openspec",
     "spec:validate": "openspec validate --all --strict --no-interactive",
     "prepare": "husky",
-    "sbom:generate": "node scripts/sbom.mjs"
+    "sbom:generate": "node scripts/sbom.mjs",
+    "test:provider": "node --env-file=.env.local ./node_modules/vitest/vitest.mjs run --project provider"
   },
   "devDependencies": {
     "@axe-core/playwright": "catalog:",
