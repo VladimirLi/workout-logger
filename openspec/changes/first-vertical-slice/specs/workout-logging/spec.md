@@ -84,6 +84,33 @@ quantities, and unilateral results MUST store side and load semantics explicitly
 - **WHEN** the user records a unilateral exercise result
 - **THEN** the stored record carries the side and the load semantics explicitly
 
+### Requirement: Unilateral entry records each side separately
+Each side of a unilateral exercise SHALL be recorded as its own result. Load SHALL default to
+per-side semantics. Combined-load semantics SHALL be offered and accepted only for an exercise
+the plan explicitly configures to permit them.
+
+Decided by the owner on 2026-09-18. A left-right pair recorded as one result cannot express the
+difference between the sides, which is the reason for measuring a unilateral exercise at all;
+and a load that silently means "in total" on one exercise and "each hand" on another is the
+ambiguity ADR-0004 exists to remove.
+
+#### Scenario: Recording the two sides of one exercise
+- **WHEN** the user records a left set and a right set of the same exercise
+- **THEN** each is a separate result carrying its own side
+
+#### Scenario: The default load semantics
+- **WHEN** the user records a unilateral result without choosing load semantics
+- **THEN** the result is stored as per-side
+
+#### Scenario: Combined load on an exercise that does not permit it
+- **WHEN** a unilateral result claims combined-load semantics for an exercise the plan does not
+  configure to permit them
+- **THEN** the result is refused rather than stored
+
+#### Scenario: Combined load on an exercise that permits it
+- **WHEN** the plan configures an exercise to permit combined load and the user chooses it
+- **THEN** the result is stored with combined-load semantics recorded explicitly
+
 #### Scenario: Recording strength exertion
 - **WHEN** the user records exertion for a strength set
 - **THEN** RIR is stored as entered and the displayed RPE is derived and not editable
