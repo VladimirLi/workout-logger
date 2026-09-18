@@ -17,6 +17,14 @@ type LogToRestProps = {
   restHeadingId: string;
   /** Spoken once the set is logged: "Set 2 saved. Rest 1:30." */
   savedAnnouncement: string;
+  /**
+   * Records the set. Called once, when the primary action fires, before the crossfade starts,
+   * so the write is under way while the set view is still fading out.
+   *
+   * Optional because the reference story has nothing to record into. A screen that omits it
+   * shows the interaction without performing it.
+   */
+  onLog?: () => void;
 };
 
 type Mode = 'set' | 'leaving' | 'rest';
@@ -30,7 +38,7 @@ const HALF_CROSSFADE_MS = 100;
  * reduced motion), a haptic tick plays (haptics.def.log-tick), focus moves to the rest
  * heading, and a live region that was already on the page announces the save.
  */
-export function LogToRest({ set, rest, restHeadingId, savedAnnouncement }: LogToRestProps) {
+export function LogToRest({ set, rest, restHeadingId, savedAnnouncement, onLog }: LogToRestProps) {
   const [mode, setMode] = useState<Mode>('set');
   const [announcement, setAnnouncement] = useState('');
   const logged = useRef(false);
@@ -69,6 +77,7 @@ export function LogToRest({ set, rest, restHeadingId, savedAnnouncement }: LogTo
                 if (logged.current) return;
                 logged.current = true;
                 vibrate(10);
+                onLog?.();
                 setMode('leaving');
               }}
             >

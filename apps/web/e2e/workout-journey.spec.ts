@@ -173,3 +173,81 @@ test.describe('the workout journey', () => {
     ).toBeVisible();
   });
 });
+
+test.describe('logging a set', () => {
+  /** Starts a workout from a seeded plan and lands on the set view. */
+  async function atTheSetView(page: Page): Promise<void> {
+    await openTodayWithPlan(page);
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForURL('**/workout');
+    await expect(page.getByRole('heading', { name: 'back-squat' })).toBeVisible();
+  }
+
+  test('records a set performed as prescribed in one action', async ({ page }) => {
+    // Task 5.4. The controls open on the prescription, so accepting it is one press.
+    await atTheSetView(page);
+    await expect(page.getByText('80 kg × 8')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Log set' }).click();
+
+    await expect(page.getByRole('heading', { name: 'Rest' })).toBeVisible();
+    // The set reached the device: the table shows it after the screen re-reads. The load cell
+    // is spoken with its unit, which is the design system's doing and worth asserting.
+    await expect(page.getByRole('cell', { name: '80 kilograms' })).toBeVisible();
+    await expect(page.getByRole('cell', { name: '8', exact: true })).toBeVisible();
+    await expect(page.getByText('That set was not saved')).toHaveCount(0);
+  });
+
+  test('records what the controls say, not the prescription', async ({ page }) => {
+    // The second half of task 5.4: modifying before logging is still one press afterwards.
+    await atTheSetView(page);
+    await page.getByRole('button', { name: 'Increase load' }).click();
+    await page.getByRole('button', { name: 'Decrease reps' }).click();
+
+    await page.getByRole('button', { name: 'Log set' }).click();
+    await expect(page.getByRole('heading', { name: 'Rest' })).toBeVisible();
+
+    // 80 + 2.5 kg and 8 - 1 reps, as adjusted.
+    await expect(page.getByRole('cell', { name: '82.5 kilograms' })).toBeVisible();
+    await expect(page.getByRole('cell', { name: '7', exact: true })).toBeVisible();
+  });
+
+  test('stores the RIR that was entered and never an editable RPE', async ({ page }) => {
+    // Task 5.8. RPE is derived by the domain from the RIR; nothing on the screen accepts one.
+    await atTheSetView(page);
+    await page.getByRole('radio', { name: '2', exact: true }).check();
+    await page.getByRole('button', { name: 'Log set' }).click();
+    await expect(page.getByRole('heading', { name: 'Rest' })).toBeVisible();
+
+    // The RIR column carries the entered value; nothing offers to type an RPE.
+    await expect(page.getByRole('row', { name: /80 kilograms 8 2/ })).toBeVisible();
+    await expect(page.getByLabel(/rpe/i)).toHaveCount(0);
+  });
+
+  test('counts rest down from the timestamp, not from ticks', async ({ page }) => {
+    // Task 5.6. The clock is moved forward by 60 seconds in one jump, which is what a
+    // suspended tab looks like: an interval-accumulating timer would still read 1:30.
+    await atTheSetView(page);
+    await page.clock.install();
+    await page.getByRole('button', { name: 'Log set' }).click();
+    await expect(page.getByRole('heading', { name: 'Rest' })).toBeVisible();
+    // The spoken remaining time, which is unambiguous; the visible clock has no role.
+    await expect(page.getByText(/1 minute 30 seconds left/)).toBeVisible();
+
+    await page.clock.fastForward(60_000);
+    await expect(page.getByText(/30 seconds left/)).toBeVisible();
+    await expect(page.getByText(/1 minute 30 seconds left/)).toHaveCount(0);
+  });
+
+  test('keeps the recorded set after the page is destroyed', async ({ page, context }) => {
+    await atTheSetView(page);
+    await page.getByRole('button', { name: 'Log set' }).click();
+    await expect(page.getByRole('cell', { name: '80 kilograms' })).toBeVisible();
+    await page.close({ runBeforeUnload: false });
+
+    const reopened = await context.newPage();
+    await reopened.goto('/workout');
+    await expect(reopened.getByRole('cell', { name: '80 kilograms' })).toBeVisible();
+    await reopened.close();
+  });
+});

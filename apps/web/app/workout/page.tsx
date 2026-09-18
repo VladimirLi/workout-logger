@@ -17,7 +17,14 @@ import {
   Text,
   TopBar,
 } from '../../ui';
-import { type DisplaySyncState, finishWorkout, readActiveSession } from '../device';
+import {
+  type DisplaySyncState,
+  finishWorkout,
+  logStrengthSet,
+  readActivePrescription,
+  readActiveSession,
+} from '../device';
+import { LogSet, type Prescription } from './LogSet';
 
 /**
  * The workout in progress (workout-logging spec, tasks 5.1 and 5.2).
@@ -32,6 +39,7 @@ interface SessionView {
   readonly startedAt: string;
   readonly rows: readonly SetRow[];
   readonly sync: DisplaySyncState | undefined;
+  readonly prescription: Prescription | undefined;
 }
 
 type State =
@@ -43,10 +51,15 @@ type State =
 export default function WorkoutPage() {
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [finishing, setFinishing] = useState(false);
+  /** A write that did not land must say so: a silent failure looks exactly like a saved set. */
+  const [logFailure, setLogFailure] = useState<string | undefined>(undefined);
 
   const load = useCallback(async () => {
     try {
-      const { session, sync } = await readActiveSession();
+      const [{ session, sync }, prescription] = await Promise.all([
+        readActiveSession(),
+        readActivePrescription(),
+      ]);
       if (!session) {
         setState({ kind: 'none' });
         return;
@@ -62,8 +75,13 @@ export default function WorkoutPage() {
             ...(set.measurement.profile !== 'cardio' && set.measurement.load
               ? { loadKg: set.measurement.load.value }
               : {}),
+            // RIR as entered. The table's RPE is the domain's derivation, never a stored one.
+            ...(set.measurement.profile !== 'cardio' && set.measurement.exertion
+              ? { rir: set.measurement.exertion.rir.value }
+              : {}),
           })),
           sync,
+          prescription,
         },
       });
     } catch (error) {
@@ -126,6 +144,42 @@ export default function WorkoutPage() {
               )}
             </Stack>
           </Surface>
+
+          {state.session.prescription ? (
+            <LogSet
+              prescription={state.session.prescription}
+              setNumber={state.session.rows.length + 1}
+              onLog={(logged) => {
+                // The write happens while the set view is fading to rest; the table catches up
+                // when the screen is next read, which is also what a refresh does.
+                void logStrengthSet({
+                  sessionId: state.session.id,
+                  exerciseId: logged.exerciseId,
+                  loadKg: logged.loadKg,
+                  reps: logged.reps,
+                  rir: logged.rir,
+                }).then(async (result) => {
+                  if (!result.ok) {
+                    setLogFailure(JSON.stringify(result.error));
+                    return;
+                  }
+                  setLogFailure(undefined);
+                  await load();
+                });
+              }}
+            />
+          ) : (
+            <StatusMessage kind="warning">
+              This session has no prescription on this device, so there is nothing to log against.
+              The plan it was started from is not here.
+            </StatusMessage>
+          )}
+
+          {logFailure && (
+            <StatusMessage kind="error" live="assertive">
+              That set was not saved: {logFailure}
+            </StatusMessage>
+          )}
 
           <SetTable caption="Sets recorded" rows={state.session.rows} />
 
