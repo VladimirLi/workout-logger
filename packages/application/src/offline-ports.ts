@@ -112,6 +112,20 @@ export interface LocalWorkoutStore {
   updateDelivery(userId: string, key: IdempotencyKey, delivery: Delivery): Promise<void>;
   /** Removes an entry the server has accepted. */
   acknowledge(userId: string, key: IdempotencyKey): Promise<void>;
+  /**
+   * Discards one session and everything queued for it, together (workout-logging spec, task
+   * 5.3).
+   *
+   * The one place a queued workout mutation goes away without the server having accepted it.
+   * The spec asks for it in as many words - "discarding loses recorded results" - so it is a
+   * choice the user makes, with a confirmation, and never something the system decides:
+   * `discardWorkout` is the only caller, and it refuses without an explicit confirmation.
+   *
+   * Removing the session and its entries in one step is what keeps the outbox honest. Leaving
+   * entries for a session that is gone would queue mutations describing something the device
+   * can no longer show.
+   */
+  discardSession(userId: string, sessionId: string): Promise<void>;
 }
 
 /** The plan as last downloaded to the device. */

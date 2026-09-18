@@ -121,6 +121,19 @@ export class InMemoryLocalWorkoutStore
     return Promise.resolve();
   }
 
+  /**
+   * Discards a session and its queued entries together (task 5.3). Applied in one synchronous
+   * step, like `commit`, so there is no moment where one exists without the other.
+   */
+  discardSession(userId: string, sessionId: string): Promise<void> {
+    this.#sessions.delete(this.#sessionKey(userId, sessionId));
+    const queue = this.#queue(userId);
+    for (let index = queue.length - 1; index >= 0; index -= 1) {
+      if (queue[index]?.entityId === sessionId) queue.splice(index, 1);
+    }
+    return Promise.resolve();
+  }
+
   // The archive ports (tasks 8.1 and 8.2). Reading all history is a different concern from
   // logging, so it is a separate port that this reference also happens to satisfy.
 

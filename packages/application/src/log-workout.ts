@@ -156,3 +156,40 @@ export async function completeWorkout(
     completedAt: completed.value.completedAt,
   });
 }
+
+export type DiscardWorkoutFailure =
+  | { readonly kind: 'not_confirmed' }
+  | { readonly kind: 'session_not_found'; readonly sessionId: string }
+  | { readonly kind: 'session_not_active'; readonly sessionId: string };
+
+/**
+ * Discards an active session and everything queued for it (task 5.3).
+ *
+ * Destructive by design: the workout-logging spec says discarding loses recorded results, and
+ * asks for a confirmation before it happens. The confirmation is a parameter rather than
+ * something the caller is trusted to have done, so a screen cannot reach this by accident and
+ * a reviewer can see where the decision was made.
+ *
+ * Only an active session can be discarded. A completed one is a fact that has been recorded,
+ * and it goes through export and deletion (section 8) rather than through this.
+ */
+export async function discardWorkout(
+  ports: WorkoutPorts,
+  command: {
+    readonly userId: string;
+    readonly sessionId: string;
+    /** True only when the user has confirmed, having been told what is lost. */
+    readonly confirmed: boolean;
+  },
+): Promise<Result<{ readonly discarded: ActiveSession }, DiscardWorkoutFailure>> {
+  if (!command.confirmed) return err({ kind: 'not_confirmed' });
+
+  const session = await ports.store.findSession(command.userId, command.sessionId);
+  if (!session) return err({ kind: 'session_not_found', sessionId: command.sessionId });
+  if (session.status !== 'active') {
+    return err({ kind: 'session_not_active', sessionId: command.sessionId });
+  }
+
+  await ports.store.discardSession(command.userId, command.sessionId);
+  return ok({ discarded: session });
+}
