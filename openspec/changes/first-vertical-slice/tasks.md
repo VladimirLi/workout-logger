@@ -193,11 +193,10 @@
       stored set, and no control on the page offers to type an RPE; the RPE is derived by the
       domain from the RIR, so a screen cannot store one that does not follow)
 - [ ] 5.9 **[UI]** Implement unilateral entry capturing side and load semantics, and verify
-      both are stored explicitly (PARTIAL: side and load semantics are stored explicitly
-      wherever a unilateral measurement exists — the domain requires them and the CSV export
-      names them in their own columns, verified in archive.integration.test.ts. OPEN: there is
-      no way to enter them, because the design system has not decided a control for side or
-      load semantics; inventing one would be deciding the design system)
+      both are stored explicitly (owner decision 2026-09-18: each side is its own result, load
+      defaults to per-side, and combined load is available only where the plan configures it)
+- [ ] 5.9a Refuse combined-load semantics for an exercise the plan does not configure to permit
+      them, and verify the refusal (owner decision 2026-09-18)
 
 ## 6. Remote MCP
 
