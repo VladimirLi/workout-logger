@@ -46,22 +46,30 @@
       `pnpm test`: scripts/validate-migrations.test.ts removes each of those in turn from a
       throwaway migration and requires the gate to fail. Running the checks against a live
       database is task 2.3, G-2)
-- [ ] 2.3 **[G-2]** Write deny-by-default tests for unauthenticated and wrong-user identities
-      across every operation, and verify each denial (PARTIAL: the unauthenticated half is
-      measured against the development database — `node --env-file=.env.local
-      scripts/check-rls.mjs` reads and writes all six exposed tables with the anonymous key and
-      every attempt is refused with 401, 2026-09-18, ADR-0011. OPEN: the wrong-user half needs
-      two signed-in identities, so it waits on authentication (3.2); and neither runs in CI
-      until repository secrets exist)
+- [x] 2.3 Write deny-by-default tests for unauthenticated and wrong-user identities
+      across every operation, and verify each denial (`node --env-file=.env.local
+      scripts/check-rls.mjs`: all six exposed tables refuse an anonymous read and write with
+      401. `pnpm test:provider`: wrong-user.provider.ts signs two development users in with
+      real tokens — another user reads nothing on any table, a write claiming another user's id
+      is refused 403 by the policy's WITH CHECK, and an update or delete aimed at another
+      user's row leaves it untouched. Both run against the development project, 2026-09-18;
+      neither runs in CI until repository secrets exist, which is G-2's remaining half)
 - [x] 2.4 Index every column used by a row-level security predicate, and verify the
       migration gate reports none missing (`pnpm test:migrations`: every column a policy
       compares must be the LEADING column of an index; `user_id` leads every primary key, so
       no extra index is needed. `pnpm test`: a policy on a non-leading column fails the gate)
-- [ ] 2.5 **[G-2]** Implement the Supabase adapters and verify they pass the existing port
-      contract suites unchanged
-- [ ] 2.6 **[G-2]** Implement the server-side idempotency record committed in the same
+- [x] 2.5 Implement the Supabase adapters and verify they pass the existing port
+      contract suites unchanged (`pnpm test:provider`: proposal-store.provider.ts runs the 19
+      ProposalStore contract cases the in-memory reference runs, against the development
+      database, compare-and-set cases included. The suite's assertions are unchanged; the
+      harness supplies the two identities, because a real database keys rows by a uuid that
+      exists in auth.users. Built on fetch, so no dependency was added)
+- [x] 2.6 Implement the server-side idempotency record committed in the same
       transaction as the mutation, and verify replay returns the original result with no
-      duplicate row
+      duplicate row (`pnpm test:provider`: workout-transport.provider.ts — one database
+      function claims the key and applies the mutation together; a replay applies nothing and
+      returns the original result; and a mutation that fails takes the claimed key with it, so
+      the change can still be delivered. Every assertion reads the rows back)
 - [x] 2.7 Verify the built client bundle contains no service-role credential
       (`pnpm test:secrets`: scripts/bundle-secrets.mjs scans apps/web/.next after the build and
       fails when there is no bundle rather than reporting a clean one; `pnpm test`:
@@ -111,7 +119,9 @@
       packages/adapters-browser/src/client-keys.test.ts; `pnpm test:integration`:
       delivery.integration.test.ts, "retries with the same idempotency key after a network
       failure", against the in-memory store)
-- [ ] 4.3 Verify a key reused with a different payload is refused by the server
+- [x] 4.3 Verify a key reused with a different payload is refused by the server
+      (`pnpm test:provider`: workout-transport.provider.ts — the second payload is refused with
+      409, a permanent failure needing a person, and a read-back shows it was not applied)
 - [x] 4.4 Implement per-entity ordered draining and verify a blocked entity does not block a
       different entity (`pnpm test:integration`: delivery.integration.test.ts, "per-entity
       ordering (task 4.4)" and "draining the outbox")
