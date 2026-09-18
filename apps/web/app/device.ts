@@ -20,6 +20,7 @@ import {
   startWorkout,
   type WorkoutPorts,
 } from '@workout/application';
+import { kilograms, type Result, strengthExertion, strengthMeasurement } from '@workout/domain';
 
 /**
  * The browser composition root (ADR-0001): the only place that knows which adapter implements
@@ -109,6 +110,32 @@ export async function readSession(sessionId: string) {
   return { user, session, sync: displaySyncState(deriveSyncState(pending)) };
 }
 
+/**
+ * The prescription the active session is working through, from the plan it was started from.
+ *
+ * The first exercise of the scheduled session: moving between exercises is product behaviour
+ * the workout-logging spec does not describe yet, so nothing here invents an order.
+ */
+export async function readActivePrescription() {
+  const { ports, userId } = deviceOf();
+  const user = await userId();
+  const session = await ports.store.activeSession(user);
+  if (!session) return undefined;
+  const plan = await ports.plans.activePlan(user);
+  const scheduled = plan?.sessions.find((item) => item.id === session.scheduledSessionId);
+  const exercise = scheduled?.exercises[0];
+  if (!exercise || exercise.prescription.profile === 'cardio') return undefined;
+  return {
+    exerciseId: exercise.exerciseId,
+    name: exercise.exerciseId,
+    loadKg: exercise.prescription.load?.value ?? 0,
+    reps: exercise.prescription.repetitions,
+    // The rest length is a design-system default (feedback defaults); the plan does not carry
+    // one, and inventing a per-exercise rest would be inventing product behaviour.
+    restSeconds: 90,
+  };
+}
+
 export async function readActiveSession() {
   const { ports, userId } = deviceOf();
   const user = await userId();
@@ -129,13 +156,39 @@ export async function startToday(scheduledSessionId: string) {
   return startWorkout(ports, { userId: await userId(), scheduledSessionId });
 }
 
-export async function logOneSet(command: {
+/**
+ * Records one strength set from what the controls said (task 5.4).
+ *
+ * The screen hands over numbers; the domain decides whether they are a measurement. RIR is
+ * what the user entered and RPE is derived from it here, by the domain, so a screen cannot
+ * store an RPE that does not follow from the RIR (ADR-0004, task 5.8).
+ */
+export async function logStrengthSet(command: {
   readonly sessionId: string;
   readonly exerciseId: string;
-  readonly measurement: Parameters<typeof logSet>[1]['measurement'];
-}) {
+  readonly loadKg: number;
+  readonly reps: number;
+  readonly rir: number | undefined;
+}): Promise<Result<unknown, unknown>> {
+  const load = kilograms(command.loadKg);
+  if (!load.ok) return load;
+  const exertion = command.rir === undefined ? undefined : strengthExertion(command.rir);
+  if (exertion && !exertion.ok) return exertion;
+
+  const measurement = strengthMeasurement({
+    repetitions: command.reps,
+    load: load.value,
+    ...(exertion?.ok ? { exertion: exertion.value } : {}),
+  });
+  if (!measurement.ok) return measurement;
+
   const { ports, userId } = deviceOf();
-  return logSet(ports, { userId: await userId(), ...command });
+  return logSet(ports, {
+    userId: await userId(),
+    sessionId: command.sessionId,
+    exerciseId: command.exerciseId,
+    measurement: measurement.value,
+  });
 }
 
 export async function finishWorkout(sessionId: string) {

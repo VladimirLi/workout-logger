@@ -64,6 +64,10 @@ export default function SummaryPage({ params }: { params: Promise<{ id: string }
             ...(set.measurement.profile !== 'cardio' && set.measurement.load
               ? { loadKg: set.measurement.load.value }
               : {}),
+            // RIR as entered. The table's RPE is the domain's derivation, never a stored one.
+            ...(set.measurement.profile !== 'cardio' && set.measurement.exertion
+              ? { rir: set.measurement.exertion.rir.value }
+              : {}),
           })),
           sync,
         },
