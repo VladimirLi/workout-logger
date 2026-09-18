@@ -34,6 +34,8 @@ const OUTBOX = 'outbox';
 const KEYS = 'idempotency-keys';
 const SEQUENCES = 'entity-sequences';
 const PLANS = 'plans';
+/** Shared so the identity adapter names the same store rather than a copy of the string. */
+export const IDENTITY_STORE = 'device-identity';
 
 const BY_USER = 'by-user';
 const BY_KEY = 'by-key';
@@ -140,6 +142,10 @@ function openDatabase(
       outbox.createIndex(BY_KEY, ['userId', 'idempotencyKey'], { unique: true });
       db.createObjectStore(KEYS, { keyPath: ['userId', 'idempotencyKey'] });
       db.createObjectStore(SEQUENCES, { keyPath: ['userId', 'entityId'] });
+      // Who the device records for before anyone signs in (identity spec, task 3.6). In this
+      // database, not localStorage, so the name the workouts are filed under cannot be lost
+      // while the workouts remain.
+      db.createObjectStore(IDENTITY_STORE, { keyPath: 'key' });
       // Keyed per plan, not per user: a superseded plan is history and is kept until the
       // user deletes it (data-portability spec), so it cannot be overwritten by its successor.
       const plans = db.createObjectStore(PLANS, { keyPath: ['userId', 'id'] });
@@ -212,6 +218,29 @@ class Database {
     await settled;
     return result;
   }
+}
+
+/**
+ * The shared database handle, for the adapters in this package that are not the outbox.
+ *
+ * Exported inside the package rather than re-implemented, so every adapter opens the same
+ * schema at the same version and a transaction can span the stores it needs.
+ */
+export async function openWorkoutDatabase(options: IndexedDbOptions = {}): Promise<{
+  transaction: <T>(
+    stores: readonly string[],
+    mode: IDBTransactionMode,
+    work: (
+      transaction: IDBTransaction,
+      request: <R>(request: IDBRequest<R>) => Promise<R>,
+    ) => Promise<T> | T,
+  ) => Promise<T>;
+}> {
+  const database = new Database(options);
+  return {
+    transaction: (stores, mode, work) =>
+      database.transaction(stores, mode, (transaction) => work(transaction, promise)),
+  };
 }
 
 export class IndexedDbWorkoutStore implements LocalWorkoutStore {
@@ -429,6 +458,59 @@ export class IndexedDbArchive implements ArchiveSource, ArchiveSink, LocalDataEr
         session,
       } satisfies SessionRecord);
     });
+  }
+
+  /**
+   * Moves every record for one identity to another, in a single transaction (task 3.7).
+   *
+   * The account claiming a device's data is the reason this exists. Each store's key begins
+   * with the identity, so the record has to be written under the new key and the old one
+   * removed - which is why it is one transaction: a partial rekey would leave a session under
+   * one identity and its queue entry under another, and the outbox guarantee would be gone.
+   *
+   * Nothing is discarded. The count of outbox entries afterwards is the count before, and a
+   * test requires it.
+   */
+  async rekey(fromUserId: string, toUserId: string): Promise<void> {
+    if (fromUserId === toUserId) return;
+    await this.#db.transaction(
+      [SESSIONS, OUTBOX, KEYS, SEQUENCES, PLANS],
+      'readwrite',
+      async (transaction) => {
+        const spanning = IDBKeyRange.bound([fromUserId, ''], [fromUserId, '\uffff']);
+
+        const sessions = transaction.objectStore(SESSIONS);
+        for (const record of await promise<SessionRecord[]>(sessions.getAll(spanning))) {
+          sessions.delete([fromUserId, record.id]);
+          sessions.put({ ...record, userId: toUserId });
+        }
+
+        const plans = transaction.objectStore(PLANS);
+        for (const record of await promise<PlanRecord[]>(plans.getAll(spanning))) {
+          plans.delete([fromUserId, record.id]);
+          plans.put({ ...record, userId: toUserId });
+        }
+
+        const keys = transaction.objectStore(KEYS);
+        for (const record of await promise<KeyRecord[]>(keys.getAll(spanning))) {
+          keys.delete([fromUserId, record.idempotencyKey]);
+          keys.put({ ...record, userId: toUserId });
+        }
+
+        const sequences = transaction.objectStore(SEQUENCES);
+        for (const record of await promise<SequenceRecord[]>(sequences.getAll(spanning))) {
+          sequences.delete([fromUserId, record.entityId]);
+          sequences.put({ ...record, userId: toUserId });
+        }
+
+        // The outbox keeps its ordinal, so commit order survives the move.
+        const outbox = transaction.objectStore(OUTBOX);
+        const entries = await promise<OutboxRecord[]>(
+          outbox.index(BY_USER).getAll(IDBKeyRange.only(fromUserId)),
+        );
+        for (const record of entries) outbox.put({ ...record, userId: toUserId });
+      },
+    );
   }
 
   /**
