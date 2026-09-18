@@ -39,7 +39,7 @@ function methodBodies(source: string): Map<string, string> {
 const APPLICATION = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'application', 'src');
 
 describe('removing a queued mutation', () => {
-  it('happens in acknowledge and in the pre-destructive clear, nowhere else', () => {
+  it('happens in acknowledge, the pre-destructive clear, and the rekey, nowhere else', () => {
     const bodies = methodBodies(SOURCE);
     expect([...bodies.keys()], 'the method scan found nothing to check').toContain('acknowledge');
 
@@ -47,9 +47,11 @@ describe('removing a queued mutation', () => {
       .filter(([, body]) => /\.(delete|clear)\(/.test(body))
       .map(([name]) => name)
       .sort();
-    // `clearAll` erases everything for one user, including the queue. It is not a discard: it
-    // is the user asking, and the use case below cannot reach it without exporting first.
-    expect(removers).toEqual(['acknowledge', 'clearAll']);
+    // `clearAll` erases everything for one user, including the queue: not a discard, but the
+    // user asking, and unreachable without the export that precedes it. `rekey` removes a
+    // record only to write it back under the claiming account's identity, in the same
+    // transaction, and a browser test requires the queue to come out the same length.
+    expect(removers).toEqual(['acknowledge', 'clearAll', 'rekey']);
   });
 
   it('keeps the eraser off the logging port, so a screen cannot reach it', () => {
@@ -59,6 +61,7 @@ describe('removing a queued mutation', () => {
       SOURCE.indexOf('export class IndexedDbPlanStore'),
     );
     expect(store).not.toMatch(/clearAll/);
+    expect(store).not.toMatch(/\brekey\b/);
     expect(SOURCE.indexOf('clearAll')).toBeGreaterThan(
       SOURCE.indexOf('export class IndexedDbArchive'),
     );
