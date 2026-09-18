@@ -141,6 +141,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@workout/adapters-browser':
+        specifier: workspace:*
+        version: link:../../packages/adapters-browser
       '@workout/adapters-supabase':
         specifier: workspace:*
         version: link:../../packages/adapters-supabase

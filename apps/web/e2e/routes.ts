@@ -8,7 +8,28 @@ import type { Page } from '@playwright/test';
  * Product routes are served by the production Next.js build. Components, patterns, states, and
  * reference screens live only in the Storybook lab (ADR-0010), served from its static build.
  */
-export const SHELL_ROUTES = ['/', '/offline'] as const;
+export const SHELL_ROUTES = ['/', '/offline', '/today', '/workout'] as const;
+
+/**
+ * The heading each route settles on, for the routes that read the device before they can show
+ * anything.
+ *
+ * Without this a screenshot races the skeleton: the store read resolves after the page is
+ * otherwise idle, so the capture could catch the delayed skeleton, the content, or the gap
+ * between them - three different pictures of a correct page. `openRoute` waits for the
+ * settled state, which is also the state worth reviewing.
+ */
+const SETTLED: Partial<Record<(typeof SHELL_ROUTES)[number], string>> = {
+  '/today': 'No plan on this device yet',
+  '/workout': 'No workout in progress',
+};
+
+/** Opens a product route and waits until it has finished reading the device. */
+export async function openRoute(page: Page, route: (typeof SHELL_ROUTES)[number]): Promise<void> {
+  await page.goto(route);
+  const heading = SETTLED[route];
+  if (heading) await page.getByRole('heading', { name: heading }).waitFor({ state: 'visible' });
+}
 
 export const STORYBOOK_URL = process.env.STORYBOOK_URL ?? 'http://127.0.0.1:6106';
 

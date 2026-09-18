@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, type Page, test } from '@playwright/test';
-import { isReferenceScreen, openStory, SCREEN, SHELL_ROUTES, stories } from './routes';
+import { isReferenceScreen, openRoute, openStory, SCREEN, SHELL_ROUTES, stories } from './routes';
 
 /**
  * Automated accessibility gate (D-037, R-007, accessibility.testing.auto-only).
@@ -17,7 +17,7 @@ for (const theme of ['light', 'dark'] as const) {
       page,
     }) => {
       await page.addInitScript((value) => window.localStorage.setItem('wl-theme', value), theme);
-      await page.goto(route);
+      await openRoute(page, route);
       // A broken bootstrap would otherwise scan the light theme twice.
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
       const results = await new AxeBuilder({ page }).analyze();
@@ -73,7 +73,7 @@ test('@a11y every control on every route and story meets the 44 x 44 px floor', 
     }
   };
   for (const route of SHELL_ROUTES) {
-    await page.goto(route);
+    await openRoute(page, route);
     await check(route);
   }
   for (const story of stories()) {
@@ -159,7 +159,7 @@ test('@a11y at 200% text and 320 px nothing scrolls sideways (reflow)', async ({
       () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
     );
   for (const route of SHELL_ROUTES) {
-    await page.goto(route);
+    await openRoute(page, route);
     if (await overflow()) overflowing.push(route);
   }
   for (const story of stories().filter(isReferenceScreen)) {
@@ -185,7 +185,7 @@ test('@a11y every route and reference screen has one h1, one main, and a page he
     expect(await page.getByRole('banner').count(), `${where} header`).toBe(1);
   };
   for (const route of SHELL_ROUTES) {
-    await page.goto(route);
+    await openRoute(page, route);
     await check(route);
   }
   for (const story of stories().filter(isReferenceScreen)) {

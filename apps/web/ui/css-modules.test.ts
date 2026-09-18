@@ -108,6 +108,10 @@ describe('screens compose the design system', () => {
       /^(react|next(\/.*)?)$/.test(specifier) ||
       /^(\.\.\/)+ui$/.test(specifier) ||
       /^(\.\.\/)+ui\/tokens\/tokens\.css$/.test(specifier) ||
+      // The browser composition root (app/device.ts). Presentation still comes only from ui/;
+      // this is where a screen gets its data, and it is deliberately the ONLY such import, so
+      // a screen cannot reach an adapter or a provider directly (ADR-0001).
+      /^(\.\.\/)*device$/.test(specifier) ||
       /^\.\/[\w-]+(\.css)?$/.test(specifier);
     expect(importsOf(file).filter((specifier) => !allowed(specifier))).toEqual([]);
     expect(

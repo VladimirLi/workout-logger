@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
 import { expect, type Page, test } from '@playwright/test';
 import { FIXED_NOW, REST } from '../ui/reference/fixtures';
-import { isReferenceScreen, openStory, SCREEN, SHELL_ROUTES, stories } from './routes';
+import { isReferenceScreen, openRoute, openStory, SCREEN, SHELL_ROUTES, stories } from './routes';
 
 /**
  * Behaviour the accepted design system promises (DESIGN_SYSTEM.md, ADR-0008). Pixels are
@@ -275,7 +275,7 @@ test.describe('preferences', () => {
   test('reduced motion makes every transition and animation instant', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     const targets = [
-      ...SHELL_ROUTES.map((route) => () => page.goto(route)),
+      ...SHELL_ROUTES.map((route) => () => openRoute(page, route)),
       ...stories().map((story) => () => openStory(page, story.id)),
     ];
     test.setTimeout(180_000);
@@ -382,7 +382,7 @@ test.describe('layout', () => {
   test('layout does not shift after first paint (CLS below 0.05)', async ({ page }) => {
     test.setTimeout(120_000);
     const targets = [
-      ...SHELL_ROUTES.map((route) => ({ route, open: () => page.goto(route) })),
+      ...SHELL_ROUTES.map((route) => ({ route, open: () => openRoute(page, route) })),
       ...stories()
         .filter(isReferenceScreen)
         .map((story) => ({ route: story.id, open: () => openStory(page, story.id) })),
