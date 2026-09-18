@@ -77,8 +77,11 @@
       migration for a password column, field, or hashing function, and requires SECURITY.md to
       record the passwordless decision so the absence is deliberate)
 
-- [ ] 3.6 Implement the durable device identity and verify the same identity is used after a
-      reload, with every local fact recorded under it (owner decision 2026-09-18)
+- [x] 3.6 Implement the durable device identity and verify the same identity is used after a
+      reload, with every local fact recorded under it (owner decision 2026-09-18;
+      `pnpm test:e2e`: apps/web/e2e/device-identity.spec.ts — a generated identifier recorded
+      once, the same one after a reload, and one identity when two tabs open at the same
+      moment)
 - [ ] 3.7 Implement claiming device-recorded data for an account on first sign-in, and verify
       no queued mutation is lost or duplicated (BLOCKED on 3.2: there is no sign-in to claim
       from, G-2/G-4. The device half — rekeying local data to another identity — is
@@ -141,12 +144,22 @@
 
 ## 5. Web experience
 
-- [ ] 5.1 **[UI]** Build separately addressable plan, active-workout, and completed-summary
-      routes, and verify each is directly reopenable
-- [ ] 5.2 **[UI]** Verify an active session survives refresh, navigation, suspension, and
-      process termination with every recorded result intact
+- [x] 5.1 **[UI]** Build separately addressable plan, active-workout, and completed-summary
+      routes, and verify each is directly reopenable (`pnpm test:e2e`:
+      apps/web/e2e/workout-journey.spec.ts — /today, /workout and /summary/[id], each opened
+      by address; with nothing synced /today says no plan has reached the device rather than
+      showing a fixture)
+- [x] 5.2 **[UI]** Verify an active session survives refresh, navigation, suspension, and
+      process termination with every recorded result intact (`pnpm test:e2e`:
+      workout-journey.spec.ts — restored after a reload, after navigating away and back, and
+      after the page is destroyed outright and its address reopened in a new one)
 - [ ] 5.3 **[UI]** Implement the single-active-session rule and verify a second start offers
-      resume or discard, with confirmation before discarding
+      resume or discard, with confirmation before discarding (PARTIAL: at most one session is
+      active — the store enforces it and the application refuses a second start; /today offers
+      to continue the one in progress and shows no second start button, verified in
+      workout-journey.spec.ts. OPEN: discard. The spec says discarding loses recorded results,
+      so it is a destructive action that needs the export-first rule of task 4.9 applied to it
+      rather than a button added to the screen)
 - [ ] 5.4 **[UI]** Implement one-primary-action logging of an unchanged prescribed set and
       verify it takes exactly one action
 - [ ] 5.5 **[UI]** Verify the active workout is usable at 375x667 CSS pixels with no
