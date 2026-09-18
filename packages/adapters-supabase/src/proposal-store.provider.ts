@@ -1,0 +1,132 @@
+import type { Proposal, Revision } from '@workout/domain';
+import { type ContractHarness, PROPOSAL_STORE_CASES } from '@workout/test-support';
+import { beforeAll, describe, it } from 'vitest';
+import { serverConfig } from './config.js';
+import { SupabaseProposalStore } from './repositories.js';
+import { upsert } from './rest.js';
+
+/**
+ * The proposal store contract, against the real development database (task 2.5, ADR-0005).
+ *
+ * `.provider.ts`, not `.test.ts`, so `pnpm verify` never runs it: the aggregate gate is
+ * hermetic and secret-free, and this needs a network and a credential. Run it deliberately:
+ *
+ *   pnpm test:provider
+ *
+ * Every assertion is the contract suite the in-memory reference runs. What this file supplies
+ * is the two things a database needs and an object in memory does not: user ids that are real
+ * uuids in `auth.users`, and an active plan row for the revision to live on.
+ *
+ * It fails rather than skips without an environment. "No credential, so no finding" is the
+ * vacuous pass these checks exist to prevent.
+ */
+
+const url = process.env['NEXT_PUBLIC_SUPABASE_URL'];
+const anonKey = process.env['NEXT_PUBLIC_SUPABASE_ANON_KEY'];
+const serviceRoleKey = process.env['SUPABASE_SERVICE_ROLE_KEY'];
+
+if (!url || !anonKey || !serviceRoleKey) {
+  throw new Error(
+    'the provider suite needs NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY and ' +
+      'SUPABASE_SERVICE_ROLE_KEY. Run `pnpm test:provider`, which loads .env.local.',
+  );
+}
+
+const config = serverConfig({ url, anonKey, serviceRoleKey });
+if (!config.ok) {
+  throw new Error(`the Supabase configuration is invalid: ${JSON.stringify(config.error)}`);
+}
+const server = config.value;
+const rest = { url: server.url, key: server.serviceRoleKey };
+
+/** Two throwaway development identities, created once and reused. */
+const EMAILS = {
+  user: 'contract-user@workout-logger.invalid',
+  otherUser: 'contract-other@workout-logger.invalid',
+} as const;
+
+const identities = { user: '', otherUser: '' };
+
+/** Creates the development user if it is not there, and returns its id either way. */
+async function ensureUser(email: string): Promise<string> {
+  const listed = await fetch(`${server.url}/auth/v1/admin/users?per_page=200`, {
+    headers: { apikey: server.serviceRoleKey, Authorization: `Bearer ${server.serviceRoleKey}` },
+  });
+  const { users } = (await listed.json()) as { users?: { id: string; email: string }[] };
+  const existing = users?.find((user) => user.email === email);
+  if (existing) return existing.id;
+
+  const created = await fetch(`${server.url}/auth/v1/admin/users`, {
+    method: 'POST',
+    headers: {
+      apikey: server.serviceRoleKey,
+      Authorization: `Bearer ${server.serviceRoleKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ email, email_confirm: true }),
+  });
+  const body = (await created.json()) as { id?: string; msg?: string };
+  if (!body.id) throw new Error(`could not create the development user: ${body.msg ?? '?'}`);
+  return body.id;
+}
+
+beforeAll(async () => {
+  identities.user = await ensureUser(EMAILS.user);
+  identities.otherUser = await ensureUser(EMAILS.otherUser);
+}, 60_000);
+
+/**
+ * A fresh state per case: the proposals and the plan are replaced, so one case's decision
+ * cannot be another case's starting point. Seeding goes around the port under test, which is
+ * what the contract's `seed` is for.
+ */
+async function harness(): Promise<ContractHarness> {
+  const userId = identities.user;
+  for (const table of ['proposals', 'workout_sessions', 'plans']) {
+    await fetch(`${server.url}/rest/v1/${table}?user_id=eq.${userId}`, {
+      method: 'DELETE',
+      headers: { apikey: server.serviceRoleKey, Authorization: `Bearer ${server.serviceRoleKey}` },
+    });
+  }
+
+  return {
+    store: new SupabaseProposalStore(server),
+    identities: { user: identities.user, otherUser: identities.otherUser },
+    seed: async (seedUserId: string, proposal: Proposal, revision: Revision) => {
+      await upsert(rest, 'plans', [
+        {
+          user_id: seedUserId,
+          id: 'plan-contract',
+          revision,
+          status: 'active',
+          activated_at: new Date('2026-09-18T00:00:00Z').toISOString(),
+          sessions: [],
+        },
+      ]);
+      await upsert(rest, 'proposals', [
+        {
+          user_id: seedUserId,
+          id: proposal.id,
+          base_revision: proposal.baseRevision,
+          diff: proposal.diff,
+          rationale: proposal.rationale,
+          status: proposal.status,
+          created_at: proposal.createdAt.toISOString(),
+          decided_at: null,
+          actor_client_id: proposal.actor.clientId,
+          actor_agent_id: proposal.actor.actorId,
+          input_hash: proposal.inputHash,
+          expires_at: proposal.expiresAt.toISOString(),
+        },
+      ]);
+    },
+  };
+}
+
+describe('ProposalStore contract: supabase development project', () => {
+  for (const testCase of PROPOSAL_STORE_CASES) {
+    it(testCase.name, async () => {
+      await testCase.run(await harness());
+    });
+  }
+});
