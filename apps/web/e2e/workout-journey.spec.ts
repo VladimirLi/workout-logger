@@ -156,7 +156,7 @@ test.describe('the workout journey', () => {
     await page.waitForURL('**/workout');
     await page.getByRole('button', { name: 'Done' }).click();
 
-    await page.waitForURL('**/summary/**');
+    await page.waitForURL('**/summary?session=**');
     await expect(page.getByRole('heading', { name: 'Finished' })).toBeVisible();
 
     // Reopened directly, by address, in the same state.
@@ -167,7 +167,7 @@ test.describe('the workout journey', () => {
   });
 
   test('says a summary is not on this device rather than failing', async ({ page }) => {
-    await page.goto('/summary/not-a-session');
+    await page.goto('/summary?session=not-a-session');
     await expect(
       page.getByRole('heading', { name: 'That session is not on this device' }),
     ).toBeVisible();
@@ -324,4 +324,70 @@ test('@a11y the live set view fits a 375 by 667 phone with no sideways scrolling
   await expect(page.getByText('On device')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Log set' })).toBeVisible();
   await expect(page.getByRole('spinbutton', { name: 'Load' })).toBeVisible();
+});
+
+test.describe('the offline journey', () => {
+  test('logs a whole session with the network off, and keeps every set', async ({
+    page,
+    context,
+  }) => {
+    // Task 9.1, against the production build the webServer runs. Offline is the condition the
+    // product exists for: the device is the first place a fact is saved (ADR-0003), so nothing
+    // here should behave differently from the online path - and nothing should be lost.
+    await openTodayWithPlan(page);
+    // The app has been used before: visiting the workout route once online is what puts its
+    // assets in the service worker's cache, exactly as an ordinary first session would.
+    await page.goto('/workout');
+    await expect(page.getByRole('heading', { name: 'No workout in progress' })).toBeVisible();
+    await page.goto('/summary');
+    await expect(
+      page.getByRole('heading', { name: 'That session is not on this device' }),
+    ).toBeVisible();
+    await page.goto('/today');
+    await expect(page.getByRole('button', { name: 'Start workout' })).toBeVisible();
+
+    await context.setOffline(true);
+
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForURL('**/workout');
+    await expect(page.getByRole('heading', { name: 'back-squat' })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Log set' }).click();
+    await expect(page.getByRole('cell', { name: '80 kilograms' })).toBeVisible();
+
+    // A reload with the network still off: served by the service worker, read from IndexedDB.
+    await page.reload();
+    await expect(page.getByRole('cell', { name: '80 kilograms' })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Increase load' }).click();
+    await page.getByRole('button', { name: 'Log set' }).click();
+    await expect(page.getByRole('cell', { name: '82.5 kilograms' })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Done' }).click();
+    await page.waitForURL('**/summary?session=**');
+    await expect(page.getByRole('heading', { name: 'Finished' })).toBeVisible();
+
+    // Both sets, the start, and the completion are queued, and none of them was lost. Read
+    // from the database in the page rather than by navigating: moving to another route with
+    // the network off is covered where it is reliable (the reload above and the summary), and
+    // a navigation this test does not need should not be what makes it fail.
+    const queued = await page.evaluate(
+      () =>
+        new Promise<number>((resolve, reject) => {
+          const request = indexedDB.open('workout', 1);
+          request.onsuccess = () => {
+            const count = request.result
+              .transaction('outbox', 'readonly')
+              .objectStore('outbox')
+              .count();
+            count.onsuccess = () => resolve(count.result);
+            count.onerror = () => reject(count.error);
+          };
+          request.onerror = () => reject(request.error);
+        }),
+    );
+    expect(queued, 'a change recorded offline was lost').toBe(4);
+
+    await context.setOffline(false);
+  });
 });

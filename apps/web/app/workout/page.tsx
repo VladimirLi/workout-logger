@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import {
   Button,
@@ -49,6 +50,7 @@ type State =
   | { readonly kind: 'failed'; readonly message: string };
 
 export default function WorkoutPage() {
+  const router = useRouter();
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [finishing, setFinishing] = useState(false);
   /** A write that did not land must say so: a silent failure looks exactly like a saved set. */
@@ -97,8 +99,10 @@ export default function WorkoutPage() {
     setFinishing(true);
     const completed = await finishWorkout(sessionId);
     setFinishing(false);
-    if (completed.ok) window.location.assign(`/summary/${sessionId}`);
-    else await load();
+    if (completed.ok) {
+      // Typed routes know the route, not its query string; the query is data, not a route.
+      router.push(`/summary?session=${encodeURIComponent(sessionId)}` as never);
+    } else await load();
   };
 
   return (

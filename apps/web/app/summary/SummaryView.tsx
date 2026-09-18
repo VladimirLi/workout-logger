@@ -1,5 +1,6 @@
 'use client';
 
+import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import {
   Heading,
@@ -14,14 +15,17 @@ import {
   SyncIndicator,
   Text,
   TopBar,
-} from '../../../ui';
-import { type DisplaySyncState, readSession } from '../../device';
+} from '../../ui';
+import { type DisplaySyncState, readSession } from '../device';
 
 /**
- * A finished session (workout-logging spec, task 5.1).
+ * A finished session (workout-logging spec, tasks 5.1 and 9.1).
  *
- * Addressed by the session's own id, so a summary can be reopened, linked, and returned to
- * after the workout is long over. It reads from the device, so it works with no connectivity.
+ * The session id is a query parameter rather than a path segment, so this is ONE static route
+ * the service worker can cache. A path per session would need a server document per session,
+ * which is precisely what a phone with no signal cannot fetch - the summary would have been
+ * unreachable exactly when the device is the only place the workout exists. The address still
+ * identifies the summary, so it can be reopened, linked, and returned to later.
  */
 
 interface SummaryView {
@@ -39,13 +43,18 @@ type State =
   | { readonly kind: 'ready'; readonly summary: SummaryView }
   | { readonly kind: 'failed'; readonly message: string };
 
-export default function SummaryPage({ params }: { params: Promise<{ id: string }> }) {
+export function SummaryView() {
+  const search = useSearchParams();
+  const sessionId = search.get('session');
   const [state, setState] = useState<State>({ kind: 'loading' });
 
   const load = useCallback(async () => {
     try {
-      const { id } = await params;
-      const { session, sync } = await readSession(id);
+      if (!sessionId) {
+        setState({ kind: 'missing' });
+        return;
+      }
+      const { session, sync } = await readSession(sessionId);
       if (!session) {
         setState({ kind: 'missing' });
         return;
@@ -75,7 +84,7 @@ export default function SummaryPage({ params }: { params: Promise<{ id: string }
     } catch (error) {
       setState({ kind: 'failed', message: error instanceof Error ? error.message : String(error) });
     }
-  }, [params]);
+  }, [sessionId]);
 
   useEffect(() => {
     void load();
