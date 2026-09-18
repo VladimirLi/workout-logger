@@ -125,14 +125,20 @@
       `storage_full` and writes nothing — `pnpm test:e2e`: browser-store.spec.ts, "writes
       neither the session nor the entry when storage is full"; the application refuses the
       write and leaves the queue intact — `pnpm test:integration`:
-      outbox-durability.integration.test.ts. OPEN: the spec also requires a clear recovery
-      action, which is user-facing and lands with section 5)
+      outbox-durability.integration.test.ts; a write that does not land now says so on the
+      workout screen rather than looking saved, and /diagnostics explains what may be evicted.
+      OPEN: the spec's recovery action for a full device specifically - offering the export at
+      the moment a write is refused - is not wired to the screen yet)
 - [x] 4.9 Implement the pre-destructive export and verify it is offered before any local data
       is cleared (`pnpm test:integration`: archive.integration.test.ts —
       `clearLocalDataAfterExport` takes the archive and CSV, returns them, and only then
       erases, so no caller can clear first; `pnpm test:e2e`: browser-store.spec.ts clears a
       real database and restores it from the export that was handed over)
-- [ ] 4.10 Request persistent storage and verify diagnostics report the granted or denied state
+- [x] 4.10 Request persistent storage and verify diagnostics report the granted or denied state
+      (`pnpm test:e2e`: apps/web/e2e/workout-journey.spec.ts, "diagnostics" — /diagnostics
+      reports granted, denied, unsupported or error and explains the consequence for
+      undelivered data; a test forces the browser to refuse and requires the denial to be
+      shown. It also reports how many changes are queued)
 - [x] 4.11 Verify no code path discards a queued workout mutation automatically
       (`pnpm test:integration`: outbox-durability.integration.test.ts — a 422 leaves the entry
       queued and needing attention, a network error leaves it retrying, and only a 2xx removes
@@ -160,18 +166,34 @@
       workout-journey.spec.ts. OPEN: discard. The spec says discarding loses recorded results,
       so it is a destructive action that needs the export-first rule of task 4.9 applied to it
       rather than a button added to the screen)
-- [ ] 5.4 **[UI]** Implement one-primary-action logging of an unchanged prescribed set and
-      verify it takes exactly one action
-- [ ] 5.5 **[UI]** Verify the active workout is usable at 375x667 CSS pixels with no
-      horizontal scrolling
-- [ ] 5.6 **[UI]** Implement timestamp-derived rest timers and verify no drift after a
-      90-second background suspension
+- [x] 5.4 **[UI]** Implement one-primary-action logging of an unchanged prescribed set and
+      verify it takes exactly one action (`pnpm test:e2e`: workout-journey.spec.ts — the
+      controls open on the prescription, so one press of Log set records it; a second test
+      adjusts load and reps first and requires the adjusted values to be what was stored)
+- [x] 5.5 **[UI]** Verify the active workout is usable at 375x667 CSS pixels with no
+      horizontal scrolling (`pnpm test:a11y`: workout-journey.spec.ts — the live set view at
+      375x667 with the document no wider than its viewport, and the current exercise, the
+      target, the sync state, and the primary action all present)
+- [x] 5.6 **[UI]** Implement timestamp-derived rest timers and verify no drift after a
+      90-second background suspension (`pnpm test:e2e`: workout-journey.spec.ts — the clock
+      jumps 60 seconds in one step, which is what a suspended tab looks like, and the
+      remaining time has to have moved by 60 seconds; an interval-accumulating timer would
+      not. The component itself is also covered in the lab)
 - [ ] 5.7 **[UI]** Render the three sync states and verify they remain distinguishable in a
-      grayscale rendering
-- [ ] 5.8 **[UI]** Implement RIR entry with derived read-only RPE and verify the RPE field is
-      not editable
+      grayscale rendering (PARTIAL: the routes render the design system's SyncIndicator, and
+      its three states are proved distinguishable without colour by the achromatopsia and
+      forced-colours baselines in the lab. OPEN: with no server the product can only ever show
+      "on device" - syncing and needs attention are unreachable until delivery exists, G-2)
+- [x] 5.8 **[UI]** Implement RIR entry with derived read-only RPE and verify the RPE field is
+      not editable (`pnpm test:e2e`: workout-journey.spec.ts — the entered RIR reaches the
+      stored set, and no control on the page offers to type an RPE; the RPE is derived by the
+      domain from the RIR, so a screen cannot store one that does not follow)
 - [ ] 5.9 **[UI]** Implement unilateral entry capturing side and load semantics, and verify
-      both are stored explicitly
+      both are stored explicitly (PARTIAL: side and load semantics are stored explicitly
+      wherever a unilateral measurement exists — the domain requires them and the CSV export
+      names them in their own columns, verified in archive.integration.test.ts. OPEN: there is
+      no way to enter them, because the design system has not decided a control for side or
+      load semantics; inventing one would be deciding the design system)
 
 ## 6. Remote MCP
 

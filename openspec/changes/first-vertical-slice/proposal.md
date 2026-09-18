@@ -8,24 +8,23 @@ telemetry privacy, proposal staleness, and typed measurements. None of it is rea
 user. There is no persistence, no authentication, no offline queue, and no serving MCP
 endpoint.
 
-**This change is partly implemented.** 24 of 63 tasks are done, and the first user-reachable
-behaviour now exists.
+**This change is partly implemented.** 29 of 63 tasks are done. A person can now open the
+application, follow a plan that has reached the device, log sets against it, rest, finish, and
+reopen any of it later — all without a network, and none of it on a server.
 
-Done: the domain and application layer (1.1–1.6); the device side of offline durability — the
-atomic IndexedDB outbox (4.1), client-generated idempotency keys (4.2), per-entity ordered
-draining (4.4), capped backoff with full jitter (4.5), retry classification (4.6), every flush
-trigger the spec names (4.7), the pre-destructive export (4.9), and the guarantee that nothing
-discards a queued mutation (4.11); export and import (8.1, 8.2); the initial schema migration
-with row-level security, grants, and indexed policy predicates, checked statically (2.1, 2.2,
-2.4); the credential policy checks that need no credential (2.7, 3.5); the device's own
-identity (3.6); and the plan, workout, and summary routes with session survival (5.1, 5.2).
+Done: the domain and application layer (1.1–1.6); the device side of offline durability (4.1,
+4.2, 4.4–4.7, 4.9–4.11); export and import (8.1, 8.2); the initial schema migration with its
+static authorization checks (2.1, 2.2, 2.4); the credential policy that needs no credential
+(2.7, 3.5); the device's own identity (3.6); and the web experience that does not need a
+server (5.1, 5.2, 5.4–5.6, 5.8).
 
-Not done, and not claimed: there is no server, so nothing has ever synced and no plan can
-reach a device except in a test that seeds one. There is no authentication, so nothing claims
-the device's data yet (3.7) and the authentication flush trigger is a method nothing calls.
-Logging a set, the rest timer, RIR entry, and the sync states are still only design-system
-stories, not reachable product behaviour (5.4–5.9). There is no serving MCP endpoint, and no
-proposal review (section 7). The schema has never been applied to a database.
+Not done, and not claimed: there is no server, so nothing has ever synced, no plan can reach a
+device except in a test that seeds one, and the sync state the product can show is always "on
+device". There is no authentication, so nothing claims the device's data (3.7) and the
+authentication flush trigger is a method nothing calls. Discarding a session exists as a
+confirmed use case with no screen offering it (5.3). Unilateral entry has no control, because
+the design system has not decided one (5.9). There is no serving MCP endpoint (section 6) and
+no proposal review (section 7). The schema has never been applied to a database.
 
 Serves: D-003, D-004, D-011, D-012, D-015, D-016, D-017, D-018, D-019, D-020, D-021, D-022,
 D-023, D-024, R-003, R-008, R-009, R-010, R-013, R-014, R-020, R-021.

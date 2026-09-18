@@ -298,3 +298,30 @@ test.describe('diagnostics', () => {
     ).toBeVisible();
   });
 });
+
+test('@a11y the live set view fits a 375 by 667 phone with no sideways scrolling', async ({
+  page,
+}) => {
+  // Task 5.5, against the real route rather than the lab: the current exercise, the target
+  // against the actual, the sync state, and the primary action all have to be reachable at
+  // the smallest phone this project supports.
+  await page.setViewportSize({ width: 375, height: 667 });
+  await openTodayWithPlan(page);
+  await page.getByRole('button', { name: 'Start workout' }).click();
+  await page.waitForURL('**/workout');
+  await expect(page.getByRole('heading', { name: 'back-squat' })).toBeVisible();
+
+  const overflow = await page.evaluate(() => ({
+    scrollWidth: document.documentElement.scrollWidth,
+    clientWidth: document.documentElement.clientWidth,
+  }));
+  expect(overflow.scrollWidth, 'the page scrolls sideways').toBeLessThanOrEqual(
+    overflow.clientWidth,
+  );
+
+  // All four things the spec names are on the page.
+  await expect(page.getByText('80 kg × 8')).toBeVisible();
+  await expect(page.getByText('On device')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Log set' })).toBeVisible();
+  await expect(page.getByRole('spinbutton', { name: 'Load' })).toBeVisible();
+});
