@@ -196,6 +196,12 @@ export async function finishWorkout(sessionId: string) {
   return completeWorkout(ports, { userId: await userId(), sessionId });
 }
 
+/** Diagnostics: how many changes are recorded here and not yet delivered (task 4.10). */
+export async function readQueueDepth(): Promise<number> {
+  const { ports, userId } = deviceOf();
+  return (await ports.store.outbox(await userId())).length;
+}
+
 /** Diagnostics: whether the browser will keep this data under storage pressure (task 4.10). */
 export function persistenceState() {
   return requestPersistentStorage(typeof navigator === 'undefined' ? undefined : navigator.storage);

@@ -251,3 +251,50 @@ test.describe('logging a set', () => {
     await reopened.close();
   });
 });
+
+test.describe('diagnostics', () => {
+  test('reports the persistent-storage answer, whatever it is', async ({ page }) => {
+    // Task 4.10. The spec requires the state to be surfaced rather than swallowed, so the
+    // test accepts any of the real answers and requires the page to explain the consequence.
+    await page.goto('/diagnostics');
+    await expect(page.getByRole('heading', { name: 'Storage' })).toBeVisible();
+    await expect(
+      page.getByText(/^Persistent storage: (granted|denied|unsupported|error)$/),
+    ).toBeVisible();
+    await expect(page.getByText(/evicted|will not be evicted/)).toBeVisible();
+  });
+
+  test('reports a denial rather than silently continuing', async ({ page }) => {
+    // The browser is made to refuse, which is the case the spec names.
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'storage', {
+        configurable: true,
+        value: {
+          persisted: () => Promise.resolve(false),
+          persist: () => Promise.resolve(false),
+          estimate: () => Promise.resolve({ usage: 0, quota: 0 }),
+        },
+      });
+    });
+    await page.goto('/diagnostics');
+    await expect(page.getByText('Persistent storage: denied')).toBeVisible();
+    await expect(page.getByText(/may be evicted under storage pressure/)).toBeVisible();
+  });
+
+  test('says nothing is waiting, and then how much is', async ({ page }) => {
+    await page.goto('/diagnostics');
+    await expect(page.getByText('Nothing is waiting to be delivered.')).toBeVisible();
+
+    await openTodayWithPlan(page);
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForURL('**/workout');
+    await page.getByRole('button', { name: 'Log set' }).click();
+    await expect(page.getByRole('cell', { name: '80 kilograms' })).toBeVisible();
+
+    await page.goto('/diagnostics');
+    // Starting the session and logging the set are two queued changes.
+    await expect(
+      page.getByText('2 changes recorded on this device and not yet delivered.'),
+    ).toBeVisible();
+  });
+});
