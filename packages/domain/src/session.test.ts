@@ -61,6 +61,8 @@ describe('starting a session', () => {
       planRevision: plan.revision,
       scheduledSessionId: 'session-mon',
       exerciseIds: ['back-squat', 'split-squat'],
+      // Snapshotted at start; none of these exercises permits combined load.
+      combinedLoadExercises: [],
       status: 'active',
       startedAt: STARTED_AT,
       sets: [],

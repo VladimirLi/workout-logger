@@ -27,7 +27,11 @@ const revisionSchema = z.number().int().positive();
 const calendarDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'not a YYYY-MM-DD date');
 
 const exercisePrescriptionSchema = z
-  .object({ exerciseId: z.string().min(1), prescription: measurementSchema })
+  .object({
+    exerciseId: z.string().min(1),
+    prescription: measurementSchema,
+    combinedLoadPermitted: z.boolean().optional(),
+  })
   .strict();
 
 const scheduledSessionSchema = z
@@ -77,6 +81,8 @@ const sessionBase = {
   planRevision: revisionSchema,
   scheduledSessionId: z.string().min(1),
   exerciseIds: z.array(z.string().min(1)),
+  /** The exercises that permitted combined load when the session started. */
+  combinedLoadExercises: z.array(z.string().min(1)),
   startedAt: instantSchema,
   sets: z.array(recordedSetSchema),
 };

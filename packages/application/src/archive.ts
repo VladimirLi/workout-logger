@@ -50,6 +50,9 @@ function planPayload(plan: Plan): ArchivePayload['plans'][number] {
       exercises: session.exercises.map((exercise) => ({
         exerciseId: exercise.exerciseId,
         prescription: exercise.prescription,
+        ...(exercise.combinedLoadPermitted === undefined
+          ? {}
+          : { combinedLoadPermitted: exercise.combinedLoadPermitted }),
       })),
     })),
     activatedAt: instant(plan.activatedAt),
@@ -66,6 +69,7 @@ function sessionPayload(session: WorkoutSession): ArchivePayload['sessions'][num
     planRevision: session.planRevision,
     scheduledSessionId: session.scheduledSessionId,
     exerciseIds: [...session.exerciseIds],
+    combinedLoadExercises: [...session.combinedLoadExercises],
     startedAt: instant(session.startedAt),
     sets: session.sets.map((set) => ({
       setId: set.setId,
@@ -204,7 +208,13 @@ function planFrom(payload: ArchivePayload['plans'][number]): Result<Plan, Archiv
     for (const exercise of scheduled.exercises) {
       const prescription = measurementFrom(exercise.prescription);
       if (!prescription.ok) return prescription;
-      exercises.push({ exerciseId: exercise.exerciseId, prescription: prescription.value });
+      exercises.push({
+        exerciseId: exercise.exerciseId,
+        prescription: prescription.value,
+        ...(exercise.combinedLoadPermitted === undefined
+          ? {}
+          : { combinedLoadPermitted: exercise.combinedLoadPermitted }),
+      });
     }
     sessions.push({ id: scheduled.id, scheduledFor: scheduled.scheduledFor, exercises });
   }
@@ -243,6 +253,7 @@ function sessionFrom(
     planRevision: payload.planRevision as Revision,
     scheduledSessionId: payload.scheduledSessionId,
     exerciseIds: payload.exerciseIds,
+    combinedLoadExercises: payload.combinedLoadExercises,
     startedAt: new Date(payload.startedAt),
     sets,
   };
