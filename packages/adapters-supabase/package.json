@@ -26,6 +26,7 @@
     "@workout/contracts": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "catalog:"
+    "@types/node": "catalog:",
+    "@workout/test-support": "workspace:*"
   }
 }
