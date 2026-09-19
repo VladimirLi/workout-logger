@@ -83,7 +83,9 @@ export function aProposalRow(
     user_id: userId,
     id,
     base_revision: baseRevision,
-    diff: { op: 'replace_plan', sessions: [] },
+    // A replacement the wire contract accepts: at least one session, because an empty plan is a
+    // deletion wearing a replacement's clothes (packages/contracts/src/plan-diff.ts).
+    diff: { op: 'replace_plan', sessions: [SCHEDULED_SESSION] },
     rationale: 'because',
     status: 'pending',
     created_at: at(-60),

@@ -340,6 +340,82 @@ describe('applying a mutation as the signed-in user', () => {
       },
       { schemaVersion: 1, profile: 'unilateral_strength', repetitions: 8, side: 'left' },
       'not-an-object',
+      // The rest of the contract packages/contracts validates on the wire, which the database
+      // walked past before storing the JSON: bounds per unit, closed key sets, notes, exertion
+      // and incline (ADR-0012, I-13).
+      { schemaVersion: 1, profile: 'strength', repetitions: 8, load: { unit: 'kg', value: 1001 } },
+      {
+        schemaVersion: 1,
+        profile: 'strength',
+        repetitions: 8,
+        load: { unit: 'kg', value: 80, estimated: true },
+      },
+      { schemaVersion: 1, profile: 'strength', repetitions: 8, notes: 'x'.repeat(2001) },
+      { schemaVersion: 1, profile: 'strength', repetitions: 8, notes: 12 },
+      { schemaVersion: 1, profile: 'strength', repetitions: 8, restSeconds: 90 },
+      { schemaVersion: 1, profile: 'strength', repetitions: 8, side: 'left' },
+      {
+        schemaVersion: 1,
+        profile: 'strength',
+        repetitions: 8,
+        exertion: { profile: 'cardio', borg: 12 },
+      },
+      {
+        schemaVersion: 1,
+        profile: 'strength',
+        repetitions: 8,
+        exertion: {
+          profile: 'strength',
+          rir: { kind: 'rir', value: 11 },
+          rpe: { kind: 'rpe_derived', value: 1 },
+        },
+      },
+      {
+        schemaVersion: 1,
+        profile: 'strength',
+        repetitions: 8,
+        exertion: {
+          profile: 'strength',
+          rir: { kind: 'rir', value: 2.25 },
+          rpe: { kind: 'rpe_derived', value: 8 },
+        },
+      },
+      {
+        // RPE is derived from RIR, so a record that disagrees asserts two different efforts.
+        schemaVersion: 1,
+        profile: 'strength',
+        repetitions: 8,
+        exertion: {
+          profile: 'strength',
+          rir: { kind: 'rir', value: 2 },
+          rpe: { kind: 'rpe_derived', value: 1 },
+        },
+      },
+      {
+        schemaVersion: 1,
+        profile: 'cardio',
+        duration: { unit: 's', value: 600 },
+        exertion: { profile: 'cardio', borg: 21 },
+      },
+      {
+        schemaVersion: 1,
+        profile: 'cardio',
+        duration: { unit: 's', value: 600 },
+        exertion: { profile: 'cardio', borg: 12.5 },
+      },
+      {
+        schemaVersion: 1,
+        profile: 'cardio',
+        duration: { unit: 's', value: 600 },
+        inclinePercent: 41,
+      },
+      {
+        schemaVersion: 1,
+        profile: 'cardio',
+        duration: { unit: 's', value: 600 },
+        inclinePercent: '10',
+      },
+      { schemaVersion: 1, profile: 'cardio', duration: { unit: 's', value: 86_401 } },
     ]) {
       const outcome = await callAsUser('apply_workout_mutation', {
         p_key: aKey(),
@@ -372,6 +448,35 @@ describe('applying a mutation as the signed-in user', () => {
         profile: 'cardio',
         duration: { unit: 's', value: 1200 },
         distance: { unit: 'm', value: 3000 },
+      },
+      // Every optional field of the contract, at the edges it permits.
+      {
+        schemaVersion: 1,
+        profile: 'strength',
+        repetitions: 8,
+        notes: 'x'.repeat(2000),
+        exertion: {
+          profile: 'strength',
+          rir: { kind: 'rir', value: 2.5 },
+          rpe: { kind: 'rpe_derived', value: 7.5 },
+        },
+      },
+      {
+        schemaVersion: 1,
+        profile: 'strength',
+        repetitions: 8,
+        exertion: {
+          profile: 'strength',
+          rir: { kind: 'rir', value: 9.5 },
+          rpe: { kind: 'rpe_derived', value: 1 },
+        },
+      },
+      {
+        schemaVersion: 1,
+        profile: 'cardio',
+        duration: { unit: 's', value: 600 },
+        inclinePercent: -20,
+        exertion: { profile: 'cardio', borg: 6 },
       },
     ];
     for (const [index, measurement] of valid.entries()) {
