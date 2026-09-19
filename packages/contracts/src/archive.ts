@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { measurementSchema } from './measurement.js';
+import { calendarDateSchema, isoTimestamp, revisionSchema } from './primitives.js';
 
 /**
  * The full-export document (data-portability spec, tasks 8.1 and 8.2).
@@ -16,15 +17,20 @@ import { measurementSchema } from './measurement.js';
 
 export const ARCHIVE_SCHEMA_VERSION = 1;
 
-/** An instant, as an ISO-8601 string with an offset. */
-const instantSchema = z.string().refine((value) => !Number.isNaN(Date.parse(value)), {
-  message: 'not an ISO-8601 instant',
-});
-
-const revisionSchema = z.number().int().positive();
-
-/** A calendar date with no time and no zone: the day a session is scheduled for. */
-const calendarDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'not a YYYY-MM-DD date');
+/**
+ * The archive reuses the primitives every other contract uses.
+ *
+ * It used to declare its own: an instant was "any string `Date.parse` accepts", which is not the
+ * ISO-8601 instant with an offset its own comment promised - `Date.parse` takes a bare date, a
+ * space-separated timestamp and `Sep 18 2026`, and reads a time with no offset in whatever zone
+ * the machine is in, so a session moves by hours between the device that exported it and the one
+ * that imported it. A date was a bare `YYYY-MM-DD` shape, which accepts 2026-02-30 and turns it
+ * into 2 March rather than refusing it.
+ *
+ * An archive is a file a person can hold and edit, so it is the least trusted input the product
+ * has. A second, weaker copy of a rule is exactly where that shows up.
+ */
+const instantSchema = isoTimestamp;
 
 const exercisePrescriptionSchema = z
   .object({

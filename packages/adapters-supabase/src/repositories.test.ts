@@ -290,6 +290,17 @@ describe('the Supabase proposal store', () => {
     ['a creation time that is not a time', { created_at: 'the other day' }],
     ['an expiry that is not a time', { expires_at: 'never' }],
     ['a decision time that is not a time', { decided_at: 'yesterday' }],
+    // `new Date` accepts all of these and interprets the ones without an offset in whatever
+    // zone the machine is in, so a proposal's lifetime moves by hours between two readers. The
+    // contract requires an ISO-8601 instant with an explicit offset
+    // (packages/contracts/src/primitives.ts).
+    ['a creation date with no time', { created_at: '2026-09-18' }],
+    ['a space-separated creation time', { created_at: '2026-09-18 00:00:00+00' }],
+    ['a creation time with no offset', { created_at: '2026-09-18T00:00:00' }],
+    ['a written-out creation date', { created_at: 'Sep 18 2026' }],
+    ['an expiry with no offset', { expires_at: '2026-09-19T00:00:00' }],
+    ['an expiry date with no time', { expires_at: '2026-09-19' }],
+    ['a decision time with no offset', { decided_at: '2026-09-18T12:00:00' }],
     ['an actor field that is not a string', { actor_client_id: 42 }],
   ])('refuses %s, rather than handing it to the domain', async (_label, overrides) => {
     // A row is untrusted input like any response (ADR-0012). Casting one into the domain's
@@ -299,6 +310,18 @@ describe('the Supabase proposal store', () => {
     await expect(
       new SupabaseProposalStore(server, USER).findById('user-1', 'prop-1'),
     ).rejects.toThrow(/proposals row/);
+  });
+
+  it.each([
+    ['the offset the product writes', '2026-09-18T00:00:00.000Z'],
+    ['the offset a database returns', '2026-09-18T00:00:00.872+00:00'],
+    ['microsecond precision, which Postgres uses', '2026-09-18T00:00:00.932021+00:00'],
+    ['a zone that is not UTC', '2026-09-18T02:00:00+02:00'],
+  ])('accepts %s', async (_label, created_at) => {
+    // The control: the formats a real row actually carries must still read.
+    stubFetch({ status: 200, body: JSON.stringify([aRow({ created_at })]) });
+    const proposal = await new SupabaseProposalStore(server, USER).findById('user-1', 'prop-1');
+    expect(proposal?.createdAt.toISOString()).toBe(new Date(created_at).toISOString());
   });
 
   it('refuses a body that is not a list of rows', async () => {
