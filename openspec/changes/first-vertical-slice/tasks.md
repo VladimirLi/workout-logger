@@ -62,9 +62,13 @@
       had left `authenticated` with ALL on every table, so a caller could rebase a stale
       proposal, decide one by writing its status, delete an idempotency record to replay a
       mutation, reopen a completed session or edit a correction. All six were reproduced first
-      and are now refused by migration 20260919110000. Both scripts run against the development
-      project, 2026-09-19; neither runs in CI until repository secrets exist, which is G-2's
-      remaining half)
+      and are now refused. Revoking by name left `TRIGGER` and `MAINTAIN` behind, which the
+      deployed schema confirmed, so 20260919140000 revokes ALL PRIVILEGES and grants back only
+      SELECT; `node scripts/check-db-boundary.mjs` reads the deployed schema back and asserts the
+      exact privilege set per role, the function owners and the pinned `search_path`, and
+      deployed-boundary.provider.ts runs it as part of the provider suite. All of it runs against
+      the development project, 2026-09-19; none of it runs in CI until repository secrets exist,
+      which is G-2's remaining half)
 - [x] 2.4 Index every column used by a row-level security predicate, and verify the
       migration gate reports none missing (`pnpm test:migrations`: every column a policy
       compares must be the LEADING column of an index; `user_id` leads every primary key, so
@@ -72,19 +76,27 @@
 - [x] 2.5 Implement the Supabase adapters and verify they pass the existing port
       contract suites unchanged (`pnpm test:provider`: proposal-store.provider.ts runs the 19
       ProposalStore contract cases the in-memory reference runs, against the development
-      database, compare-and-set cases included. The suite's assertions are unchanged; the
-      harness supplies what a database needs and an object in memory does not — two identities
-      keyed by uuids that exist in auth.users, an active plan row, an expiry that has not
-      passed, and a signed-in token, because the store acts as a user and not as the service
-      role. Built on fetch, so no dependency was added)
+      database, compare-and-set cases included. The port's compare-and-set is carried to the
+      server rather than evaluated here: the expected status and revision are sent, the server
+      compares both with rows it locks, and a mismatch reports the server's value — accepting and
+      rejecting are separate functions so that a rejection cannot read the plan at all. The
+      suite's assertions are unchanged; the harness supplies what a database needs and an object
+      in memory does not — two identities keyed by uuids that exist in auth.users, an active plan
+      row, an expiry relative to the run, and a signed-in token, because the store acts as a user
+      and not as the service role. Built on fetch, so no dependency was added)
 - [x] 2.6 Implement the server-side idempotency record committed in the same
       transaction as the mutation, and verify replay returns the original result with no
       duplicate row (`pnpm test:provider`: workout-transport.provider.ts — one database
       function claims the key and applies the mutation together; a replay applies nothing and
       returns the original result; and a mutation that fails takes the claimed key with it, so
       the change can still be delivered. Sent as a signed-in user, with the fingerprint derived
-      from the stored payload rather than supplied by the caller. Every assertion reads the rows
-      back)
+      from the stored payload rather than supplied by the caller. authenticated-rpc.provider.ts
+      checks the mutation contract itself, one case per invariant in ADR-0012's matrix: the
+      session's plan facts are derived from the locked plan rather than taken from the payload, a
+      set must name a prescribed exercise and cannot predate its session, its sequence is counted
+      server-side, a session cannot complete before it started, and validation reads JSON types
+      so that a missing field or `"8"` for a repetition count is refused rather than coerced.
+      Every assertion reads the rows back)
 - [x] 2.7 Verify the built client bundle contains no service-role credential
       (`pnpm test:secrets`: scripts/bundle-secrets.mjs scans apps/web/.next after the build and
       fails when there is no bundle rather than reporting a clean one; `pnpm test`:
