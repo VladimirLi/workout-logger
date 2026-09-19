@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { serverConfig } from './config.js';
 import { rpc, select, upsert } from './rest.js';
+import { A_MEASUREMENT, aPlanRow, at, EXERCISE, SCHEDULED_SESSION_ID } from './test-fixtures.js';
 import { signInDevelopmentUser } from './test-identity.js';
 import { SupabaseWorkoutTransport } from './workout-transport.js';
 
@@ -44,30 +45,21 @@ async function reset(): Promise<void> {
       headers: admin,
     });
   }
-  await upsert(rest, 'plans', [
-    {
-      user_id: userId,
-      id: 'plan-transport',
-      revision: 1,
-      status: 'active',
-      activated_at: '2026-09-18T00:00:00Z',
-      sessions: [],
-    },
-  ]);
+  await upsert(rest, 'plans', [aPlanRow(userId, { id: 'plan-transport', revision: 1 })]);
 }
 
+/**
+ * What a device delivers: which plan, which scheduled session, when it started. The revision,
+ * the prescribed exercises and the combined-load permission are the plan's, derived by the
+ * server (ADR-0012, I-14).
+ */
 const startSession = (id: string) => ({
   kind: 'start_session',
   session: {
     id,
     planId: 'plan-transport',
-    planRevision: 1,
-    scheduledSessionId: 'session-mon',
-    exerciseIds: ['back-squat'],
-    combinedLoadExercises: [],
-    startedAt: '2026-09-18T10:00:00Z',
-    status: 'active',
-    sets: [],
+    scheduledSessionId: SCHEDULED_SESSION_ID,
+    startedAt: at(-30),
   },
 });
 
@@ -146,7 +138,7 @@ describe('delivering a mutation to the server', () => {
       mutation: {
         kind: 'complete_session',
         sessionId: 'nonexistent',
-        completedAt: '2026-09-18T11:00:00Z',
+        completedAt: at(-5),
       },
     });
     expect(outcome.kind === 'response' && outcome.status).toBeGreaterThanOrEqual(400);
@@ -166,10 +158,9 @@ describe('delivering a mutation to the server', () => {
         sessionId: 'workout-1',
         set: {
           setId: 'set-1',
-          exerciseId: 'back-squat',
-          sequence: 1,
-          measurement: { schemaVersion: 1, profile: 'strength', repetitions: 8 },
-          recordedAt: '2026-09-18T10:05:00Z',
+          exerciseId: EXERCISE.perSide,
+          measurement: A_MEASUREMENT,
+          recordedAt: at(-20),
         },
       },
     });
@@ -178,7 +169,7 @@ describe('delivering a mutation to the server', () => {
       mutation: {
         kind: 'complete_session',
         sessionId: 'workout-1',
-        completedAt: '2026-09-18T11:00:00Z',
+        completedAt: at(-5),
       },
     });
 

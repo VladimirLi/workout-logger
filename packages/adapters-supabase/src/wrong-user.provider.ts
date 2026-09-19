@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { serverConfig } from './config.js';
 import { upsert } from './rest.js';
+import { aPlanRow, aProposalRow, at } from './test-fixtures.js';
 import { type DevelopmentIdentity, signInDevelopmentUser } from './test-identity.js';
 
 /**
@@ -54,7 +55,6 @@ let owner: DevelopmentIdentity;
 let intruder: DevelopmentIdentity;
 
 const OWNER_KEY = '44444444-4444-4444-8444-444444444444';
-const FUTURE = new Date(Date.now() + 3_600_000).toISOString();
 
 /**
  * One exposed relation, with everything the checks need: a row that is really the owner's, the
@@ -75,14 +75,7 @@ function relationsFor(userId: string): Relation[] {
   return [
     {
       table: 'plans',
-      row: {
-        user_id: userId,
-        id: 'plan-rls',
-        revision: 1,
-        status: 'active',
-        activated_at: '2026-09-18T00:00:00Z',
-        sessions: [],
-      },
+      row: aPlanRow(userId, { id: 'plan-rls', revision: 1 }),
       filter: 'id=eq.plan-rls',
       patch: { revision: 99 },
       watched: 'revision',
@@ -97,7 +90,7 @@ function relationsFor(userId: string): Relation[] {
         scheduled_session_id: 'session-mon',
         exercise_ids: ['back-squat'],
         combined_load_exercises: [],
-        started_at: '2026-09-18T10:00:00Z',
+        started_at: at(-60),
         status: 'active',
       },
       filter: 'id=eq.session-rls',
@@ -113,7 +106,7 @@ function relationsFor(userId: string): Relation[] {
         sequence: 1,
         exercise_id: 'back-squat',
         measurement: { schemaVersion: 1, profile: 'strength', repetitions: 8 },
-        recorded_at: '2026-09-18T10:05:00Z',
+        recorded_at: at(-50),
       },
       filter: 'set_id=eq.set-rls',
       patch: { exercise_id: 'front-squat' },
@@ -130,7 +123,7 @@ function relationsFor(userId: string): Relation[] {
         corrected: { repetitions: 9 },
         actor_kind: 'user',
         actor_id: userId,
-        corrected_at: '2026-09-18T12:00:00Z',
+        corrected_at: at(-40),
       },
       filter: 'session_id=eq.session-rls&revision=eq.1',
       patch: { actor_kind: 'agent' },
@@ -138,20 +131,13 @@ function relationsFor(userId: string): Relation[] {
     },
     {
       table: 'proposals',
-      row: {
-        user_id: userId,
+      row: aProposalRow(userId, {
         id: 'prop-rls',
-        base_revision: 1,
-        diff: { op: 'replace_plan', sessions: [] },
-        rationale: 'because',
-        status: 'pending',
-        created_at: '2026-09-18T00:00:00Z',
-        decided_at: null,
+        baseRevision: 1,
         actor_client_id: 'client-rls',
         actor_agent_id: 'agent-rls',
         input_hash: 'hash-rls',
-        expires_at: FUTURE,
-      },
+      }),
       filter: 'id=eq.prop-rls',
       patch: { rationale: 'tampered' },
       watched: 'rationale',
@@ -370,10 +356,11 @@ describe('a signed-in user and another user’s rows', () => {
   });
 
   it('cannot decide another user’s proposal through the database function', async () => {
-    for (const decision of ['accept', 'reject']) {
-      const { body } = await callRpc(intruder, 'decide_proposal', {
+    for (const name of ['accept_proposal', 'reject_proposal']) {
+      const { body } = await callRpc(intruder, name, {
         p_proposal_id: 'prop-rls',
-        p_decision: decision,
+        p_expected_status: 'pending',
+        ...(name === 'accept_proposal' ? { p_expected_revision: 1 } : {}),
       });
       // The function looks the proposal up under the caller's own identity. The intruder has a
       // proposal of that id, so this decides theirs; the owner's must be untouched.
@@ -418,7 +405,7 @@ describe('a signed-in user and another user’s rows', () => {
           exerciseId: 'back-squat',
           sequence: 7,
           measurement: { schemaVersion: 1, profile: 'strength', repetitions: 8 },
-          recordedAt: '2026-09-18T10:07:00Z',
+          recordedAt: at(-10),
         },
       },
     });
@@ -440,7 +427,7 @@ describe('a signed-in user and another user’s rows', () => {
       p_mutation: {
         kind: 'complete_session',
         sessionId: 'session-rls',
-        completedAt: '2026-09-18T11:00:00Z',
+        completedAt: at(-5),
       },
     });
     expect(
