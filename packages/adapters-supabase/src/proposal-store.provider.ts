@@ -4,6 +4,7 @@ import { beforeAll, describe, it } from 'vitest';
 import { serverConfig } from './config.js';
 import { SupabaseProposalStore } from './repositories.js';
 import { upsert } from './rest.js';
+import { at } from './test-fixtures.js';
 import { signInDevelopmentUser } from './test-identity.js';
 
 /**
@@ -106,7 +107,7 @@ async function harness(): Promise<ContractHarness> {
           id: 'plan-contract',
           revision,
           status: 'active',
-          activated_at: new Date('2026-09-18T00:00:00Z').toISOString(),
+          activated_at: at(-24 * 60),
           sessions: [],
         },
       ]);
@@ -123,11 +124,11 @@ async function harness(): Promise<ContractHarness> {
           actor_client_id: proposal.actor.clientId,
           actor_agent_id: proposal.actor.actorId,
           input_hash: proposal.inputHash,
-          // The contract does not model expiry, so its proposals carry a fixed date that is
-          // long past. The database does model it (the domain refuses to decide an expired
-          // proposal at all), so a case about revisions gets a live one. Expiry itself is
-          // checked against the real function in authenticated-rpc.provider.ts.
-          expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+          // The contract does not model expiry, so its proposals carry a written-down date that
+          // is long past by now. The database does model it - the domain refuses to decide an
+          // expired proposal at all - so a case about revisions gets an expiry relative to this
+          // run instead. Expiry itself is checked in authenticated-rpc.provider.ts.
+          expires_at: at(24 * 60),
         },
       ]);
     },
