@@ -29,3 +29,4 @@ never edited to change its decision — it is superseded by a new one.
 | [0009](0009-platform-repository-and-relying-party-decisions.md) | Platform, repository, and relying-party decisions | Accepted |
 | [0010](0010-storybook-is-the-only-design-system-lab.md) | Storybook is the only design-system lab | Accepted |
 | [0011](0011-supabase-development-project.md) | Supabase is suitable, and a development project exists | Accepted |
+| [0012](0012-one-trusted-write-boundary.md) | One trusted write boundary, and one matrix of invariants | Accepted |

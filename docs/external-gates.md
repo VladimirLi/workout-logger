@@ -52,14 +52,21 @@ decision is deferred, and the Pro requirement below still applies to production.
 and is unsuitable for production. RLS and explicit grants on every exposed table or view.
 Service-role credentials server-side only.
 
-**What ships now.** `packages/adapters-supabase` is a port-implementing skeleton with no
-credentials. `.env.example` lists required variable names with empty values.
+**What ships now.** `packages/adapters-supabase` implements the proposal store and the workout
+transport against a real development project, on `fetch` with no added dependency.
+`.env.example` lists required variable names with empty values; the values live in a gitignored
+`.env.local`.
 
-**Unverified boundary.** No connection has been made. No RLS policy has been executed or
-tested. Deny-by-default proofs cannot run without a project.
+**Verified against a development project, not against production.** Migrations apply, and the
+policies and privileges have been executed rather than reasoned about: the anonymous half of
+deny-by-default (`scripts/check-rls.mjs`), the wrong-user half with two signed-in identities
+(`pnpm test:provider`), and the deployed privileges, function owners and pinned `search_path`
+(`node scripts/check-db-boundary.mjs`). Nothing here has run against production, which does not
+exist.
 
 **Done when.** A Pro project exists, migrations apply, and the adapter contract suite plus
-the RLS deny-by-default suite pass against it in CI with repository secrets.
+the deny-by-default suites pass against it in CI with repository secrets. The suites exist and
+pass locally; CI cannot run them until repository secrets exist, which is what remains.
 
 **Blocking check before relying on it.** Confirm no blocking requirement has emerged that
 makes Supabase unsuitable (D-025). Record the outcome in an ADR.
@@ -70,6 +77,14 @@ exposed tables with an owner policy each, every anonymous read and write is refu
 `search_path`. One finding recorded for production: Supabase's default privileges grant future
 tables in `public` to anon, so deny-by-default there rests on RLS rather than on grants.
 
+Corrected on 2026-09-19: that finding was understated. The same default privileges grant ALL to
+`authenticated`, which is the role a browser holds, and the migration gate only asked for a
+revocation from `PUBLIC` and `anon` - so every signed-in user could write all six tables
+directly, past the functions that own those writes. Closed by migration 20260919140000
+(`REVOKE ALL PRIVILEGES`, then `GRANT SELECT`), by a gate that replays every privilege statement
+from that default and fails unless the final state is exactly SELECT, and by a check that reads
+the deployed schema back. See ADR-0012.
+
 **Development project, 2026-09-18.** Vladimir authorised one Supabase **Free** project for
 development only: `workout-logger-dev`, ref `vrhukqvrnlejvmpefmxl`, `eu-west-1`,
 `ACTIVE_HEALTHY`, Postgres 17.6.1, linked by Supabase CLI 2.117.0. The committed migration is
@@ -77,9 +92,11 @@ applied and verified by read-back. Credentials live in a gitignored `.env.local`
 been printed. Not authorised, and not done: production resources, any paid upgrade, production
 data, DNS, passkey enrollment, and any deployment.
 
-**Still open for this gate.** The Pro project, CI secrets, and therefore the adapter contract
-suite and the wrong-user denial suite running in CI. The anonymous half of deny-by-default is
-proved; the wrong-user half needs two signed-in identities, which needs authentication.
+**Still open for this gate.** The Pro project, CI secrets, and therefore the provider suites
+running in CI. Both halves of deny-by-default are proved locally against the development
+project: the anonymous half by `scripts/check-rls.mjs`, and the wrong-user half by
+`wrong-user.provider.ts`, which signs two development identities in through the same
+verification exchange the product's email code flow will use.
 
 ---
 

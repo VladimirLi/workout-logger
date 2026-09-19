@@ -3,7 +3,7 @@
 **Status:** Accepted
 **Date:** 2026-09-18
 **Discovery:** D-025, D-026, R-011, R-013, R-015, R-020
-**Relates to:** [0005](0005-supabase-behind-adapters.md), [0009](0009-platform-repository-and-relying-party-decisions.md)
+**Relates to:** [0005](0005-supabase-behind-adapters.md), [0009](0009-platform-repository-and-relying-party-decisions.md), [0012](0012-one-trusted-write-boundary.md)
 
 ## Context
 
@@ -56,12 +56,17 @@ for any signed-in user, bounded by row-level security but not by the functions t
 writes; a provider test proved it by rebasing a stored proposal as a signed-in user, which makes
 a stale proposal acceptable (review of d535b3f..cc91a55, 2026-09-19).
 
-Corrected on 2026-09-19: migration 20260919110000 revokes every write privilege on all six
-tables from `PUBLIC`, `anon` and `authenticated` and grants back only SELECT, so a change
-reaches the database only through a `SECURITY DEFINER` function. The gate now requires that
-revocation for every table it sees created, checked across the whole migration set rather than
-per file, because an applied migration is not rewritten. This still covers only what this
-repository creates.
+Corrected on 2026-09-19 in two steps, because the first one was not enough. Migration
+20260919110000 revoked the write privileges by name, which left `TRIGGER` and, on Postgres 17,
+`MAINTAIN` - the deployed schema read back as `GRANT SELECT,TRIGGER,MAINTAIN ... TO
+authenticated`. Migration 20260919140000 revokes ALL PRIVILEGES and grants back only SELECT.
+
+The gate no longer asks whether a revocation exists. It replays every `GRANT` and `REVOKE` in
+migration order, starting from the ALL that default privileges give, and fails unless the final
+state is exactly SELECT for `authenticated` and nothing for `anon` - which also catches a later
+migration granting a write back. `scripts/check-db-boundary.mjs` then reads the deployed schema
+and asserts the same thing about the database rather than about the SQL. ADR-0012 states the
+trust model these enforce. This still covers only what this repository creates.
 
 **Recommendation, deliberately not acted on here:** revoke those default privileges on the
 production project before it holds data. It is a change to platform behaviour with
