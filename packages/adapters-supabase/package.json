@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "license": "UNLICENSED",
-  "description": "Supabase implementations of application ports. Skeleton only; no credentials, no live client.",
+  "description": "Supabase implementations of application ports, over fetch. Proved against a development project; credentials come from the environment and are never stored here.",
   "exports": {
     ".": {
       "source": "./src/index.ts",

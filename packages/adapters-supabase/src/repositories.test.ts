@@ -26,6 +26,44 @@ if (!config.ok) throw new Error('the test configuration should be valid');
 const server = config.value;
 const USER = { id: 'user-1', accessToken: 'a-user-access-token' } as const;
 
+/**
+ * A plan diff the wire contract accepts. `replace_plan` requires at least one session, so an
+ * empty one is not a diff a stored row could have come from.
+ */
+const A_DIFF = {
+  op: 'replace_plan',
+  sessions: [
+    {
+      id: 'session-mon',
+      scheduledFor: '2026-09-21',
+      exercises: [
+        {
+          exerciseId: 'split-squat',
+          prescription: { schemaVersion: 1, profile: 'strength', repetitions: 8 },
+        },
+      ],
+    },
+  ],
+} as const;
+
+/** A proposals row as PostgREST returns one. */
+function aRow(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    id: 'prop-1',
+    base_revision: 5,
+    diff: A_DIFF,
+    rationale: 'because',
+    status: 'pending',
+    created_at: '2026-09-18T00:00:00Z',
+    decided_at: null,
+    actor_client_id: 'client-1',
+    actor_agent_id: 'agent-1',
+    input_hash: 'sha256:0000000000000000000000000000000000000000000000000000000000000000',
+    expires_at: '2026-09-19T00:00:00Z',
+    ...overrides,
+  };
+}
+
 /** A decision request as the use case makes one: an acceptance against revision 5. */
 function aCommit(
   overrides: { status?: 'accepted' | 'rejected'; advanceRevision?: boolean } = {},
@@ -37,7 +75,7 @@ function aCommit(
       id: 'prop-1',
       actor: { clientId: 'c', actorId: 'a' },
       baseRevision: 5 as Revision,
-      diff: { op: 'replace_plan', sessions: [] },
+      diff: A_DIFF,
       rationale: 'because',
       inputHash: 'hash',
       createdAt: new Date('2026-09-18T00:00:00Z'),
@@ -226,6 +264,60 @@ describe('the Supabase proposal store', () => {
     await expect(
       new SupabaseProposalStore(server, USER).findById('user-1', 'prop-1'),
     ).rejects.toBeInstanceOf(PostgrestError);
+  });
+
+  it('round-trips a row the contract accepts', async () => {
+    stubFetch({ status: 200, body: JSON.stringify([aRow()]) });
+    const proposal = await new SupabaseProposalStore(server, USER).findById('user-1', 'prop-1');
+
+    expect(proposal?.id).toBe('prop-1');
+    expect(proposal?.baseRevision).toBe(5);
+    expect(proposal?.status).toBe('pending');
+    expect(proposal?.diff).toEqual(A_DIFF);
+    expect(proposal?.createdAt.toISOString()).toBe('2026-09-18T00:00:00.000Z');
+  });
+
+  it.each([
+    ['a status the domain does not define', { status: 'half_accepted' }],
+    ['a revision that is not a positive whole number', { base_revision: 0 }],
+    ['a revision that arrived as a string', { base_revision: '5' }],
+    ['a revision that is fractional', { base_revision: 5.5 }],
+    ['a diff whose operation is unknown', { diff: { op: 'rewrite_history' } }],
+    ['a diff that is not an object', { diff: 'replace_plan' }],
+    ['no id', { id: undefined }],
+    ['an id that is not a string', { id: 7 }],
+    ['a rationale that is not a string', { rationale: null }],
+    ['a creation time that is not a time', { created_at: 'the other day' }],
+    ['an expiry that is not a time', { expires_at: 'never' }],
+    ['a decision time that is not a time', { decided_at: 'yesterday' }],
+    ['an actor field that is not a string', { actor_client_id: 42 }],
+  ])('refuses %s, rather than handing it to the domain', async (_label, overrides) => {
+    // A row is untrusted input like any response (ADR-0012). Casting one into the domain's
+    // types moves the failure to wherever the value is finally used, with no clue where it
+    // came from - and a status outside the vocabulary has no rule anywhere to catch it.
+    stubFetch({ status: 200, body: JSON.stringify([aRow(overrides)]) });
+    await expect(
+      new SupabaseProposalStore(server, USER).findById('user-1', 'prop-1'),
+    ).rejects.toThrow(/proposals row/);
+  });
+
+  it('refuses a body that is not a list of rows', async () => {
+    stubFetch({ status: 200, body: '{"id":"prop-1"}' });
+    await expect(
+      new SupabaseProposalStore(server, USER).findById('user-1', 'prop-1'),
+    ).rejects.toThrow(/list of rows/);
+  });
+
+  it.each([
+    ['a string', '[{"revision":"7"}]'],
+    ['zero', '[{"revision":0}]'],
+    ['fractional', '[{"revision":7.5}]'],
+    ['absent', '[{}]'],
+  ])('refuses a plan revision that is %s', async (_label, body) => {
+    stubFetch({ status: 200, body });
+    await expect(new SupabaseProposalStore(server, USER).currentRevision('user-1')).rejects.toThrow(
+      /revision/,
+    );
   });
 
   it('still carries its configuration, so wiring can be checked without a database', () => {
