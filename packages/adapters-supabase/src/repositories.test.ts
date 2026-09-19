@@ -22,6 +22,7 @@ const config = serverConfig({
 });
 if (!config.ok) throw new Error('the test configuration should be valid');
 const server = config.value;
+const USER = { id: 'user-1', accessToken: 'a-user-access-token' } as const;
 
 interface Call {
   url: string;
@@ -58,7 +59,7 @@ describe('the Supabase proposal store', () => {
     // Row-level security filters too, but the server acts with a role that bypasses it. The
     // explicit filter is what stops a bug from reaching another user's rows.
     const calls = stubFetch({ status: 200, body: '[]' });
-    await new SupabaseProposalStore(server).findById('user-1', 'prop-1');
+    await new SupabaseProposalStore(server, USER).findById('user-1', 'prop-1');
 
     expect(calls).toHaveLength(1);
     expect(calls[0]?.url).toContain('user_id=eq.user-1');
@@ -67,19 +68,23 @@ describe('the Supabase proposal store', () => {
 
   it('never puts a credential in the URL', async () => {
     const calls = stubFetch({ status: 200, body: '[]' });
-    await new SupabaseProposalStore(server).findById('user-1', 'prop-1');
+    await new SupabaseProposalStore(server, USER).findById('user-1', 'prop-1');
 
     expect(calls[0]?.url).not.toContain('service-role-key-for-tests');
     expect(calls[0]?.url).not.toContain('anon-key-for-tests');
+    expect(calls[0]?.url).not.toContain('a-user-access-token');
     // It travels in headers, where a log or a referrer will not carry it.
-    expect(calls[0]?.headers['apikey']).toBe('service-role-key-for-tests');
+    // The anonymous key plus the user's token, exactly as a browser sends them. The
+    // service-role key never leaves the server, so the adapter does not carry it.
+    expect(calls[0]?.headers['apikey']).toBe('anon-key-for-tests');
+    expect(calls[0]?.headers['Authorization']).toBe('Bearer a-user-access-token');
   });
 
   it('commits a decision through the database function, with the expected state', async () => {
     // The compare-and-set cannot be a read then a write from here, so the adapter must call
     // the function that does both in one transaction.
     const calls = stubFetch({ status: 200, body: '{"kind":"committed","revision":6}' });
-    const store = new SupabaseProposalStore(server);
+    const store = new SupabaseProposalStore(server, USER);
     const outcome = await store.commitDecision({
       userId: 'user-1',
       proposal: {
@@ -98,17 +103,18 @@ describe('the Supabase proposal store', () => {
       advanceRevision: true,
     });
 
-    expect(calls[0]?.url).toContain('/rpc/commit_proposal_decision');
+    expect(calls[0]?.url).toContain('/rpc/decide_proposal');
     const sent = JSON.parse(calls[0]?.body ?? '{}') as Record<string, unknown>;
-    expect(sent['p_expected_revision']).toBe(5);
-    expect(sent['p_expected_status']).toBe('pending');
-    expect(sent['p_advance_revision']).toBe(true);
+    // Only the intent. The revision, the status, the time and whether the plan advances are
+    // the server's to decide from rows it holds; sending them is offering a caller the chance
+    // to be wrong about its own decision.
+    expect(sent).toEqual({ p_proposal_id: 'prop-1', p_decision: 'accept' });
     expect(outcome).toEqual({ kind: 'committed', revision: 6 });
   });
 
   it('reports a moved revision as the port describes it', async () => {
     stubFetch({ status: 200, body: '{"kind":"revision_changed","currentRevision":9}' });
-    const outcome = await new SupabaseProposalStore(server).commitDecision({
+    const outcome = await new SupabaseProposalStore(server, USER).commitDecision({
       userId: 'user-1',
       proposal: {
         id: 'prop-1',
@@ -130,12 +136,26 @@ describe('the Supabase proposal store', () => {
 
   it('marks stale through the status-only function, never touching the revision', async () => {
     const calls = stubFetch({ status: 200, body: '"marked"' });
-    const outcome = await new SupabaseProposalStore(server).markStaleIfPending('user-1', 'prop-1');
+    const outcome = await new SupabaseProposalStore(server, USER).markStaleIfPending(
+      'user-1',
+      'prop-1',
+    );
 
     expect(calls[0]?.url).toContain('/rpc/mark_proposal_stale_if_pending');
     const sent = JSON.parse(calls[0]?.body ?? '{}') as Record<string, unknown>;
-    expect(Object.keys(sent)).not.toContain('p_expected_revision');
+    expect(sent).toEqual({ p_proposal_id: 'prop-1' });
     expect(outcome).toBe('marked');
+  });
+
+  it('makes no request at all when asked to act for a different user', async () => {
+    // The functions take their identity from the token, so a call naming someone else cannot
+    // be carried out. Without this it would be carried out against this user's own rows.
+    const calls = stubFetch({ status: 200, body: '"marked"' });
+    const store = new SupabaseProposalStore(server, USER);
+
+    expect(await store.markStaleIfPending('user-2', 'prop-1')).toBe('not_found');
+    expect(await store.rejectIfPending('user-2', 'prop-1')).toEqual({ kind: 'not_found' });
+    expect(calls).toHaveLength(0);
   });
 
   it('keeps the server’s message when a request fails', async () => {
@@ -144,15 +164,15 @@ describe('the Supabase proposal store', () => {
       status: 400,
       body: '{"message":"column proposals.nope does not exist","details":"line 1"}',
     });
-    await expect(new SupabaseProposalStore(server).findById('user-1', 'prop-1')).rejects.toThrow(
-      /column proposals.nope does not exist \(line 1\)/,
-    );
     await expect(
-      new SupabaseProposalStore(server).findById('user-1', 'prop-1'),
+      new SupabaseProposalStore(server, USER).findById('user-1', 'prop-1'),
+    ).rejects.toThrow(/column proposals.nope does not exist \(line 1\)/);
+    await expect(
+      new SupabaseProposalStore(server, USER).findById('user-1', 'prop-1'),
     ).rejects.toBeInstanceOf(PostgrestError);
   });
 
   it('still carries its configuration, so wiring can be checked without a database', () => {
-    expect(new SupabaseProposalStore(server).projectUrl).toBe('https://example.supabase.co');
+    expect(new SupabaseProposalStore(server, USER).projectUrl).toBe('https://example.supabase.co');
   });
 });
