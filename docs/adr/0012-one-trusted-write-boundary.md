@@ -7,14 +7,17 @@
 
 ## Context
 
-Two review cycles found the same shape of defect in different places: something the server was
-supposed to know it instead took from the caller. First the expected revision, the target status,
+Three review cycles found the same shape of defect in different places: something the server was
+supposed to know it instead took from the caller, or something a check was supposed to see it
+never looked at. First the expected revision, the target status,
 the decision time and the payload fingerprint were parameters. Then the table privileges turned
 out to leave every signed-in user able to write the rows those functions were guarding. Each was
 fixed where it was found. That is how a boundary ends up with a different answer in each corner:
 a rejection that needs a plan it should never read, a validator that accepts `"8"` for a
 repetition count and a cardio result with no duration, a privilege set that still carries
-`TRIGGER` because `REVOKE` named privileges one at a time.
+`TRIGGER` because `REVOKE` named privileges one at a time, a measurement contract enforced whole
+on the wire and in part everywhere else, a row cast into a domain type because it was written down
+as one, and a gate whose every rule missed a quoted table name.
 
 The problem was never the individual holes. It was that nowhere said, in one place, **which
 component is authoritative for each invariant, and what it derives that invariant from.** Three
@@ -67,7 +70,7 @@ payload.
 | I-10 | A decision's time is when the server took it | db | `now()` | `authenticated-rpc.provider.ts` |
 | I-11 | Statuses and revisions are exactly the domain's vocabulary | domain, schema, db | `CHECK` constraints and a closed enum in the function; runtime validation of what comes back | `packages/domain`, `repositories.test.ts` |
 | I-12 | A mutation is one of a closed set of kinds, fully formed | db | JSON type checks per field, not `->>` string coercion | `authenticated-rpc.provider.ts` |
-| I-13 | A measurement is a valid profile of the current schema version | domain (`isMeasurement`), db (`is_valid_measurement`) | the payload's own types, checked exactly as the domain checks them | `packages/domain/src/session.test.ts`, `authenticated-rpc.provider.ts` |
+| I-13 | A measurement satisfies the whole measurement contract | contracts (`measurementSchema`), domain (`isMeasurement`), db (`is_valid_measurement`) | the payload's own types: profile, closed key set, per-unit maximum, notes length, incline range, and an exertion whose derived RPE follows from its RIR | `packages/domain/src/session.test.ts`, `authenticated-rpc.provider.ts` |
 | I-14 | A session's plan-derived facts are the plan's, not the caller's | db | the locked plan row's scheduled session: revision, exercise ids, combined-load permission | `authenticated-rpc.provider.ts` |
 | I-15 | A set belongs to an exercise the session prescribes | db | the session's stored `exercise_ids` | `authenticated-rpc.provider.ts` |
 | I-16 | Combined load is recorded only where the plan permitted it | domain, db | the session's stored `combined_load_exercises` | `authenticated-rpc.provider.ts` |
@@ -78,6 +81,7 @@ payload.
 | I-21 | A key and its mutation commit together, or neither | db | one transaction; the key is claimed before the mutation runs | `workout-transport.provider.ts` |
 | I-22 | A replay returns the original result; a key reused for a different payload is refused | db | the stored payload compared with the delivered one | `workout-transport.provider.ts` |
 | I-23 | A delay the server asked for is honoured | application | `Retry-After`, carried through the adapter | `workout-transport.test.ts`, `delivery.integration.test.ts` |
+| I-24 | A row read back is validated before it reaches the domain | adapters | the domain's own rules per field, and the wire contract's closed union for a diff | `repositories.test.ts` |
 
 Two rows are deliberately **not** the database's: I-23, because backoff is a client policy, and
 the domain half of I-13, because a device must refuse a malformed measurement before it is queued
@@ -90,7 +94,12 @@ server.
   allowed; facts are not.
 - Granting a privilege on a table to `anon` or `authenticated` beyond `SELECT`. The migration gate
   replays every `GRANT` and `REVOKE` in order, starting from the ALL that Supabase's default
-  privileges give, and fails unless the final state is exactly that.
+  privileges give, and fails unless the final state is exactly that. The replay counts a grant to
+  `PUBLIC` against both browser roles, resolves `ON ALL TABLES IN SCHEMA`, and refuses a migration
+  that changes default privileges - three forms that reach a table without naming it.
+- Casting a row or a response body into a domain type. Both are untrusted input (I-24): a status
+  outside the vocabulary has no rule anywhere to catch it, and a cast moves the failure to
+  wherever the value is finally used.
 - Enforcing an invariant in the adapter instead of the database. The adapter may validate what it
   receives back; it may not be the reason something holds.
 
@@ -100,10 +109,12 @@ The application's write path is narrow and slightly awkward: everything goes thr
 functions, and adding a field means a migration. That is the point — the awkwardness is where the
 authority lives.
 
-`plpgsql` now holds real domain logic, duplicating rules `packages/domain` also states. The
-duplication is a cost accepted deliberately: the domain's copy serves a device that is offline,
-and the database's copy is the one that is authoritative. Where they could drift, the matrix names
-both sites and both tests.
+`plpgsql` now holds real domain logic, duplicating rules `packages/domain` and
+`packages/contracts` also state. The duplication is a cost accepted deliberately: the wire copy
+refuses a payload before it is queued, the domain's copy serves a device that is offline, and the
+database's copy is the one that is authoritative. Where they could drift, the matrix names every
+site and its test - which is how the measurement contract was found open in two of the three, with
+notes, exertion, incline and the per-unit maxima validated on the wire and nowhere else.
 
 Reads stay direct PostgREST queries, so the client remains a thin reader over its own rows, and
 row-level security is still what decides whose rows those are.
