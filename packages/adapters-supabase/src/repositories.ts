@@ -5,13 +5,8 @@ import type {
   ProposalStore,
   RejectOutcome,
 } from '@workout/application';
-import {
-  type PlanDiff,
-  PROPOSAL_STATUSES,
-  type Proposal,
-  type ProposalStatus,
-  type Revision,
-} from '@workout/domain';
+import { planDiffSchema, proposalStatusSchema } from '@workout/contracts';
+import type { PlanDiff, Proposal, ProposalStatus, Revision } from '@workout/domain';
 import type { ServerSupabaseConfig } from './config.js';
 import { type RestConfig, rpc, select } from './rest.js';
 
@@ -34,32 +29,99 @@ import { type RestConfig, rpc, select } from './rest.js';
  * (packages/adapters-supabase/src/proposal-store.contract.test.ts), against a real database.
  */
 
-interface ProposalRow {
-  id: string;
-  base_revision: number;
-  diff: PlanDiff;
-  rationale: string;
-  status: ProposalStatus;
-  created_at: string;
-  decided_at: string | null;
-  actor_client_id: string | null;
-  actor_agent_id: string | null;
-  input_hash: string | null;
-  expires_at: string | null;
+/**
+ * Reading a row is reading untrusted input (ADR-0012).
+ *
+ * A row arrives as JSON over HTTP, and casting it into the domain's types moves the failure to
+ * wherever the value is finally used, with no clue where it came from: a status outside the
+ * vocabulary has no rule anywhere to catch it, a revision that arrived as `"5"` compares equal to
+ * nothing, and a diff whose operation nobody implements reaches the plan. So each field is
+ * checked against the rule the domain actually has for it, and a row that fails is an error
+ * naming the field rather than a value handed on.
+ *
+ * `inputHash` and the actor ids are checked as strings and no further. The MCP wire contract
+ * requires a `sha256:` digest of an incoming proposal, but the domain's `Proposal` states no
+ * format, so imposing one here would make a stored row unreadable over a rule the domain does
+ * not have - a denial of read rather than a safety property.
+ */
+
+function fail(field: string, why: string): never {
+  throw new Error(`a proposals row is unusable: ${field} ${why}`);
 }
 
-function toProposal(row: ProposalRow): Proposal {
+function aString(value: unknown, field: string): string {
+  if (typeof value !== 'string' || value.length === 0) fail(field, 'is not a non-empty string');
+  return value;
+}
+
+function anOptionalString(value: unknown, field: string): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value !== 'string') fail(field, 'is not a string or null');
+  return value;
+}
+
+function aStoredRevision(value: unknown, field: string): Revision {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1) {
+    fail(field, 'is not a positive whole revision');
+  }
+  return value as Revision;
+}
+
+function aTime(value: unknown, field: string): Date {
+  if (typeof value !== 'string') fail(field, 'is not a timestamp');
+  const time = new Date(value);
+  if (Number.isNaN(time.getTime())) fail(field, `is not a timestamp: ${value}`);
+  return time;
+}
+
+function aStatus(value: unknown, field: string): ProposalStatus {
+  const parsed = proposalStatusSchema.safeParse(value);
+  if (!parsed.success) fail(field, `is not a status the domain defines: ${String(value)}`);
+  return parsed.data;
+}
+
+function aDiff(value: unknown, field: string): PlanDiff {
+  // The same closed union the wire contract enforces, so the substance of a proposal is
+  // validated rather than trusted (packages/contracts/src/plan-diff.ts).
+  const parsed = planDiffSchema.safeParse(value);
+  if (!parsed.success) fail(field, 'is not a plan diff this version understands');
+  return parsed.data as PlanDiff;
+}
+
+function toProposal(row: unknown): Proposal {
+  if (typeof row !== 'object' || row === null || Array.isArray(row)) {
+    throw new Error('a proposals row is unusable: it is not an object');
+  }
+  const record = row as Record<string, unknown>;
+  const createdAt = aTime(record['created_at'], 'created_at');
   return {
-    id: row.id,
-    actor: { clientId: row.actor_client_id ?? '', actorId: row.actor_agent_id ?? '' },
-    baseRevision: row.base_revision as Revision,
-    diff: row.diff,
-    rationale: row.rationale,
-    inputHash: row.input_hash ?? '',
-    createdAt: new Date(row.created_at),
-    expiresAt: new Date(row.expires_at ?? row.created_at),
-    status: row.status,
+    id: aString(record['id'], 'id'),
+    actor: {
+      clientId: anOptionalString(record['actor_client_id'], 'actor_client_id'),
+      actorId: anOptionalString(record['actor_agent_id'], 'actor_agent_id'),
+    },
+    baseRevision: aStoredRevision(record['base_revision'], 'base_revision'),
+    diff: aDiff(record['diff'], 'diff'),
+    rationale: aString(record['rationale'], 'rationale'),
+    inputHash: anOptionalString(record['input_hash'], 'input_hash'),
+    createdAt,
+    expiresAt:
+      record['expires_at'] === null || record['expires_at'] === undefined
+        ? createdAt
+        : aTime(record['expires_at'], 'expires_at'),
+    status: aStatus(record['status'], 'status'),
+    ...(record['decided_at'] === null || record['decided_at'] === undefined
+      ? {}
+      : { decidedAt: aTime(record['decided_at'], 'decided_at') }),
   };
+}
+
+/** PostgREST answers a filtered select with a list. Anything else is not a result set. */
+function rowsOf(body: unknown): readonly unknown[] {
+  if (!Array.isArray(body)) {
+    throw new Error('the database did not answer with a list of rows');
+  }
+  return body;
 }
 
 /**
@@ -77,16 +139,15 @@ type DecisionOutcome =
   | { kind: 'expired' }
   | { kind: 'not_found' };
 
-function aRevision(value: unknown): Revision | undefined {
+function reportedRevision(value: unknown): Revision | undefined {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 1
     ? (value as Revision)
     : undefined;
 }
 
-function aStatus(value: unknown): ProposalStatus | undefined {
-  return (PROPOSAL_STATUSES as readonly string[]).includes(value as string)
-    ? (value as ProposalStatus)
-    : undefined;
+function reportedStatus(value: unknown): ProposalStatus | undefined {
+  const parsed = proposalStatusSchema.safeParse(value);
+  return parsed.success ? parsed.data : undefined;
 }
 
 function decisionOf(body: unknown): DecisionOutcome | undefined {
@@ -97,17 +158,17 @@ function decisionOf(body: unknown): DecisionOutcome | undefined {
       // Absent for a rejection, which never reads the plan. Present and invalid is not the same
       // thing as absent, so a bad value is still refused.
       if (record['revision'] === undefined) return { kind: 'committed' };
-      const revision = aRevision(record['revision']);
+      const revision = reportedRevision(record['revision']);
       return revision === undefined ? undefined : { kind: 'committed', revision };
     }
     case 'revision_changed': {
-      const currentRevision = aRevision(record['currentRevision']);
+      const currentRevision = reportedRevision(record['currentRevision']);
       return currentRevision === undefined
         ? undefined
         : { kind: 'revision_changed', currentRevision };
     }
     case 'status_changed': {
-      const currentStatus = aStatus(record['currentStatus']);
+      const currentStatus = reportedStatus(record['currentStatus']);
       return currentStatus === undefined ? undefined : { kind: 'status_changed', currentStatus };
     }
     case 'expired':
@@ -155,26 +216,39 @@ export class SupabaseProposalStore implements ProposalStore {
   }
 
   async currentRevision(userId: string): Promise<Revision> {
-    const rows = await select<{ revision: number }>(
-      this.#rest,
-      'plans',
-      `user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=revision`,
+    const rows = rowsOf(
+      await select<unknown>(
+        this.#rest,
+        'plans',
+        `user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=revision`,
+      ),
     );
-    const revision = rows[0]?.revision;
-    if (revision === undefined) {
+    const first = rows[0];
+    if (first === undefined) {
       throw new Error(`no active plan for user ${userId}`);
+    }
+    if (typeof first !== 'object' || first === null) {
+      throw new Error('the active plan row is unusable: it is not an object');
+    }
+    const revision = (first as Record<string, unknown>)['revision'];
+    if (typeof revision !== 'number' || !Number.isSafeInteger(revision) || revision < 1) {
+      throw new Error(
+        `the active plan's revision is not a positive whole number: ${String(revision)}`,
+      );
     }
     return revision as Revision;
   }
 
   async findById(userId: string, proposalId: string): Promise<Proposal | undefined> {
-    const rows = await select<ProposalRow>(
-      this.#rest,
-      'proposals',
-      `user_id=eq.${encodeURIComponent(userId)}&id=eq.${encodeURIComponent(proposalId)}&select=*`,
+    const rows = rowsOf(
+      await select<unknown>(
+        this.#rest,
+        'proposals',
+        `user_id=eq.${encodeURIComponent(userId)}&id=eq.${encodeURIComponent(proposalId)}&select=*`,
+      ),
     );
     const row = rows[0];
-    return row ? toProposal(row) : undefined;
+    return row === undefined ? undefined : toProposal(row);
   }
 
   /**
