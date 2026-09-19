@@ -66,7 +66,11 @@
       deployed schema confirmed, so 20260919140000 revokes ALL PRIVILEGES and grants back only
       SELECT; `node scripts/check-db-boundary.mjs` reads the deployed schema back and asserts the
       exact privilege set per role, the function owners and the pinned `search_path`, and
-      deployed-boundary.provider.ts runs it as part of the provider suite. All of it runs against
+      deployed-boundary.provider.ts runs it as part of the provider suite. Both halves derive the
+      set of functions they audit rather than listing it — the deployed check from the schema, the
+      provider suite from the migrations — so the eleven functions in `public` are all covered and
+      a twelfth is covered the day it is added; each provider refusal is paired with the same call
+      as a role that does hold EXECUTE, because PostgREST answers 404 either way. All of it runs against
       the development project, 2026-09-19; none of it runs in CI until repository secrets exist,
       which is G-2's remaining half)
 - [x] 2.4 Index every column used by a row-level security predicate, and verify the
@@ -84,9 +88,10 @@
       in memory does not — two identities keyed by uuids that exist in auth.users, an active plan
       row, an expiry relative to the run, and a signed-in token, because the store acts as a user
       and not as the service role. A row read back is validated before it reaches the domain -
-      statuses, revisions, timestamps and the diff against the wire contract's closed union -
-      rather than cast (`pnpm test`: repositories.test.ts, one case per malformed field). Built on
-      fetch, so no dependency was added)
+      statuses, revisions, instants against the contract's ISO-with-offset rule, and the diff
+      against the wire contract's closed union - rather than cast (`pnpm test`:
+      repositories.test.ts, one case per malformed field, with controls for the offsets a real row
+      carries). Built on fetch, so no dependency was added)
 - [x] 2.6 Implement the server-side idempotency record committed in the same
       transaction as the mutation, and verify replay returns the original result with no
       duplicate row (`pnpm test:provider`: workout-transport.provider.ts — one database
@@ -290,7 +295,10 @@
       `pnpm test:e2e`: browser-store.spec.ts round-trips between two real IndexedDB databases.
       The document declares its schema version, refuses an unknown field rather than dropping
       it, and rebuilds every measurement through the domain factories so a tampered RPE is
-      refused)
+      refused. `pnpm test`: packages/contracts/src/archive.test.ts — an instant must carry an
+      explicit offset and a scheduled date must be a real day, so a document cannot import as a
+      different afternoon than it was exported on, and 2026-02-30 is refused rather than read as
+      2 March)
 - [x] 8.2 Implement CSV history export and verify every quantity column names its unit
       (`pnpm test:integration`: archive.integration.test.ts — load_kg, duration_s, distance_m,
       incline_percent, the exertion scale per row, and a check that no bare quantity name
