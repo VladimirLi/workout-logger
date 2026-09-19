@@ -61,7 +61,7 @@ payload.
 | I-1 | A write acts for the signed-in user only | db | `auth.uid()`, refusing NULL | `wrong-user.provider.ts`, `authenticated-rpc.provider.ts` |
 | I-2 | A user may not write any table directly | schema | `REVOKE ALL PRIVILEGES`, then `GRANT SELECT` | `check-db-boundary.mjs`, `authenticated-rpc.provider.ts` |
 | I-3 | A user reads only their own rows | schema | row-level security, forced, owner policy per table | `check-rls.mjs`, `wrong-user.provider.ts` |
-| I-4 | Boundary functions cannot be shadowed, and nothing else in `public` is reachable | schema | owner `postgres`, `search_path` pinned, `EXECUTE` to `authenticated` on the four boundary functions and on nothing else in the schema | `check-db-boundary.mjs`, `authenticated-rpc.provider.ts` |
+| I-4 | Boundary functions cannot be shadowed, and no other function this repository defines is reachable | schema | owner `postgres`, `search_path` pinned, `EXECUTE` to `authenticated` on the four boundary functions and on none of the eleven helpers; Supabase's own `rls_auto_enable` is exempt by name (see below) | `check-db-boundary.mjs`, `authenticated-rpc.provider.ts` |
 | I-5 | A decision applies to a proposal that is still pending | db | the proposal row under lock, plus the caller's expected status | `proposal-store.provider.ts`, `authenticated-rpc.provider.ts` |
 | I-6 | An acceptance applies only to the plan it was computed against | db | the locked plan's revision vs. the proposal's stored `base_revision`, plus the caller's expected revision | `proposal-store.provider.ts` |
 | I-7 | An acceptance advances the plan revision exactly once, in the same transaction | db | `UPDATE ... RETURNING` inside the function | `proposal-store.provider.ts` (race case) |
@@ -88,6 +88,12 @@ Two rows are deliberately **not** the database's: I-23, because backoff is a cli
 the domain half of I-13, because a device must refuse a malformed measurement before it is queued
 rather than after a round trip. Both are duplicated on purpose; neither is relied on by the
 server.
+
+I-4 covers the fifteen functions this repository defines in `public`: the four a client calls, and
+the eleven the boundary calls internally. It does **not** cover `public.rls_auto_enable`, which is
+Supabase's own event trigger and which the platform grants to `anon` and `authenticated`. That
+exemption is by name, recorded here and in ADR-0011, because it is not this repository's function
+to revoke; every other function in the schema, including one added later, is audited.
 
 ### What this forbids
 
