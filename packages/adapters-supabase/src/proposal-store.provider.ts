@@ -4,6 +4,7 @@ import { beforeAll, describe, it } from 'vitest';
 import { serverConfig } from './config.js';
 import { SupabaseProposalStore } from './repositories.js';
 import { upsert } from './rest.js';
+import { signInDevelopmentUser } from './test-identity.js';
 
 /**
  * The proposal store contract, against the real development database (task 2.5, ADR-0005).
@@ -14,8 +15,11 @@ import { upsert } from './rest.js';
  *   pnpm test:provider
  *
  * Every assertion is the contract suite the in-memory reference runs. What this file supplies
- * is the two things a database needs and an object in memory does not: user ids that are real
- * uuids in `auth.users`, and an active plan row for the revision to live on.
+ * is the three things a database needs and an object in memory does not: user ids that are
+ * real uuids in `auth.users`, an active plan row for the revision to live on, and a signed-in
+ * token, because the store acts as a user and not as the service role. Running it with the
+ * service role would bypass row-level security and every grant, so the isolation cases would
+ * pass without proving anything.
  *
  * It fails rather than skips without an environment. "No credential, so no finding" is the
  * vacuous pass these checks exist to prevent.
@@ -46,6 +50,7 @@ const EMAILS = {
 } as const;
 
 const identities = { user: '', otherUser: '' };
+let store: SupabaseProposalStore;
 
 /** Creates the development user if it is not there, and returns its id either way. */
 async function ensureUser(email: string): Promise<string> {
@@ -71,8 +76,10 @@ async function ensureUser(email: string): Promise<string> {
 }
 
 beforeAll(async () => {
-  identities.user = await ensureUser(EMAILS.user);
+  const signedIn = await signInDevelopmentUser(server, EMAILS.user);
+  identities.user = signedIn.id;
   identities.otherUser = await ensureUser(EMAILS.otherUser);
+  store = new SupabaseProposalStore(server, signedIn);
 }, 60_000);
 
 /**
@@ -90,7 +97,7 @@ async function harness(): Promise<ContractHarness> {
   }
 
   return {
-    store: new SupabaseProposalStore(server),
+    store,
     identities: { user: identities.user, otherUser: identities.otherUser },
     seed: async (seedUserId: string, proposal: Proposal, revision: Revision) => {
       await upsert(rest, 'plans', [
@@ -116,7 +123,11 @@ async function harness(): Promise<ContractHarness> {
           actor_client_id: proposal.actor.clientId,
           actor_agent_id: proposal.actor.actorId,
           input_hash: proposal.inputHash,
-          expires_at: proposal.expiresAt.toISOString(),
+          // The contract does not model expiry, so its proposals carry a fixed date that is
+          // long past. The database does model it (the domain refuses to decide an expired
+          // proposal at all), so a case about revisions gets a live one. Expiry itself is
+          // checked against the real function in authenticated-rpc.provider.ts.
+          expires_at: new Date(Date.now() + 3_600_000).toISOString(),
         },
       ]);
     },
