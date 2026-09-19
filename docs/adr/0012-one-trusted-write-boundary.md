@@ -61,7 +61,7 @@ payload.
 | I-1 | A write acts for the signed-in user only | db | `auth.uid()`, refusing NULL | `wrong-user.provider.ts`, `authenticated-rpc.provider.ts` |
 | I-2 | A user may not write any table directly | schema | `REVOKE ALL PRIVILEGES`, then `GRANT SELECT` | `check-db-boundary.mjs`, `authenticated-rpc.provider.ts` |
 | I-3 | A user reads only their own rows | schema | row-level security, forced, owner policy per table | `check-rls.mjs`, `wrong-user.provider.ts` |
-| I-4 | Boundary functions cannot be shadowed | schema | owner `postgres`, `search_path` pinned, `EXECUTE` to `authenticated` only | `check-db-boundary.mjs` |
+| I-4 | Boundary functions cannot be shadowed, and nothing else in `public` is reachable | schema | owner `postgres`, `search_path` pinned, `EXECUTE` to `authenticated` on the four boundary functions and on nothing else in the schema | `check-db-boundary.mjs`, `authenticated-rpc.provider.ts` |
 | I-5 | A decision applies to a proposal that is still pending | db | the proposal row under lock, plus the caller's expected status | `proposal-store.provider.ts`, `authenticated-rpc.provider.ts` |
 | I-6 | An acceptance applies only to the plan it was computed against | db | the locked plan's revision vs. the proposal's stored `base_revision`, plus the caller's expected revision | `proposal-store.provider.ts` |
 | I-7 | An acceptance advances the plan revision exactly once, in the same transaction | db | `UPDATE ... RETURNING` inside the function | `proposal-store.provider.ts` (race case) |
@@ -81,7 +81,8 @@ payload.
 | I-21 | A key and its mutation commit together, or neither | db | one transaction; the key is claimed before the mutation runs | `workout-transport.provider.ts` |
 | I-22 | A replay returns the original result; a key reused for a different payload is refused | db | the stored payload compared with the delivered one | `workout-transport.provider.ts` |
 | I-23 | A delay the server asked for is honoured | application | `Retry-After`, carried through the adapter | `workout-transport.test.ts`, `delivery.integration.test.ts` |
-| I-24 | A row read back is validated before it reaches the domain | adapters | the domain's own rules per field, and the wire contract's closed union for a diff | `repositories.test.ts` |
+| I-24 | A row read back is validated before it reaches the domain | adapters | the domain's own rules per field, the wire contract's closed union for a diff, and `isoTimestamp` for every instant | `repositories.test.ts` |
+| I-25 | An instant is an ISO-8601 time with an explicit offset | contracts (`isoTimestamp`) | the string itself, before any `Date` is constructed from it | `repositories.test.ts`, `packages/contracts/src/archive.test.ts` |
 
 Two rows are deliberately **not** the database's: I-23, because backoff is a client policy, and
 the domain half of I-13, because a device must refuse a malformed measurement before it is queued
@@ -100,6 +101,12 @@ server.
 - Casting a row or a response body into a domain type. Both are untrusted input (I-24): a status
   outside the vocabulary has no rule anywhere to catch it, and a cast moves the failure to
   wherever the value is finally used.
+- Parsing an instant with `new Date` or `Date.parse` (I-25). Both accept a bare date and a time
+  with no offset, which they then read in whatever zone the process is in.
+- Writing a second copy of a rule the contracts package already states, or auditing a set of
+  database objects from a hand-written list. Both drift silently, and both have: the archive
+  carried its own weaker instant, and the deployed check named six helpers while the migrations
+  defined eleven. A check derives its set from the schema or the migrations.
 - Enforcing an invariant in the adapter instead of the database. The adapter may validate what it
   receives back; it may not be the reason something holds.
 
