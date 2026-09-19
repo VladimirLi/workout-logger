@@ -53,14 +53,36 @@ const BOUNDARY_FUNCTIONS = [
   'apply_workout_mutation',
 ];
 
-/** Called inside the functions above, which run as their owner, so no client role needs them. */
-const HELPER_FUNCTIONS = [
+/**
+ * Functions Supabase configures itself, which this repository did not write and does not revoke.
+ *
+ * `rls_auto_enable` is the event trigger that turns row-level security on for a new table in
+ * `public`; ADR-0011 records it. Failing on it would make this check red for something
+ * deliberately left alone.
+ */
+const PLATFORM_FUNCTIONS = ['rls_auto_enable'];
+
+/**
+ * Helpers are not listed. Every function in `public` that is not a boundary function is one, and
+ * none of them may be executable by a client role.
+ *
+ * A list was the defect: migration 20260919170000 added five helpers, the list kept naming six
+ * older ones, and the five nobody had added were audited by nobody - they could have been granted
+ * to `authenticated` and this check would still have said OK. The set now comes from the schema,
+ * so a helper a later migration adds is covered on the day it is deployed.
+ */
+const EXPECTED_HELPERS = [
   'is_valid_measurement',
   'json_is_positive_integer',
   'json_is_nonnegative_number',
   'json_is_nonempty_string',
   'json_is_quantity',
   'json_timestamptz',
+  'json_has_only',
+  'json_is_notes',
+  'json_is_strength_exertion',
+  'json_is_cardio_exertion',
+  'json_is_incline',
 ];
 
 /** Functions that must no longer exist, because a later migration replaced them. */
@@ -282,19 +304,26 @@ for (const name of BOUNDARY_FUNCTIONS) {
   }
 }
 
-for (const name of HELPER_FUNCTIONS) {
+/** Everything in `public` that is not a boundary function and not the platform's own. */
+const helpers = [...functions.keys()].filter(
+  (name) => !BOUNDARY_FUNCTIONS.includes(name) && !PLATFORM_FUNCTIONS.includes(name),
+);
+
+for (const name of EXPECTED_HELPERS) {
   if (!functions.has(name)) {
     problems.push(`public.${name} is not in the deployed schema`);
-    continue;
   }
+}
+
+for (const name of helpers) {
   for (const statement of statements) {
     if (statement.objectKind !== 'FUNCTION' || statement.object !== `public.${name}`) continue;
     if (statement.action !== 'GRANT') continue;
     for (const role of statement.roles) {
       if (CLIENT_ROLES.includes(role)) {
         problems.push(
-          `public.${name} is executable by ${role}, and a validation helper is surface ` +
-            'with no purpose outside the functions that call it (ADR-0012, I-4)',
+          `public.${name} is executable by ${role}, and a function the boundary calls is ` +
+            'surface with no purpose outside the functions that call it (ADR-0012, I-4)',
         );
       }
     }
@@ -341,8 +370,8 @@ if (problems.length === 0) {
   console.log(
     `check-db-boundary: OK — ${String(TABLES.length)} tables grant authenticated SELECT only, ` +
       `${String(BOUNDARY_FUNCTIONS.length)} boundary functions are owned by postgres with a ` +
-      `pinned search_path, and ${String(HELPER_FUNCTIONS.length)} helpers are callable by no ` +
-      'client role.\n' +
+      `pinned search_path, and ${String(helpers.length)} other functions in public are callable ` +
+      'by no client role.\n' +
       `  Noted, as ADR-0011 records: the platform's default privileges still grant ALL on a new ` +
       `table in public to ${[...defaultRoles].sort().join(', ') || 'nobody'}. Every existing ` +
       'table is asserted above, and the migration gate refuses a migration that leaves a new ' +
