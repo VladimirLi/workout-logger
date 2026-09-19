@@ -5,7 +5,13 @@ import type {
   ProposalStore,
   RejectOutcome,
 } from '@workout/application';
-import type { PlanDiff, Proposal, ProposalStatus, Revision } from '@workout/domain';
+import {
+  type PlanDiff,
+  PROPOSAL_STATUSES,
+  type Proposal,
+  type ProposalStatus,
+  type Revision,
+} from '@workout/domain';
 import type { ServerSupabaseConfig } from './config.js';
 import { type RestConfig, rpc, select } from './rest.js';
 
@@ -56,30 +62,54 @@ function toProposal(row: ProposalRow): Proposal {
   };
 }
 
-/** What `decide_proposal` returns. Checked at runtime, never asserted (review warning). */
+/**
+ * What `accept_proposal` and `reject_proposal` return.
+ *
+ * Validated at runtime, never asserted: a response is untrusted input like any other. A revision
+ * must be a positive whole number, as `Revision` requires, and a status must be one the domain
+ * defines - otherwise a server this version does not understand would feed the domain a value it
+ * has no rule for.
+ */
 type DecisionOutcome =
-  | { kind: 'committed'; revision: number }
-  | { kind: 'revision_changed'; currentRevision: number }
+  | { kind: 'committed'; revision?: Revision }
+  | { kind: 'revision_changed'; currentRevision: Revision }
   | { kind: 'status_changed'; currentStatus: ProposalStatus }
   | { kind: 'expired' }
   | { kind: 'not_found' };
+
+function aRevision(value: unknown): Revision | undefined {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 1
+    ? (value as Revision)
+    : undefined;
+}
+
+function aStatus(value: unknown): ProposalStatus | undefined {
+  return (PROPOSAL_STATUSES as readonly string[]).includes(value as string)
+    ? (value as ProposalStatus)
+    : undefined;
+}
 
 function decisionOf(body: unknown): DecisionOutcome | undefined {
   if (typeof body !== 'object' || body === null) return undefined;
   const record = body as Record<string, unknown>;
   switch (record['kind']) {
-    case 'committed':
-      return typeof record['revision'] === 'number'
-        ? { kind: 'committed', revision: record['revision'] }
-        : undefined;
-    case 'revision_changed':
-      return typeof record['currentRevision'] === 'number'
-        ? { kind: 'revision_changed', currentRevision: record['currentRevision'] }
-        : undefined;
-    case 'status_changed':
-      return typeof record['currentStatus'] === 'string'
-        ? { kind: 'status_changed', currentStatus: record['currentStatus'] as ProposalStatus }
-        : undefined;
+    case 'committed': {
+      // Absent for a rejection, which never reads the plan. Present and invalid is not the same
+      // thing as absent, so a bad value is still refused.
+      if (record['revision'] === undefined) return { kind: 'committed' };
+      const revision = aRevision(record['revision']);
+      return revision === undefined ? undefined : { kind: 'committed', revision };
+    }
+    case 'revision_changed': {
+      const currentRevision = aRevision(record['currentRevision']);
+      return currentRevision === undefined
+        ? undefined
+        : { kind: 'revision_changed', currentRevision };
+    }
+    case 'status_changed': {
+      const currentStatus = aStatus(record['currentStatus']);
+      return currentStatus === undefined ? undefined : { kind: 'status_changed', currentStatus };
+    }
     case 'expired':
       return { kind: 'expired' };
     case 'not_found':
@@ -148,12 +178,16 @@ export class SupabaseProposalStore implements ProposalStore {
   }
 
   /**
-   * The decision, not its consequences.
+   * The decision, and the expectations it was made against (ADR-0012, I-5 and I-6).
    *
-   * The port carries the expected revision and status because an in-memory store needs them.
-   * The server does not: it reads the proposal's own base revision and the plan's, both under
-   * lock, and stamps the time itself. Sending them would be offering a caller the chance to
-   * be wrong about its own decision.
+   * The port's compare-and-set is carried to the server rather than dropped here: the caller
+   * says which status and which revision it decided against, and the server compares both with
+   * rows it locks. This is not trust - an expectation can only lose, and the answer is always
+   * the value the server holds. What the caller may NOT say is the target status, the decision
+   * time, or whether the plan advances; those follow from the decision itself.
+   *
+   * Accepting and rejecting are separate functions because a rejection must not read the plan at
+   * all, which is a property of the code path rather than of a flag.
    */
   async commitDecision(request: CommitDecisionRequest): Promise<CommitDecisionOutcome> {
     if (!this.#actsFor(request.userId)) return { kind: 'not_found' };
@@ -173,18 +207,35 @@ export class SupabaseProposalStore implements ProposalStore {
         : { kind: 'not_found' };
     }
 
+    // An acceptance changes the plan and a rejection does not, so a request that says otherwise
+    // contradicts itself. Committing either meaning would be guessing which half is the bug.
+    if (request.advanceRevision !== (decision === 'accept')) {
+      throw new Error(
+        `a request to ${decision} a proposal must ` +
+          `${decision === 'accept' ? 'advance' : 'not advance'} the revision`,
+      );
+    }
+
     const outcome = decisionOf(
-      await rpc<unknown>(this.#rest, 'decide_proposal', {
-        p_proposal_id: request.proposal.id,
-        p_decision: decision,
-      }),
+      decision === 'accept'
+        ? await rpc<unknown>(this.#rest, 'accept_proposal', {
+            p_proposal_id: request.proposal.id,
+            p_expected_status: request.expectedStatus,
+            p_expected_revision: request.expectedRevision,
+          })
+        : await rpc<unknown>(this.#rest, 'reject_proposal', {
+            p_proposal_id: request.proposal.id,
+            p_expected_status: request.expectedStatus,
+          }),
     );
 
     switch (outcome?.kind) {
       case 'committed':
-        return { kind: 'committed', revision: outcome.revision as Revision };
+        return outcome.revision === undefined
+          ? { kind: 'committed' }
+          : { kind: 'committed', revision: outcome.revision };
       case 'revision_changed':
-        return { kind: 'revision_changed', currentRevision: outcome.currentRevision as Revision };
+        return { kind: 'revision_changed', currentRevision: outcome.currentRevision };
       case 'status_changed':
         return { kind: 'status_changed', currentStatus: outcome.currentStatus };
       case 'expired':
@@ -193,7 +244,7 @@ export class SupabaseProposalStore implements ProposalStore {
       case 'not_found':
         return { kind: 'not_found' };
       default:
-        throw new Error('decide_proposal returned a body this version does not understand');
+        throw new Error('the decision returned a body this version does not understand');
     }
   }
 
@@ -211,9 +262,10 @@ export class SupabaseProposalStore implements ProposalStore {
   async rejectIfPending(userId: string, proposalId: string): Promise<RejectOutcome> {
     if (!this.#actsFor(userId)) return { kind: 'not_found' };
     const outcome = decisionOf(
-      await rpc<unknown>(this.#rest, 'decide_proposal', {
+      await rpc<unknown>(this.#rest, 'reject_proposal', {
         p_proposal_id: proposalId,
-        p_decision: 'reject',
+        // Only a pending proposal is rejectable, which is the expectation this call makes.
+        p_expected_status: 'pending',
       }),
     );
 
@@ -234,7 +286,7 @@ export class SupabaseProposalStore implements ProposalStore {
       case 'not_found':
         return { kind: 'not_found' };
       default:
-        throw new Error('decide_proposal returned a body this version does not understand');
+        throw new Error('the rejection returned a body this version does not understand');
     }
   }
 }
