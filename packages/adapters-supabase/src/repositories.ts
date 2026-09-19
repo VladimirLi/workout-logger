@@ -5,7 +5,7 @@ import type {
   ProposalStore,
   RejectOutcome,
 } from '@workout/application';
-import { planDiffSchema, proposalStatusSchema } from '@workout/contracts';
+import { isoTimestamp, planDiffSchema, proposalStatusSchema } from '@workout/contracts';
 import type { PlanDiff, Proposal, ProposalStatus, Revision } from '@workout/domain';
 import type { ServerSupabaseConfig } from './config.js';
 import { type RestConfig, rpc, select } from './rest.js';
@@ -67,11 +67,20 @@ function aStoredRevision(value: unknown, field: string): Revision {
   return value as Revision;
 }
 
+/**
+ * An instant, validated before a `Date` is constructed from it.
+ *
+ * `new Date` is not a check: it accepts a bare date, a space-separated timestamp and `Sep 18
+ * 2026`, and reads a time with no offset in whatever zone the process is in - so the same row
+ * would give a proposal a different lifetime on a server in Stockholm and one in UTC. The rule is
+ * the contract's (packages/contracts/src/primitives.ts), which is what every other boundary in
+ * the product uses, and which the timestamps PostgREST returns satisfy.
+ */
 function aTime(value: unknown, field: string): Date {
-  if (typeof value !== 'string') fail(field, 'is not a timestamp');
-  const time = new Date(value);
-  if (Number.isNaN(time.getTime())) fail(field, `is not a timestamp: ${value}`);
-  return time;
+  if (!isoTimestamp.safeParse(value).success) {
+    fail(field, `is not an ISO-8601 instant with an offset: ${JSON.stringify(value)}`);
+  }
+  return new Date(value as string);
 }
 
 function aStatus(value: unknown, field: string): ProposalStatus {
