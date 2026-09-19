@@ -83,7 +83,10 @@
       suite's assertions are unchanged; the harness supplies what a database needs and an object
       in memory does not — two identities keyed by uuids that exist in auth.users, an active plan
       row, an expiry relative to the run, and a signed-in token, because the store acts as a user
-      and not as the service role. Built on fetch, so no dependency was added)
+      and not as the service role. A row read back is validated before it reaches the domain -
+      statuses, revisions, timestamps and the diff against the wire contract's closed union -
+      rather than cast (`pnpm test`: repositories.test.ts, one case per malformed field). Built on
+      fetch, so no dependency was added)
 - [x] 2.6 Implement the server-side idempotency record committed in the same
       transaction as the mutation, and verify replay returns the original result with no
       duplicate row (`pnpm test:provider`: workout-transport.provider.ts — one database
@@ -95,8 +98,13 @@
       session's plan facts are derived from the locked plan rather than taken from the payload, a
       set must name a prescribed exercise and cannot predate its session, its sequence is counted
       server-side, a session cannot complete before it started, and validation reads JSON types
-      so that a missing field or `"8"` for a repetition count is refused rather than coerced.
-      Every assertion reads the rows back)
+      so that a missing field or `"8"` for a repetition count is refused rather than coerced. The
+      measurement contract is enforced whole at all three sites: notes, exertion including the
+      RPE-follows-RIR derivation, incline range, per-unit maxima and closed key sets were
+      validated on the wire (`packages/contracts`) and nowhere else, and are now checked by
+      `isMeasurement` and by `is_valid_measurement`, with matched negatives in
+      packages/domain/src/session.test.ts and authenticated-rpc.provider.ts. Every assertion
+      reads the rows back)
 - [x] 2.7 Verify the built client bundle contains no service-role credential
       (`pnpm test:secrets`: scripts/bundle-secrets.mjs scans apps/web/.next after the build and
       fails when there is no bundle rather than reporting a clean one; `pnpm test`:
