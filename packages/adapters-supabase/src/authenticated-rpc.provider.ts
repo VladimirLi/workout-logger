@@ -65,13 +65,13 @@ function helperFunctionsInMigrations(): string[] {
     for (const match of sql.matchAll(
       /\bCREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+public\.([a-z_][a-z0-9_]*)/gi,
     )) {
-      names.add(match[1]);
+      if (match[1] !== undefined) names.add(match[1]);
     }
     // A function a later migration withdrew is not deployed and cannot be called.
     for (const match of sql.matchAll(
       /\bDROP\s+FUNCTION\s+(?:IF\s+EXISTS\s+)?public\.([a-z_][a-z0-9_]*)/gi,
     )) {
-      names.delete(match[1]);
+      if (match[1] !== undefined) names.delete(match[1]);
     }
   }
   return [...names].filter((name) => !BOUNDARY_FUNCTIONS.includes(name)).sort();
