@@ -50,10 +50,21 @@
       across every operation, and verify each denial (`node --env-file=.env.local
       scripts/check-rls.mjs`: all six exposed tables refuse an anonymous read and write with
       401. `pnpm test:provider`: wrong-user.provider.ts signs two development users in with
-      real tokens — another user reads nothing on any table, a write claiming another user's id
-      is refused 403 by the policy's WITH CHECK, and an update or delete aimed at another
-      user's row leaves it untouched. Both run against the development project, 2026-09-18;
-      neither runs in CI until repository secrets exist, which is G-2's remaining half)
+      real tokens and seeds a row for each of them in all six relations, because a denial over
+      an empty table is not a denial. Per relation, as the intruder: a read of the owner's rows
+      returns nothing, and an insert, an update and a delete aimed at the owner's row are
+      refused, with the owner's row read back through the service role every time. The
+      functions are covered too, since they are SECURITY DEFINER and row-level security does
+      not reach them: another user cannot decide or stale the owner's proposal, record a set
+      against the owner's session, or read the owner's result by reusing their idempotency key.
+      A read control per relation keeps the denials from passing because nothing works at all.
+      authenticated-rpc.provider.ts adds the direct-write half: Supabase's default privileges
+      had left `authenticated` with ALL on every table, so a caller could rebase a stale
+      proposal, decide one by writing its status, delete an idempotency record to replay a
+      mutation, reopen a completed session or edit a correction. All six were reproduced first
+      and are now refused by migration 20260919110000. Both scripts run against the development
+      project, 2026-09-19; neither runs in CI until repository secrets exist, which is G-2's
+      remaining half)
 - [x] 2.4 Index every column used by a row-level security predicate, and verify the
       migration gate reports none missing (`pnpm test:migrations`: every column a policy
       compares must be the LEADING column of an index; `user_id` leads every primary key, so
@@ -62,14 +73,18 @@
       contract suites unchanged (`pnpm test:provider`: proposal-store.provider.ts runs the 19
       ProposalStore contract cases the in-memory reference runs, against the development
       database, compare-and-set cases included. The suite's assertions are unchanged; the
-      harness supplies the two identities, because a real database keys rows by a uuid that
-      exists in auth.users. Built on fetch, so no dependency was added)
+      harness supplies what a database needs and an object in memory does not — two identities
+      keyed by uuids that exist in auth.users, an active plan row, an expiry that has not
+      passed, and a signed-in token, because the store acts as a user and not as the service
+      role. Built on fetch, so no dependency was added)
 - [x] 2.6 Implement the server-side idempotency record committed in the same
       transaction as the mutation, and verify replay returns the original result with no
       duplicate row (`pnpm test:provider`: workout-transport.provider.ts — one database
       function claims the key and applies the mutation together; a replay applies nothing and
       returns the original result; and a mutation that fails takes the claimed key with it, so
-      the change can still be delivered. Every assertion reads the rows back)
+      the change can still be delivered. Sent as a signed-in user, with the fingerprint derived
+      from the stored payload rather than supplied by the caller. Every assertion reads the rows
+      back)
 - [x] 2.7 Verify the built client bundle contains no service-role credential
       (`pnpm test:secrets`: scripts/bundle-secrets.mjs scans apps/web/.next after the build and
       fails when there is no bundle rather than reporting a clean one; `pnpm test`:
@@ -120,8 +135,11 @@
       delivery.integration.test.ts, "retries with the same idempotency key after a network
       failure", against the in-memory store)
 - [x] 4.3 Verify a key reused with a different payload is refused by the server
-      (`pnpm test:provider`: workout-transport.provider.ts — the second payload is refused with
-      409, a permanent failure needing a person, and a read-back shows it was not applied)
+      (`pnpm test:provider`: workout-transport.provider.ts and authenticated-rpc.provider.ts —
+      the second payload is refused with 409, a permanent failure needing a person, and a
+      read-back shows it was not applied. The comparison is against the payload the server
+      stored under that key, so a caller cannot present a matching fingerprint for a different
+      body)
 - [x] 4.4 Implement per-entity ordered draining and verify a blocked entity does not block a
       different entity (`pnpm test:integration`: delivery.integration.test.ts, "per-entity
       ordering (task 4.4)" and "draining the outbox")
