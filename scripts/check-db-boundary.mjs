@@ -68,6 +68,9 @@ const WITHDRAWN_FUNCTIONS = ['decide_proposal'];
 
 const PERMITTED_TABLE_PRIVILEGES = { authenticated: ['SELECT'], anon: [] };
 
+/** The roles a browser can hold. A grant to PUBLIC reaches both without naming either. */
+const CLIENT_ROLES = ['anon', 'authenticated'];
+
 const problems = [];
 
 /** `supabase db dump`, into a directory that is removed afterwards. */
@@ -117,11 +120,35 @@ function privilegeStatements(dump) {
       continue;
     }
     const match =
-      /^(GRANT|REVOKE)\s+(.+?)\s+ON\s+(FUNCTION|TABLE|SCHEMA|SEQUENCE)\s+(.+?)\s+(?:TO|FROM)\s+(.+);$/.exec(
+      /^(GRANT|REVOKE)\s+(.+?)\s+ON\s+(FUNCTION|TABLE|SCHEMA|SEQUENCE|ALL TABLES IN SCHEMA)\s+(.+?)\s+(?:TO|FROM)\s+(.+);$/.exec(
         line.trim(),
       );
-    if (!match) continue;
+    if (!match) {
+      // A default privilege grants every table created afterwards, which no per-object check can
+      // see. It is reported rather than modelled.
+      const defaults =
+        /^ALTER DEFAULT PRIVILEGES\b.*\bGRANT\s+(.+?)\s+ON\s+TABLES\s+TO\s+(.+);$/.exec(
+          line.trim(),
+        );
+      if (defaults) {
+        statements.push({
+          action: 'DEFAULT',
+          privileges: defaults[1]
+            .toUpperCase()
+            .split(',')
+            .map((privilege) => privilege.trim()),
+          objectKind: 'DEFAULT',
+          object: 'public',
+          roles: plain(defaults[2])
+            .toLowerCase()
+            .split(',')
+            .map((role) => role.trim()),
+        });
+      }
+      continue;
+    }
     const [, action, privileges, objectKind, object, role] = match;
+    const named = plain(role).toLowerCase();
     statements.push({
       action,
       privileges: privileges
@@ -131,7 +158,15 @@ function privilegeStatements(dump) {
       objectKind,
       /** `public.name` for a table; `public.name` without the argument list for a function. */
       object: plain(object.replace(/\(.*$/, '')),
-      role: plain(role).toLowerCase(),
+      /**
+       * Every role this statement reaches.
+       *
+       * PUBLIC is not a role name here but a synonym for all of them, so a GRANT to PUBLIC counts
+       * against both browser roles - which is the hole this replaces: the table replay only
+       * looked at statements that NAMED `anon` or `authenticated`, so `GRANT INSERT ... TO PUBLIC`
+       * granted a write to every signed-in user and the check still said OK.
+       */
+      roles: named === 'public' ? [...CLIENT_ROLES, 'public'] : [named],
     });
   }
   return statements;
@@ -171,15 +206,21 @@ const functions = functionFacts(dump);
 // I-2: what a client role holds on each table, as deployed.
 for (const table of TABLES) {
   const object = `public.${table}`;
-  if (!dump.includes(`CREATE TABLE IF NOT EXISTS "public"."${table}"`)) {
+  // `pg_dump` output is not a promise about which spelling it uses.
+  if (!new RegExp(String.raw`CREATE TABLE (?:IF NOT EXISTS )?"public"\."${table}"`).test(dump)) {
     problems.push(`${object} is not in the deployed schema`);
     continue;
   }
   for (const [role, permitted] of Object.entries(PERMITTED_TABLE_PRIVILEGES)) {
     const held = new Set();
     for (const statement of statements) {
-      if (statement.objectKind !== 'TABLE' || statement.object !== object) continue;
-      if (statement.role !== role) continue;
+      if (statement.action === 'DEFAULT') continue;
+      // A statement naming the whole schema reaches this table too.
+      const namesTable =
+        (statement.objectKind === 'TABLE' && statement.object === object) ||
+        (statement.objectKind === 'ALL TABLES IN SCHEMA' && statement.object === 'public');
+      if (!namesTable) continue;
+      if (!statement.roles.includes(role)) continue;
       for (const privilege of statement.privileges) {
         if (statement.action === 'GRANT') held.add(privilege);
         else held.delete(privilege);
@@ -226,8 +267,10 @@ for (const name of BOUNDARY_FUNCTIONS) {
   const executors = new Set();
   for (const statement of statements) {
     if (statement.objectKind !== 'FUNCTION' || statement.object !== `public.${name}`) continue;
-    if (statement.action === 'GRANT') executors.add(statement.role);
-    else executors.delete(statement.role);
+    for (const role of statement.roles) {
+      if (statement.action === 'GRANT') executors.add(role);
+      else executors.delete(role);
+    }
   }
   if (!executors.has('authenticated')) {
     problems.push(`public.${name} is not executable by authenticated, so the app cannot call it`);
@@ -247,10 +290,42 @@ for (const name of HELPER_FUNCTIONS) {
   for (const statement of statements) {
     if (statement.objectKind !== 'FUNCTION' || statement.object !== `public.${name}`) continue;
     if (statement.action !== 'GRANT') continue;
-    if (['anon', 'authenticated'].includes(statement.role)) {
+    for (const role of statement.roles) {
+      if (CLIENT_ROLES.includes(role)) {
+        problems.push(
+          `public.${name} is executable by ${role}, and a validation helper is surface ` +
+            'with no purpose outside the functions that call it (ADR-0012, I-4)',
+        );
+      }
+    }
+  }
+}
+
+/**
+ * Default privileges on tables, which decide what the NEXT table arrives holding.
+ *
+ * Supabase configures `ALTER DEFAULT PRIVILEGES ... GRANT ALL ON TABLES` to `postgres`, `anon`,
+ * `authenticated` and `service_role` on every project. ADR-0011 records the decision not to change
+ * that on the development project - it is platform behaviour with consequences for Supabase's own
+ * tooling, and the authorisation in hand is development-only - and recommends revoking it before
+ * production holds data.
+ *
+ * So the platform's own set is reported as the condition it is, not as a failure: every existing
+ * table is asserted above, and a table added later is caught by the migration gate, which starts
+ * its privilege replay from exactly this ALL and refuses a migration that does not take it away.
+ * A default privilege for any OTHER role is not the platform's and is refused.
+ */
+const PLATFORM_DEFAULT_ROLES = ['postgres', 'anon', 'authenticated', 'service_role'];
+const defaultRoles = new Set();
+for (const statement of statements) {
+  if (statement.action !== 'DEFAULT') continue;
+  for (const role of statement.roles) {
+    defaultRoles.add(role);
+    if (!PLATFORM_DEFAULT_ROLES.includes(role)) {
       problems.push(
-        `public.${name} is executable by ${statement.role}, and a validation helper is surface ` +
-          'with no purpose outside the functions that call it (ADR-0012, I-4)',
+        `the schema sets default privileges granting ${statement.privileges.join(', ')} on ` +
+          `tables to ${role}, which is not the platform's own set, so a table added later ` +
+          'arrives granted them (ADR-0012, I-2)',
       );
     }
   }
@@ -267,7 +342,11 @@ if (problems.length === 0) {
     `check-db-boundary: OK — ${String(TABLES.length)} tables grant authenticated SELECT only, ` +
       `${String(BOUNDARY_FUNCTIONS.length)} boundary functions are owned by postgres with a ` +
       `pinned search_path, and ${String(HELPER_FUNCTIONS.length)} helpers are callable by no ` +
-      'client role.',
+      'client role.\n' +
+      `  Noted, as ADR-0011 records: the platform's default privileges still grant ALL on a new ` +
+      `table in public to ${[...defaultRoles].sort().join(', ') || 'nobody'}. Every existing ` +
+      'table is asserted above, and the migration gate refuses a migration that leaves a new ' +
+      'one that way.',
   );
   process.exit(0);
 }

@@ -50,26 +50,40 @@ if (files.length === 0) {
   process.exit(0);
 }
 
+/**
+ * One grammar for an identifier, used by every rule below.
+ *
+ * Postgres accepts `things`, `public.things`, `"things"` and `"public"."things"` as the same
+ * table, and every rule here is anchored on a table name. Each rule having its own pattern was
+ * the defect: they all required a bare identifier, so a migration written the way a dump or a
+ * generator writes it was invisible to ALL of them at once - no row-level-security check, no
+ * grant check, no policy check, no index check - and the gate passed it in silence.
+ */
+const IDENTIFIER = String.raw`(?:"[^"]*"|[A-Za-z_][\w$]*)`;
+const QUALIFIED_NAME = String.raw`${IDENTIFIER}(?:\s*\.\s*${IDENTIFIER})?`;
+
+/** Compiles a rule that names a table, so no rule carries its own identifier pattern. */
+function rule(source, flags = 'gi') {
+  return new RegExp(
+    source.replaceAll('<name>', QUALIFIED_NAME).replaceAll('<id>', IDENTIFIER),
+    flags,
+  );
+}
+
 /** Tables a migration creates, as `schema.table`, defaulting to the public schema. */
 function createdTables(sql) {
-  const pattern = /\bCREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-z_][\w.]*)/gi;
+  const pattern = rule(String.raw`\bCREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(<name>)`);
   return [...sql.matchAll(pattern)].map((match) => qualify(match[1]));
 }
 
 function qualify(name) {
-  const bare = name.replaceAll('"', '');
+  const bare = name.replaceAll('"', '').replaceAll(' ', '');
   return bare.includes('.') ? bare : `public.${bare}`;
 }
 
 /** Tables the migration turns row-level security on for. */
 function securedTables(sql) {
-  const pattern = /\bALTER\s+TABLE\s+([a-z_][\w.]*)\s+ENABLE\s+ROW\s+LEVEL\s+SECURITY/gi;
-  return new Set([...sql.matchAll(pattern)].map((match) => qualify(match[1])));
-}
-
-/** Tables the migration grants something on, to anyone. */
-function grantedTables(sql) {
-  const pattern = /\bGRANT\s+[^;]*?\bON\s+(?:TABLE\s+)?([a-z_][\w.]*)/gi;
+  const pattern = rule(String.raw`\bALTER\s+TABLE\s+(<name>)\s+ENABLE\s+ROW\s+LEVEL\s+SECURITY`);
   return new Set([...sql.matchAll(pattern)].map((match) => qualify(match[1])));
 }
 
@@ -113,8 +127,14 @@ function statementsOf(sql) {
 }
 
 /**
- * Privilege changes to tables, in order. Anything that is not a table - a function, a schema, a
- * sequence, a default privilege - is not part of this model and is skipped.
+ * Privilege changes to tables, in order.
+ *
+ * `ON ALL TABLES IN SCHEMA s` names every table in that schema rather than a list, and skipping
+ * it - which an earlier version did, because the target starts with the word ALL - left a form
+ * that re-opens every table at once invisible to the replay. It is resolved against the tables
+ * the replay already knows about, at the point it is applied.
+ *
+ * A function, a sequence or a database is not part of this model and is skipped.
  */
 function privilegeChanges(sql) {
   const changes = [];
@@ -125,7 +145,9 @@ function privilegeChanges(sql) {
       );
     if (!match) continue;
     const [, action, privileges, target, roles] = match;
+    const everyTableIn = /^\s*ALL\s+TABLES\s+IN\s+SCHEMA\s+([\s\S]+)$/i.exec(target)?.[1]?.trim();
     if (
+      everyTableIn === undefined &&
       /^\s*(FUNCTION|PROCEDURE|ROUTINE|SCHEMA|SEQUENCE|DATABASE|TYPE|DOMAIN|LARGE|FOREIGN|ALL)\b/i.test(
         target,
       )
@@ -138,10 +160,18 @@ function privilegeChanges(sql) {
       privileges: /^ALL\b/.test(named)
         ? [...TABLE_PRIVILEGES]
         : named.split(',').map((privilege) => privilege.trim().split(/\s|\(/)[0]),
-      tables: target
-        .replace(/^\s*TABLE\s+/i, '')
-        .split(',')
-        .map((table) => qualify(table.trim())),
+      /** Set when the statement names a whole schema instead of a list of tables. */
+      schema:
+        everyTableIn === undefined
+          ? undefined
+          : everyTableIn.split(',')[0].replaceAll('"', '').trim(),
+      tables:
+        everyTableIn === undefined
+          ? target
+              .replace(/^\s*TABLE\s+/i, '')
+              .split(',')
+              .map((table) => qualify(table.trim()))
+          : [],
       // PUBLIC is asymmetric, and this is the asymmetry the repository got wrong: a GRANT to
       // PUBLIC reaches every role, while a REVOKE from PUBLIC takes away nothing that was
       // granted to a role directly - which is why `REVOKE ALL ... FROM PUBLIC, anon` left
@@ -166,13 +196,13 @@ function privilegeChanges(sql) {
  */
 function policyPredicateColumns(sql) {
   const columns = new Map();
-  const pattern = /\bCREATE\s+POLICY\s+[\w"]+\s+ON\s+([a-z_][\w.]*)([\s\S]*?);/gi;
+  const pattern = rule(String.raw`\bCREATE\s+POLICY\s+<id>\s+ON\s+(<name>)([\s\S]*?);`);
   for (const match of sql.matchAll(pattern)) {
     const table = qualify(match[1]);
     const body = match[2] ?? '';
     const referenced = new Set();
-    for (const comparison of body.matchAll(/\b([a-z_][a-z0-9_]*)\s*=/gi)) {
-      const column = comparison[1].toLowerCase();
+    for (const comparison of body.matchAll(/(?:"([^"]+)"|\b([a-z_][a-z0-9_]*))\s*=/gi)) {
+      const column = (comparison[1] ?? comparison[2]).toLowerCase();
       // Keywords that can precede `=` in a policy body but are not columns.
       if (['using', 'check', 'select', 'and', 'or', 'not'].includes(column)) continue;
       referenced.add(column);
@@ -195,8 +225,9 @@ function leadingIndexedColumns(sql) {
   };
 
   // PRIMARY KEY (a, b) and UNIQUE (a, b) inside a CREATE TABLE body.
-  const tablePattern =
-    /\bCREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-z_][\w.]*)\s*\(([\s\S]*?)\n\);/gi;
+  const tablePattern = rule(
+    String.raw`\bCREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(<name>)\s*\(([\s\S]*?)\n\);`,
+  );
   for (const match of sql.matchAll(tablePattern)) {
     const table = match[1];
     const body = match[2] ?? '';
@@ -205,17 +236,44 @@ function leadingIndexedColumns(sql) {
     }
     // A column-level PRIMARY KEY or UNIQUE, as in `id text PRIMARY KEY`.
     for (const line of body.split('\n')) {
-      const inline = /^\s*([a-z_][a-z0-9_]*)\s+[^,]*\b(PRIMARY\s+KEY|UNIQUE)\b/i.exec(line);
-      if (inline) add(table, inline[1]);
+      const inline = /^\s*(?:"([^"]+)"|([a-z_][a-z0-9_]*))\s+[^,]*\b(PRIMARY\s+KEY|UNIQUE)\b/i.exec(
+        line,
+      );
+      if (inline) add(table, inline[1] ?? inline[2]);
     }
   }
 
   // CREATE [UNIQUE] INDEX ... ON table (a, ...)
-  const indexPattern =
-    /\bCREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:CONCURRENTLY\s+)?(?:IF\s+NOT\s+EXISTS\s+)?[\w"]+\s+ON\s+([a-z_][\w.]*)\s*(?:USING\s+\w+\s*)?\(\s*([\w"]+)/gi;
+  const indexPattern = rule(
+    String.raw`\bCREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:CONCURRENTLY\s+)?(?:IF\s+NOT\s+EXISTS\s+)?<id>\s+ON\s+(<name>)\s*(?:USING\s+\w+\s*)?\(\s*([\w"]+)`,
+  );
   for (const match of sql.matchAll(indexPattern)) add(match[1], match[2].replaceAll('"', ''));
 
   return covered;
+}
+
+/**
+ * `ALTER DEFAULT PRIVILEGES ... GRANT ... ON TABLES TO <role>` widens every table created
+ * afterwards, which no replay of existing tables can see.
+ *
+ * It is refused rather than modelled. The premise of this gate is that a new table arrives
+ * granted ALL and a migration takes that away; a default privilege that grants MORE has no
+ * purpose here, and one that grants less would make the premise optimistic.
+ */
+function defaultPrivilegeGrants(sql) {
+  const found = [];
+  for (const statement of statementsOf(sql)) {
+    const match =
+      /\bALTER\s+DEFAULT\s+PRIVILEGES\b([\s\S]*?)\bGRANT\s+([\s\S]+?)\s+ON\s+(TABLES|SEQUENCES|FUNCTIONS|ROUTINES|TYPES|SCHEMAS)\s+TO\s+([\s\S]+)$/i.exec(
+        statement,
+      );
+    if (!match) continue;
+    const roles = match[4].split(',').map((role) => role.trim().replaceAll('"', '').toLowerCase());
+    if (match[3].toUpperCase() !== 'TABLES') continue;
+    if (!roles.some((role) => role === 'public' || CLIENT_ROLES.includes(role))) continue;
+    found.push(`${match[2].trim()} to ${roles.join(', ')}`);
+  }
+  return found;
 }
 
 const problems = [];
@@ -263,7 +321,23 @@ for (const file of files) {
   // tasks 2.2 and 2.4). Running deny-by-default tests against a live database is task 2.3.
   const created = createdTables(sql);
   const secured = securedTables(sql);
-  const granted = grantedTables(sql);
+  const changes = privilegeChanges(sql);
+  const granted = new Set(
+    changes
+      .filter((change) => change.action === 'GRANT')
+      .flatMap((change) =>
+        change.schema === undefined
+          ? change.tables
+          : [...privileges.keys()].filter((table) => table.startsWith(`${change.schema}.`)),
+      ),
+  );
+  for (const grant of defaultPrivilegeGrants(sql)) {
+    problems.push(
+      `${file}: it changes default privileges, granting ${grant}. Every table this repository ` +
+        'creates starts with ALL granted to anon and authenticated already, so a default ' +
+        'privilege can only widen what a later table inherits (ADR-0012, I-2)',
+    );
+  }
   for (const table of created) {
     if (!table.startsWith('public.')) continue;
     createdIn.set(table, file);
@@ -272,8 +346,12 @@ for (const file of files) {
   }
 
   const revoked = new Set();
-  for (const change of privilegeChanges(sql)) {
-    for (const table of change.tables) {
+  for (const change of changes) {
+    const targets =
+      change.schema === undefined
+        ? change.tables
+        : [...privileges.keys()].filter((table) => table.startsWith(`${change.schema}.`));
+    for (const table of targets) {
       if (change.action === 'REVOKE' && change.roles.length > 0) revoked.add(table);
       const held = privileges.get(table);
       if (!held) continue;
