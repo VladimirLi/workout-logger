@@ -111,6 +111,52 @@ describe('the deployed-boundary check', () => {
     expect(result.stderr).toContain('grants anon SELECT');
   });
 
+  it('rejects a table privilege granted through PUBLIC', () => {
+    // PUBLIC is every role, so a grant to it reaches `anon` and `authenticated` without naming
+    // either. The replay only counted statements that named a browser role, so this passed.
+    const result = run(`${aCorrectDump()}GRANT INSERT ON TABLE "public"."plans" TO PUBLIC;\n`);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/plans grants (anon|authenticated) INSERT/);
+  });
+
+  it('rejects a privilege granted to every table in the schema at once', () => {
+    const result = run(
+      `${aCorrectDump()}GRANT INSERT ON ALL TABLES IN SCHEMA "public" TO "authenticated";\n`,
+    );
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/grants authenticated INSERT/);
+  });
+
+  it('reports the platform’s own default privileges as the condition they are', () => {
+    // ADR-0011 records the decision not to change Supabase's default privileges on the
+    // development project, and the migration gate is what stops a new table keeping them. So
+    // this is stated in the summary rather than failed - a check that is red for something
+    // deliberately left alone teaches people to ignore it.
+    const result = run(
+      `${aCorrectDump()}ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "anon";\n` +
+        `ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "authenticated";\n`,
+    );
+    expect(result.stderr, result.stderr).toBe('');
+    expect(result.status).toBe(0);
+    expect(result.stdout).toMatch(/default privileges still grant ALL .* to anon, authenticated/s);
+  });
+
+  it('rejects default privileges for a role the platform does not configure', () => {
+    const result = run(
+      `${aCorrectDump()}ALTER DEFAULT PRIVILEGES IN SCHEMA "public" GRANT SELECT ON TABLES TO "some_other_role";\n`,
+    );
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/not the platform's own set/);
+  });
+
+  it('reads a table that the dump declares without IF NOT EXISTS', () => {
+    // `pg_dump` output is not a promise about which spelling it uses. A check that only
+    // recognises one form reports a deployed table as missing.
+    const result = run(aCorrectDump().replace(/CREATE TABLE IF NOT EXISTS /g, 'CREATE TABLE '));
+    expect(result.stderr, result.stderr).toBe('');
+    expect(result.status).toBe(0);
+  });
+
   it('rejects a table the app can no longer read', () => {
     const result = run(
       aCorrectDump().replace(

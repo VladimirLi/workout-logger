@@ -51,6 +51,21 @@ function runAll(migrations: Record<string, string>): {
   }
 }
 
+/** The same table, written the way a dump or a generator writes it: everything quoted. */
+const QUOTED_CORRECT = `${PREAMBLE}
+CREATE TABLE IF NOT EXISTS "public"."things" (
+  "user_id" uuid NOT NULL,
+  "id" text NOT NULL,
+  PRIMARY KEY ("user_id", "id")
+);
+ALTER TABLE "public"."things" ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE "public"."things" FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON TABLE "public"."things" TO "authenticated";
+CREATE POLICY "things_owner" ON "public"."things"
+  FOR ALL TO "authenticated"
+  USING ("user_id" = (SELECT auth.uid()));
+`;
+
 function run(sql: string): { status: number; stderr: string; stdout: string } {
   return runAll({ '20260101000000_probe.sql': sql });
 }
@@ -138,6 +153,69 @@ describe('the migration gate', () => {
     });
     expect(result.stderr, result.stderr).toBe('');
     expect(result.status).toBe(0);
+  });
+
+  it('rejects a write granted to every table in the schema at once', () => {
+    // The replay skipped any target starting with ALL, so this form re-opened every table in
+    // `public` and the gate had nothing to say. A later migration is exactly where it would
+    // appear, long after the file that created the table was reviewed.
+    const result = runAll({
+      '20260101000000_probe.sql': CORRECT,
+      '20260102000000_reopen.sql': `${PREAMBLE}GRANT INSERT ON ALL TABLES IN SCHEMA public TO authenticated;\n`,
+    });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/still leaves authenticated holding INSERT/);
+  });
+
+  it('rejects a privilege reaching every role through PUBLIC', () => {
+    const result = runAll({
+      '20260101000000_probe.sql': CORRECT,
+      '20260102000000_reopen.sql': `${PREAMBLE}GRANT INSERT ON public.things TO PUBLIC;\n`,
+    });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/still leaves anon holding INSERT/);
+  });
+
+  it('rejects default privileges that would open the next table', () => {
+    const result = runAll({
+      '20260101000000_probe.sql': CORRECT,
+      '20260102000000_defaults.sql': `${PREAMBLE}ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT INSERT ON TABLES TO authenticated;\n`,
+    });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/default privileges/i);
+  });
+
+  it('accepts a correct table written with quoted identifiers', () => {
+    // Every rule below is anchored on a table name, and the parsers only matched bare ones. A
+    // migration written the way a dump or a generator writes it was invisible to all of them:
+    // no RLS check, no grant check, no policy check, no index check.
+    const result = run(QUOTED_CORRECT);
+    expect(result.stderr, result.stderr).toBe('');
+    expect(result.status).toBe(0);
+  });
+
+  it('rejects a quoted table with no row-level security', () => {
+    const result = run(
+      QUOTED_CORRECT.replace('ALTER TABLE "public"."things" ENABLE ROW LEVEL SECURITY;', ''),
+    );
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('does not ENABLE ROW LEVEL SECURITY');
+  });
+
+  it('rejects a quoted table left writable by every signed-in user', () => {
+    const result = run(
+      QUOTED_CORRECT.replace('FROM PUBLIC, anon, authenticated;', 'FROM PUBLIC, anon;'),
+    );
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/still leaves authenticated holding/);
+  });
+
+  it('rejects a quoted table whose policy column no index leads with', () => {
+    const result = run(
+      QUOTED_CORRECT.replace('  PRIMARY KEY ("user_id", "id")', '  PRIMARY KEY ("id", "user_id")'),
+    );
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('is compared by a policy and is not the leading column');
   });
 
   it('rejects a secured table with no policy, which would be unreadable', () => {
