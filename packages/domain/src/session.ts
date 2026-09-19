@@ -1,13 +1,18 @@
 import type { CorrectionRevision } from './correction-revision.js';
+import { BORG_MAX, BORG_MIN, deriveRpe, RIR_MAX, RIR_MIN } from './exertion.js';
 import {
   LOAD_SEMANTICS,
+  MAX_INCLINE_PERCENT,
+  MAX_NOTES_LENGTH,
   MEASUREMENT_SCHEMA_VERSION,
   type Measurement,
+  MIN_INCLINE_PERCENT,
   SIDES,
 } from './measurement.js';
 import { findScheduledSession, type Plan } from './plan.js';
 import { err, ok, type Result } from './result.js';
 import type { Revision } from './revision.js';
+import { MAXIMUM_BY_UNIT, type Unit } from './units.js';
 
 /**
  * A workout session (workout-logging spec, R-005, ADR-0004).
@@ -112,41 +117,150 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function isQuantity(candidate: unknown, expectedUnit: string): boolean {
+/** Only the keys the shape defines, so a field nobody understands cannot ride along (R-021). */
+function hasOnly(candidate: Record<string, unknown>, keys: readonly string[]): boolean {
+  return Object.keys(candidate).every((key) => keys.includes(key));
+}
+
+function isQuantity(candidate: unknown, expectedUnit: Unit): boolean {
   if (!isRecord(candidate)) return false;
   const { unit, value } = candidate;
-  return unit === expectedUnit && typeof value === 'number' && Number.isFinite(value) && value >= 0;
+  return (
+    unit === expectedUnit &&
+    typeof value === 'number' &&
+    Number.isFinite(value) &&
+    value >= 0 &&
+    // The bound the constructor applies. A value `quantity()` would refuse must not become
+    // valid by arriving as JSON.
+    value <= MAXIMUM_BY_UNIT[expectedUnit] &&
+    hasOnly(candidate, ['unit', 'value'])
+  );
 }
 
 function isPositiveInteger(value: unknown): boolean {
   return typeof value === 'number' && Number.isInteger(value) && value >= 1;
 }
 
-function optionalQuantity(value: unknown, unit: string): boolean {
+function optionalQuantity(value: unknown, unit: Unit): boolean {
   return value === undefined || isQuantity(value, unit);
 }
 
+function areNotes(value: unknown): boolean {
+  return value === undefined || (typeof value === 'string' && value.length <= MAX_NOTES_LENGTH);
+}
+
+function isHalfStep(value: number): boolean {
+  return Number.isInteger(value * 2);
+}
+
 /**
- * Runtime shape check for a measurement of the current schema version. The factories in
- * measurement.ts validate ranges; this guards the boundary where a value was not built by them.
+ * A strength exertion, including the relationship between its two fields.
+ *
+ * RPE is derived from RIR, never entered (ADR-0004). Validating them independently would let a
+ * record assert RIR 2 with RPE 1 - two different efforts at once - which is exactly what the
+ * wire contract refuses in packages/contracts/src/measurement.ts.
+ */
+function isStrengthExertion(value: unknown): boolean {
+  if (value === undefined) return true;
+  if (!isRecord(value) || !hasOnly(value, ['profile', 'rir', 'rpe'])) return false;
+  if (value['profile'] !== 'strength') return false;
+  const rir = value['rir'];
+  const rpe = value['rpe'];
+  if (!isRecord(rir) || !hasOnly(rir, ['kind', 'value']) || rir['kind'] !== 'rir') return false;
+  if (!isRecord(rpe) || !hasOnly(rpe, ['kind', 'value']) || rpe['kind'] !== 'rpe_derived') {
+    return false;
+  }
+  const rirValue = rir['value'];
+  const rpeValue = rpe['value'];
+  if (typeof rirValue !== 'number' || !Number.isFinite(rirValue)) return false;
+  if (rirValue < RIR_MIN || rirValue > RIR_MAX || !isHalfStep(rirValue)) return false;
+  if (typeof rpeValue !== 'number') return false;
+  return rpeValue === deriveRpe({ kind: 'rir', value: rirValue }).value;
+}
+
+function isCardioExertion(value: unknown): boolean {
+  if (value === undefined) return true;
+  if (!isRecord(value) || !hasOnly(value, ['profile', 'borg'])) return false;
+  if (value['profile'] !== 'cardio') return false;
+  const borg = value['borg'];
+  return typeof borg === 'number' && Number.isInteger(borg) && borg >= BORG_MIN && borg <= BORG_MAX;
+}
+
+function isIncline(value: unknown): boolean {
+  return (
+    value === undefined ||
+    (typeof value === 'number' &&
+      Number.isFinite(value) &&
+      value >= MIN_INCLINE_PERCENT &&
+      value <= MAX_INCLINE_PERCENT)
+  );
+}
+
+/**
+ * Runtime shape check for a measurement of the current schema version.
+ *
+ * This is the domain's half of one contract, and it has to be the WHOLE contract: the same
+ * fields, bounds and closed key sets that packages/contracts validates on the wire and the
+ * database validates before it stores the JSON. A field this check walks past is a field that
+ * reaches storage unvalidated, however carefully the factories in measurement.ts were written -
+ * measurements arrive from IndexedDB and from the network as well as from code.
  */
 export function isMeasurement(candidate: unknown): candidate is Measurement {
   if (!isRecord(candidate)) return false;
   const { schemaVersion, profile, repetitions, load, side, loadSemantics, duration, distance } =
     candidate;
   if (schemaVersion !== MEASUREMENT_SCHEMA_VERSION) return false;
+  if (!areNotes(candidate['notes'])) return false;
+
   switch (profile) {
     case 'strength':
-      return isPositiveInteger(repetitions) && optionalQuantity(load, 'kg');
+      return (
+        hasOnly(candidate, [
+          'schemaVersion',
+          'profile',
+          'repetitions',
+          'load',
+          'exertion',
+          'notes',
+        ]) &&
+        isPositiveInteger(repetitions) &&
+        optionalQuantity(load, 'kg') &&
+        isStrengthExertion(candidate['exertion'])
+      );
     case 'unilateral_strength':
       return (
+        hasOnly(candidate, [
+          'schemaVersion',
+          'profile',
+          'side',
+          'loadSemantics',
+          'repetitions',
+          'load',
+          'exertion',
+          'notes',
+        ]) &&
         isPositiveInteger(repetitions) &&
         optionalQuantity(load, 'kg') &&
         (SIDES as readonly unknown[]).includes(side) &&
-        (LOAD_SEMANTICS as readonly unknown[]).includes(loadSemantics)
+        (LOAD_SEMANTICS as readonly unknown[]).includes(loadSemantics) &&
+        isStrengthExertion(candidate['exertion'])
       );
     case 'cardio':
-      return isQuantity(duration, 's') && optionalQuantity(distance, 'm');
+      return (
+        hasOnly(candidate, [
+          'schemaVersion',
+          'profile',
+          'duration',
+          'distance',
+          'inclinePercent',
+          'exertion',
+          'notes',
+        ]) &&
+        isQuantity(duration, 's') &&
+        optionalQuantity(distance, 'm') &&
+        isIncline(candidate['inclinePercent']) &&
+        isCardioExertion(candidate['exertion'])
+      );
     default:
       return false;
   }

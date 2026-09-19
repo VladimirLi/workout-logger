@@ -192,6 +192,124 @@ describe('recording results', () => {
       'unilateral without load semantics',
       { profile: 'unilateral_strength', schemaVersion: 1, side: 'left', repetitions: 8 },
     ],
+    // The fields the wire contract validates and this check used to walk past. A measurement
+    // that reaches storage or the network is only as typed as the check that let it in, and
+    // packages/contracts is the same contract with the same bounds (R-021, ADR-0004).
+    [
+      'a load above the maximum for its unit',
+      { profile: 'strength', schemaVersion: 1, repetitions: 8, load: { unit: 'kg', value: 1_001 } },
+    ],
+    [
+      'a load carrying a field the contract does not define',
+      {
+        profile: 'strength',
+        schemaVersion: 1,
+        repetitions: 8,
+        load: { unit: 'kg', value: 80, estimated: true },
+      },
+    ],
+    [
+      'notes longer than the contract permits',
+      { profile: 'strength', schemaVersion: 1, repetitions: 8, notes: 'x'.repeat(2_001) },
+    ],
+    [
+      'notes that are not a string',
+      { profile: 'strength', schemaVersion: 1, repetitions: 8, notes: 12 },
+    ],
+    [
+      'an exertion of the wrong profile',
+      {
+        profile: 'strength',
+        schemaVersion: 1,
+        repetitions: 8,
+        exertion: { profile: 'cardio', borg: 12 },
+      },
+    ],
+    [
+      'reps in reserve outside the scale',
+      {
+        profile: 'strength',
+        schemaVersion: 1,
+        repetitions: 8,
+        exertion: {
+          profile: 'strength',
+          rir: { kind: 'rir', value: 11 },
+          rpe: { kind: 'rpe_derived', value: 1 },
+        },
+      },
+    ],
+    [
+      'reps in reserve off the half step',
+      {
+        profile: 'strength',
+        schemaVersion: 1,
+        repetitions: 8,
+        exertion: {
+          profile: 'strength',
+          rir: { kind: 'rir', value: 2.25 },
+          rpe: { kind: 'rpe_derived', value: 8 },
+        },
+      },
+    ],
+    [
+      // The interpretation must follow from the observation, or a record asserts two
+      // different efforts at once (ADR-0004).
+      'an RPE that is not the one derived from the RIR',
+      {
+        profile: 'strength',
+        schemaVersion: 1,
+        repetitions: 8,
+        exertion: {
+          profile: 'strength',
+          rir: { kind: 'rir', value: 2 },
+          rpe: { kind: 'rpe_derived', value: 1 },
+        },
+      },
+    ],
+    [
+      'a Borg rating outside 6 to 20',
+      {
+        profile: 'cardio',
+        schemaVersion: 1,
+        duration: { unit: 's', value: 600 },
+        exertion: { profile: 'cardio', borg: 21 },
+      },
+    ],
+    [
+      'a Borg rating that is not whole',
+      {
+        profile: 'cardio',
+        schemaVersion: 1,
+        duration: { unit: 's', value: 600 },
+        exertion: { profile: 'cardio', borg: 12.5 },
+      },
+    ],
+    [
+      'an incline outside the range the contract permits',
+      {
+        profile: 'cardio',
+        schemaVersion: 1,
+        duration: { unit: 's', value: 600 },
+        inclinePercent: 41,
+      },
+    ],
+    [
+      'an incline that is not a number',
+      {
+        profile: 'cardio',
+        schemaVersion: 1,
+        duration: { unit: 's', value: 600 },
+        inclinePercent: '10',
+      },
+    ],
+    [
+      'a field no profile defines',
+      { profile: 'strength', schemaVersion: 1, repetitions: 8, restSeconds: 90 },
+    ],
+    [
+      'a field belonging to another profile',
+      { profile: 'strength', schemaVersion: 1, repetitions: 8, side: 'left' },
+    ],
   ])('refuses %s at runtime', (_label, measurement) => {
     const result = recordSet(started(), {
       setId: 'set-1',
@@ -200,6 +318,58 @@ describe('recording results', () => {
       recordedAt: at(3),
     });
     expect(result).toEqual({ ok: false, error: { kind: 'not_a_measurement', setId: 'set-1' } });
+  });
+
+  it.each([
+    [
+      'notes at the limit',
+      { profile: 'strength', schemaVersion: 1, repetitions: 8, notes: 'x'.repeat(2_000) },
+    ],
+    [
+      'a strength exertion whose RPE follows from its RIR',
+      {
+        profile: 'strength',
+        schemaVersion: 1,
+        repetitions: 8,
+        exertion: {
+          profile: 'strength',
+          rir: { kind: 'rir', value: 2.5 },
+          rpe: { kind: 'rpe_derived', value: 7.5 },
+        },
+      },
+    ],
+    [
+      'an RIR of nine or more, where the derived RPE bottoms out at one',
+      {
+        profile: 'strength',
+        schemaVersion: 1,
+        repetitions: 8,
+        exertion: {
+          profile: 'strength',
+          rir: { kind: 'rir', value: 9.5 },
+          rpe: { kind: 'rpe_derived', value: 1 },
+        },
+      },
+    ],
+    [
+      'a downhill incline and a Borg rating',
+      {
+        profile: 'cardio',
+        schemaVersion: 1,
+        duration: { unit: 's', value: 600 },
+        inclinePercent: -20,
+        exertion: { profile: 'cardio', borg: 6 },
+      },
+    ],
+  ])('accepts %s, which the contract permits', (_label, measurement) => {
+    // The control. A check that refused everything would pass every rejection above.
+    const result = recordSet(started(), {
+      setId: 'set-1',
+      exerciseId: 'back-squat',
+      measurement: measurement as never,
+      recordedAt: at(3),
+    });
+    expect(result.ok, JSON.stringify(measurement)).toBe(true);
   });
 
   it('accepts cardio with a duration quantity', () => {

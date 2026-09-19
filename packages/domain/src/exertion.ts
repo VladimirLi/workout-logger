@@ -15,10 +15,11 @@ export type ExertionError =
     }
   | { readonly kind: 'not_half_step'; readonly received: number };
 
-const RIR_MIN = 0;
-const RIR_MAX = 10;
-const BORG_MIN = 6;
-const BORG_MAX = 20;
+/** Exported for the same reason as the measurement bounds: one copy of each number. */
+export const RIR_MIN = 0;
+export const RIR_MAX = 10;
+export const BORG_MIN = 6;
+export const BORG_MAX = 20;
 
 /**
  * Reps in reserve. The authoritative user-entered value for strength sets.
