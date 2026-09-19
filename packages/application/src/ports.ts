@@ -33,7 +33,15 @@ export interface CommitDecisionRequest {
 }
 
 export type CommitDecisionOutcome =
-  | { readonly kind: 'committed'; readonly revision: Revision }
+  /**
+   * The decision was recorded.
+   *
+   * `revision` is the plan's revision after the commit, and is absent when the decision did not
+   * concern the plan: a rejection must not read or advance it (see `rejectIfPending`), so an
+   * implementation that never looks has nothing authoritative to report. No caller depends on
+   * the value; reporting one for a rejection would suggest the plan had been consulted.
+   */
+  | { readonly kind: 'committed'; readonly revision?: Revision }
   /** The plan moved between the read and the commit. The decision is void. */
   | { readonly kind: 'revision_changed'; readonly currentRevision: Revision }
   /** Someone else decided this proposal first. */

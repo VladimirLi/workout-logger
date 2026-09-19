@@ -1,3 +1,5 @@
+import type { CommitDecisionRequest } from '@workout/application';
+import type { Revision } from '@workout/domain';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { serverConfig } from './config.js';
 import { SupabaseProposalStore } from './repositories.js';
@@ -23,6 +25,30 @@ const config = serverConfig({
 if (!config.ok) throw new Error('the test configuration should be valid');
 const server = config.value;
 const USER = { id: 'user-1', accessToken: 'a-user-access-token' } as const;
+
+/** A decision request as the use case makes one: an acceptance against revision 5. */
+function aCommit(
+  overrides: { status?: 'accepted' | 'rejected'; advanceRevision?: boolean } = {},
+): CommitDecisionRequest {
+  const { status = 'accepted', advanceRevision = status === 'accepted' } = overrides;
+  return {
+    userId: 'user-1',
+    proposal: {
+      id: 'prop-1',
+      actor: { clientId: 'c', actorId: 'a' },
+      baseRevision: 5 as Revision,
+      diff: { op: 'replace_plan', sessions: [] },
+      rationale: 'because',
+      inputHash: 'hash',
+      createdAt: new Date('2026-09-18T00:00:00Z'),
+      expiresAt: new Date('2026-09-19T00:00:00Z'),
+      status,
+    },
+    expectedRevision: 5 as Revision,
+    expectedStatus: 'pending',
+    advanceRevision,
+  };
+}
 
 interface Call {
   url: string;
@@ -80,57 +106,87 @@ describe('the Supabase proposal store', () => {
     expect(calls[0]?.headers['Authorization']).toBe('Bearer a-user-access-token');
   });
 
-  it('commits a decision through the database function, with the expected state', async () => {
-    // The compare-and-set cannot be a read then a write from here, so the adapter must call
-    // the function that does both in one transaction.
+  it('carries the compare-and-set to the server when it accepts', async () => {
+    // The port mandates a compare-and-set over the revision AND the status
+    // (packages/application/src/ports.ts). The adapter used to drop all three inputs and send
+    // only the intent, which left the contract enforced nowhere: the server derived its own
+    // answer, so a caller that had decided against a different revision was never told.
+    const calls = stubFetch({ status: 200, body: '{"kind":"committed","revision":6}' });
+    const outcome = await new SupabaseProposalStore(server, USER).commitDecision(aCommit());
+
+    expect(calls[0]?.url).toContain('/rpc/accept_proposal');
+    const sent = JSON.parse(calls[0]?.body ?? '{}') as Record<string, unknown>;
+    // The expectations, and nothing else. The decision time, the target status and whether the
+    // plan advances remain the server's, derived from rows it locks.
+    expect(sent).toEqual({
+      p_proposal_id: 'prop-1',
+      p_expected_status: 'pending',
+      p_expected_revision: 5,
+    });
+    expect(outcome).toEqual({ kind: 'committed', revision: 6 });
+  });
+
+  it('carries only the status compare-and-set when it rejects', async () => {
+    // A rejection is about the proposal's content, so it must not read or advance the revision -
+    // and therefore must not send one either.
+    const calls = stubFetch({ status: 200, body: '{"kind":"committed"}' });
+    const outcome = await new SupabaseProposalStore(server, USER).commitDecision(
+      aCommit({ status: 'rejected', advanceRevision: false }),
+    );
+
+    expect(calls[0]?.url).toContain('/rpc/reject_proposal');
+    expect(JSON.parse(calls[0]?.body ?? '{}')).toEqual({
+      p_proposal_id: 'prop-1',
+      p_expected_status: 'pending',
+    });
+    expect(outcome).toEqual({ kind: 'committed' });
+  });
+
+  it('refuses a request whose advanceRevision contradicts its own decision', async () => {
+    // An acceptance changes the plan and a rejection does not, so these cannot disagree. A
+    // caller that says otherwise has a bug, and carrying on would commit one of the two
+    // meanings silently.
     const calls = stubFetch({ status: 200, body: '{"kind":"committed","revision":6}' });
     const store = new SupabaseProposalStore(server, USER);
-    const outcome = await store.commitDecision({
-      userId: 'user-1',
-      proposal: {
-        id: 'prop-1',
-        actor: { clientId: 'c', actorId: 'a' },
-        baseRevision: 5 as never,
-        diff: { op: 'replace_plan', sessions: [] },
-        rationale: 'because',
-        inputHash: 'hash',
-        createdAt: new Date('2026-09-18T00:00:00Z'),
-        expiresAt: new Date('2026-09-19T00:00:00Z'),
-        status: 'accepted',
-      },
-      expectedRevision: 5 as never,
-      expectedStatus: 'pending',
-      advanceRevision: true,
-    });
 
-    expect(calls[0]?.url).toContain('/rpc/decide_proposal');
-    const sent = JSON.parse(calls[0]?.body ?? '{}') as Record<string, unknown>;
-    // Only the intent. The revision, the status, the time and whether the plan advances are
-    // the server's to decide from rows it holds; sending them is offering a caller the chance
-    // to be wrong about its own decision.
-    expect(sent).toEqual({ p_proposal_id: 'prop-1', p_decision: 'accept' });
-    expect(outcome).toEqual({ kind: 'committed', revision: 6 });
+    await expect(store.commitDecision(aCommit({ advanceRevision: false }))).rejects.toThrow(
+      /advance/i,
+    );
+    await expect(
+      store.commitDecision(aCommit({ status: 'rejected', advanceRevision: true })),
+    ).rejects.toThrow(/advance/i);
+    expect(calls, 'a contradictory request reached the server').toHaveLength(0);
+  });
+
+  it('refuses a status the domain does not define, whatever the server said', async () => {
+    // The body is untrusted input like any other response. A status outside the vocabulary
+    // would otherwise flow into the domain as a valid one.
+    stubFetch({ status: 200, body: '{"kind":"status_changed","currentStatus":"half_accepted"}' });
+    await expect(new SupabaseProposalStore(server, USER).commitDecision(aCommit())).rejects.toThrow(
+      /understand/,
+    );
+  });
+
+  it('refuses a revision that is not a positive whole number', async () => {
+    for (const body of [
+      '{"kind":"committed","revision":0}',
+      '{"kind":"committed","revision":-3}',
+      '{"kind":"committed","revision":6.5}',
+      '{"kind":"revision_changed","currentRevision":0}',
+      '{"kind":"revision_changed","currentRevision":"9"}',
+    ]) {
+      stubFetch({ status: 200, body });
+      await expect(
+        new SupabaseProposalStore(server, USER).commitDecision(aCommit()),
+        body,
+      ).rejects.toThrow(/understand/);
+      vi.unstubAllGlobals();
+    }
   });
 
   it('reports a moved revision as the port describes it', async () => {
     stubFetch({ status: 200, body: '{"kind":"revision_changed","currentRevision":9}' });
-    const outcome = await new SupabaseProposalStore(server, USER).commitDecision({
-      userId: 'user-1',
-      proposal: {
-        id: 'prop-1',
-        actor: { clientId: 'c', actorId: 'a' },
-        baseRevision: 5 as never,
-        diff: { op: 'replace_plan', sessions: [] },
-        rationale: 'because',
-        inputHash: 'hash',
-        createdAt: new Date('2026-09-18T00:00:00Z'),
-        expiresAt: new Date('2026-09-19T00:00:00Z'),
-        status: 'accepted',
-      },
-      expectedRevision: 5 as never,
-      expectedStatus: 'pending',
-      advanceRevision: true,
-    });
+    const outcome = await new SupabaseProposalStore(server, USER).commitDecision(aCommit());
     expect(outcome).toEqual({ kind: 'revision_changed', currentRevision: 9 });
   });
 
