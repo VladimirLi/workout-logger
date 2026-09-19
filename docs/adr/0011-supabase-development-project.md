@@ -49,9 +49,19 @@ This is Supabase's own default, not something this repository configured. A tabl
 `public` therefore arrives granted to anonymous callers, and is protected only by the RLS the
 event trigger enables — deny-by-default rests on row-level security rather than on grants.
 
-Every table this repository creates revokes those grants explicitly, and the migration gate
-refuses a migration that forgets to (`scripts/validate-migrations.mjs`). That covers what this
-repository creates and nothing else.
+Every table this repository creates revoked those grants from `PUBLIC` and `anon`, and the
+migration gate refused a migration that forgot to — but neither covered `authenticated`, and
+that is the role a browser holds. The effective privileges on all six tables were therefore ALL
+for any signed-in user, bounded by row-level security but not by the functions that own the
+writes; a provider test proved it by rebasing a stored proposal as a signed-in user, which makes
+a stale proposal acceptable (review of d535b3f..cc91a55, 2026-09-19).
+
+Corrected on 2026-09-19: migration 20260919110000 revokes every write privilege on all six
+tables from `PUBLIC`, `anon` and `authenticated` and grants back only SELECT, so a change
+reaches the database only through a `SECURITY DEFINER` function. The gate now requires that
+revocation for every table it sees created, checked across the whole migration set rather than
+per file, because an applied migration is not rewritten. This still covers only what this
+repository creates.
 
 **Recommendation, deliberately not acted on here:** revoke those default privileges on the
 production project before it holds data. It is a change to platform behaviour with
