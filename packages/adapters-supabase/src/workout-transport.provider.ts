@@ -1,7 +1,7 @@
-import { createHash } from 'node:crypto';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { serverConfig } from './config.js';
 import { rpc, select, upsert } from './rest.js';
+import { signInDevelopmentUser } from './test-identity.js';
 import { SupabaseWorkoutTransport } from './workout-transport.js';
 
 /**
@@ -9,6 +9,11 @@ import { SupabaseWorkoutTransport } from './workout-transport.js';
  *
  * `.provider.ts`, so `pnpm verify` never runs it. Every assertion here is about what the
  * database did, read back after the fact rather than inferred from a return value.
+ *
+ * The transport sends as a signed-in user, because that is the only role the application ever
+ * has. The service role is used to set up and to read back, never to make the call under test:
+ * it bypasses row-level security and every grant, so it would hide exactly the failures these
+ * assertions are for.
  */
 
 const url = process.env['NEXT_PUBLIC_SUPABASE_URL'];
@@ -25,26 +30,11 @@ const server = config.value;
 const rest = { url: server.url, key: server.serviceRoleKey };
 const admin = { apikey: server.serviceRoleKey, Authorization: `Bearer ${server.serviceRoleKey}` };
 
-const fingerprint = (mutation: unknown) =>
-  createHash('sha256').update(JSON.stringify(mutation)).digest('hex');
-
 const EMAIL = 'transport-user@workout-logger.invalid';
 let userId = '';
-
-async function ensureUser(): Promise<string> {
-  const listed = await fetch(`${server.url}/auth/v1/admin/users?per_page=200`, { headers: admin });
-  const { users } = (await listed.json()) as { users?: { id: string; email: string }[] };
-  const existing = users?.find((user) => user.email === EMAIL);
-  if (existing) return existing.id;
-  const created = await fetch(`${server.url}/auth/v1/admin/users`, {
-    method: 'POST',
-    headers: { ...admin, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: EMAIL, email_confirm: true }),
-  });
-  const body = (await created.json()) as { id?: string; msg?: string };
-  if (!body.id) throw new Error(`could not create the development user: ${body.msg ?? '?'}`);
-  return body.id;
-}
+/** The user's own REST credentials, for the one assertion that calls the function directly. */
+let asUser = { url: server.url, key: server.anonKey, accessToken: '' };
+let transport: SupabaseWorkoutTransport;
 
 /** Empties this user's rows and seeds the plan a session has to belong to. */
 async function reset(): Promise<void> {
@@ -84,13 +74,15 @@ const startSession = (id: string) => ({
 const KEY = '11111111-1111-4111-8111-111111111111';
 
 beforeAll(async () => {
-  userId = await ensureUser();
+  const signedIn = await signInDevelopmentUser(server, EMAIL);
+  userId = signedIn.id;
+  asUser = { url: server.url, key: server.anonKey, accessToken: signedIn.accessToken };
+  transport = new SupabaseWorkoutTransport(server, signedIn.accessToken);
 }, 60_000);
 
 describe('delivering a mutation to the server', () => {
   it('applies it once and records the key in the same transaction', async () => {
     await reset();
-    const transport = new SupabaseWorkoutTransport(server, userId, fingerprint);
     const mutation = startSession('workout-1');
 
     expect(await transport.send({ idempotencyKey: KEY, mutation })).toEqual({
@@ -107,7 +99,6 @@ describe('delivering a mutation to the server', () => {
 
   it('returns the original result on replay, with no duplicate row', async () => {
     await reset();
-    const transport = new SupabaseWorkoutTransport(server, userId, fingerprint);
     const mutation = startSession('workout-1');
 
     await transport.send({ idempotencyKey: KEY, mutation });
@@ -118,15 +109,12 @@ describe('delivering a mutation to the server', () => {
     const sessions = await select<{ id: string }>(rest, 'workout_sessions', `user_id=eq.${userId}`);
     expect(sessions, 'the replay created a second row').toHaveLength(1);
 
+    // The transport reports a replay as a plain success, so the distinction is only visible
+    // in the function's own answer. Called as the user, which is the only way it is callable.
     const raw = await rpc<{ kind: string; result: { sessionId: string } }>(
-      rest,
+      asUser,
       'apply_workout_mutation',
-      {
-        p_user_id: userId,
-        p_key: KEY,
-        p_fingerprint: fingerprint(mutation),
-        p_mutation: mutation,
-      },
+      { p_key: KEY, p_mutation: mutation },
     );
     expect(raw.kind).toBe('replayed');
     expect(raw.result).toEqual({ sessionId: 'workout-1' });
@@ -134,8 +122,6 @@ describe('delivering a mutation to the server', () => {
 
   it('refuses a key reused for a different payload (task 4.3)', async () => {
     await reset();
-    const transport = new SupabaseWorkoutTransport(server, userId, fingerprint);
-
     await transport.send({ idempotencyKey: KEY, mutation: startSession('workout-1') });
     const reused = await transport.send({
       idempotencyKey: KEY,
@@ -155,8 +141,6 @@ describe('delivering a mutation to the server', () => {
     // The mutation fails: completing a session that is not there. The key must not survive it,
     // or the client could never deliver that change at all.
     await reset();
-    const transport = new SupabaseWorkoutTransport(server, userId, fingerprint);
-
     const outcome = await transport.send({
       idempotencyKey: KEY,
       mutation: {
@@ -173,7 +157,6 @@ describe('delivering a mutation to the server', () => {
 
   it('records a set and completes the session it belongs to', async () => {
     await reset();
-    const transport = new SupabaseWorkoutTransport(server, userId, fingerprint);
     await transport.send({ idempotencyKey: KEY, mutation: startSession('workout-1') });
 
     await transport.send({
