@@ -74,30 +74,88 @@ function grantedTables(sql) {
 }
 
 /**
- * Tables the migration revokes from a role, by role.
+ * The privileges a client role holds on each table, replayed statement by statement.
  *
- * `anon` and `PUBLIC` are the deny-by-default half. `authenticated` is the half that was
- * missed: Supabase's default privileges grant ALL on a table created in `public` to it, so a
- * migration that only revokes from `PUBLIC, anon` leaves every signed-in user able to INSERT,
- * UPDATE and DELETE, bounded by row-level security but not by the functions that are supposed
- * to own the writes. That is how a caller could rewrite a stored revision and make a stale
- * proposal acceptable (review of d535b3f..cc91a55, fixed by 20260919110000).
+ * Fail closed, from what Supabase actually does rather than from what a migration says: default
+ * privileges in `public` grant ALL on a new table to `anon` and `authenticated`, so a table
+ * starts fully writable and a migration has to take that away. Two mistakes follow from
+ * modelling it any other way, and the repository made both: revoking from `PUBLIC, anon` looks
+ * like deny-by-default and leaves `authenticated` untouched, and revoking a named list leaves
+ * whatever the list forgot - TRIGGER and, on Postgres 17, MAINTAIN.
  *
- * One REVOKE can name several tables and several roles, so both sides are split.
+ * Replaying also catches the case a per-file check cannot see at all: a later migration granting
+ * a write back.
  */
-function revokedTables(sql) {
-  const pattern =
-    /\bREVOKE\s+[^;]*?\bON\s+(?:TABLE\s+)?([a-z_][\w.]*(?:\s*,\s*[a-z_][\w.]*)*)\s+FROM\s+([^;]+)/gi;
-  const fromAnon = new Set();
-  const fromAuthenticated = new Set();
-  for (const match of sql.matchAll(pattern)) {
-    const tables = match[1].split(',').map((table) => qualify(table.trim()));
-    for (const table of tables) {
-      if (/\b(public|anon)\b/i.test(match[2])) fromAnon.add(table);
-      if (/\bauthenticated\b/i.test(match[2])) fromAuthenticated.add(table);
+const TABLE_PRIVILEGES = [
+  'SELECT',
+  'INSERT',
+  'UPDATE',
+  'DELETE',
+  'TRUNCATE',
+  'REFERENCES',
+  'TRIGGER',
+  'MAINTAIN',
+];
+
+/** The roles a browser can hold. `service_role` is the server's own and is not modelled. */
+const CLIENT_ROLES = ['anon', 'authenticated'];
+
+/** What a client role may still hold once every migration has run. */
+const PERMITTED = { anon: [], authenticated: ['SELECT'] };
+
+/** SQL with comments and function bodies removed, so only real statements are parsed. */
+function statementsOf(sql) {
+  return sql
+    .replace(/\$\$[\s\S]*?\$\$/g, ' ')
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/--[^\n]*/g, ' ')
+    .split(';');
+}
+
+/**
+ * Privilege changes to tables, in order. Anything that is not a table - a function, a schema, a
+ * sequence, a default privilege - is not part of this model and is skipped.
+ */
+function privilegeChanges(sql) {
+  const changes = [];
+  for (const statement of statementsOf(sql)) {
+    const match =
+      /^\s*(GRANT|REVOKE)\s+([\s\S]+?)\s+ON\s+([\s\S]+?)\s+(?:TO|FROM)\s+([\s\S]+)$/i.exec(
+        statement,
+      );
+    if (!match) continue;
+    const [, action, privileges, target, roles] = match;
+    if (
+      /^\s*(FUNCTION|PROCEDURE|ROUTINE|SCHEMA|SEQUENCE|DATABASE|TYPE|DOMAIN|LARGE|FOREIGN|ALL)\b/i.test(
+        target,
+      )
+    ) {
+      continue;
     }
+    const named = privileges.trim().toUpperCase();
+    changes.push({
+      action: action.toUpperCase(),
+      privileges: /^ALL\b/.test(named)
+        ? [...TABLE_PRIVILEGES]
+        : named.split(',').map((privilege) => privilege.trim().split(/\s|\(/)[0]),
+      tables: target
+        .replace(/^\s*TABLE\s+/i, '')
+        .split(',')
+        .map((table) => qualify(table.trim())),
+      // PUBLIC is asymmetric, and this is the asymmetry the repository got wrong: a GRANT to
+      // PUBLIC reaches every role, while a REVOKE from PUBLIC takes away nothing that was
+      // granted to a role directly - which is why `REVOKE ALL ... FROM PUBLIC, anon` left
+      // `authenticated` holding everything Supabase's default privileges had given it.
+      roles: (() => {
+        const named = roles.split(',').map((role) => role.trim().replace(/"/g, '').toLowerCase());
+        const direct = named.filter((role) => CLIENT_ROLES.includes(role));
+        return action.toUpperCase() === 'GRANT' && named.includes('public')
+          ? [...new Set([...direct, ...CLIENT_ROLES])]
+          : direct;
+      })(),
+    });
   }
-  return { fromAnon, fromAuthenticated };
+  return changes;
 }
 
 /**
@@ -163,8 +221,8 @@ function leadingIndexedColumns(sql) {
 const problems = [];
 /** Public tables and the migration that created them, for the cumulative checks below. */
 const createdIn = new Map();
-/** Tables any migration has revoked write privileges from `authenticated` on. */
-const writesRevoked = new Set();
+/** Per table, the privileges each client role still holds as the migrations are replayed. */
+const privileges = new Map();
 const timestamps = [];
 
 for (const file of files) {
@@ -206,10 +264,40 @@ for (const file of files) {
   const created = createdTables(sql);
   const secured = securedTables(sql);
   const granted = grantedTables(sql);
-  const revoked = revokedTables(sql).fromAnon;
-  for (const table of revokedTables(sql).fromAuthenticated) writesRevoked.add(table);
   for (const table of created) {
-    if (table.startsWith('public.')) createdIn.set(table, file);
+    if (!table.startsWith('public.')) continue;
+    createdIn.set(table, file);
+    // Supabase's default privileges, which is the state a migration inherits.
+    privileges.set(table, new Map(CLIENT_ROLES.map((role) => [role, new Set(TABLE_PRIVILEGES)])));
+  }
+
+  const revoked = new Set();
+  for (const change of privilegeChanges(sql)) {
+    for (const table of change.tables) {
+      if (change.action === 'REVOKE' && change.roles.length > 0) revoked.add(table);
+      const held = privileges.get(table);
+      if (!held) continue;
+      for (const role of change.roles) {
+        const set = held.get(role);
+        if (!set) continue;
+        for (const privilege of change.privileges) {
+          if (change.action === 'GRANT') set.add(privilege);
+          else set.delete(privilege);
+        }
+      }
+    }
+  }
+  // Stating deny-by-default in the file that creates the table, as well as ending up there.
+  for (const statement of statementsOf(sql)) {
+    const match = /^\s*REVOKE\s+[\s\S]+?\s+ON\s+([\s\S]+?)\s+FROM\s+([\s\S]+)$/i.exec(statement);
+    if (match && /\b(public|anon)\b/i.test(match[2])) {
+      for (const table of match[1]
+        .replace(/^\s*TABLE\s+/i, '')
+        .split(',')
+        .map((table) => qualify(table.trim()))) {
+        revoked.add(table);
+      }
+    }
   }
   const predicates = policyPredicateColumns(sql);
   const indexed = leadingIndexedColumns(sql);
@@ -243,18 +331,27 @@ for (const file of files) {
 }
 
 /**
- * Every table must have its write privileges taken away from `authenticated` somewhere.
+ * What a client role is left holding once every migration has run (ADR-0012, I-2).
  *
  * Checked across the whole set rather than per file, because a table created before this rule
- * existed is corrected by a later migration, and an applied migration is not rewritten.
+ * existed is corrected by a later migration and an applied migration is not rewritten. The
+ * final state is what the database enforces, so the final state is what is asserted.
  */
 for (const [table, file] of createdIn) {
-  if (!writesRevoked.has(table)) {
-    problems.push(
-      `${table} (created in ${file}) is never revoked from authenticated, and Supabase's ` +
-        'default privileges grant ALL on a new table in public to that role, so every ' +
-        'signed-in user may write it directly',
-    );
+  const held = privileges.get(table) ?? new Map();
+  for (const role of CLIENT_ROLES) {
+    const leftover = [...(held.get(role) ?? new Set())]
+      .filter((privilege) => !PERMITTED[role].includes(privilege))
+      .sort();
+    if (leftover.length > 0) {
+      problems.push(
+        `${table} (created in ${file}) still leaves ${role} holding ${leftover.join(', ')} ` +
+          "after every migration. Supabase's default privileges grant ALL on a new table in " +
+          'public to anon and authenticated, so revoke ALL PRIVILEGES from PUBLIC, anon, ' +
+          `authenticated and grant back only ${PERMITTED[role].join(', ') || 'nothing'} ` +
+          '(ADR-0012, I-2)',
+      );
+    }
   }
 }
 

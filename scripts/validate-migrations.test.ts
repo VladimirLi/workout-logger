@@ -85,11 +85,45 @@ describe('the migration gate', () => {
   it('rejects a table left writable by every signed-in user', () => {
     // Supabase's default privileges grant ALL on a new table in `public` to `authenticated`, so
     // revoking from PUBLIC and anon leaves a signed-in user able to write it directly - past
-    // the functions that own those writes. The gate missed this until a caller proved it
-    // (review of d535b3f..cc91a55).
+    // the functions that own those writes (review of d535b3f..cc91a55).
     const result = run(CORRECT.replace('FROM PUBLIC, anon, authenticated;', 'FROM PUBLIC, anon;'));
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain('is never revoked from authenticated');
+    expect(result.stderr).toMatch(/still leaves authenticated holding .*INSERT/);
+  });
+
+  it('rejects a revocation that names privileges and forgets the rest', () => {
+    // The mistake the deployed database was carrying: revoking INSERT, UPDATE, DELETE, TRUNCATE
+    // and REFERENCES by name left TRIGGER and, on Postgres 17, MAINTAIN behind. TRIGGER on a
+    // table is enough to attach a function to it.
+    const result = run(
+      CORRECT.replace(
+        'REVOKE ALL ON public.things FROM PUBLIC, anon, authenticated;',
+        'REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES ON public.things\n' +
+          '  FROM PUBLIC, anon, authenticated;',
+      ),
+    );
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/still leaves authenticated holding MAINTAIN, TRIGGER/);
+  });
+
+  it('rejects a later migration that grants a write back', () => {
+    // A per-file check cannot see this at all: the file that creates the table is correct, and
+    // the privilege returns three migrations later.
+    const result = runAll({
+      '20260101000000_probe.sql': CORRECT,
+      '20260102000000_reopen.sql': `${PREAMBLE}GRANT INSERT ON public.things TO authenticated;\n`,
+    });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/still leaves authenticated holding INSERT/);
+  });
+
+  it('rejects any privilege at all for the anonymous role', () => {
+    const result = runAll({
+      '20260101000000_probe.sql': CORRECT,
+      '20260102000000_open_up.sql': `${PREAMBLE}GRANT SELECT ON public.things TO anon;\n`,
+    });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/still leaves anon holding SELECT/);
   });
 
   it('accepts the revocation arriving in a later migration, since an applied one is not rewritten', () => {
@@ -98,7 +132,9 @@ describe('the migration gate', () => {
         'FROM PUBLIC, anon, authenticated;',
         'FROM PUBLIC, anon;',
       ),
-      '20260102000000_lock_writes.sql': `${PREAMBLE}REVOKE INSERT, UPDATE, DELETE ON public.things FROM authenticated;\n`,
+      '20260102000000_lock_writes.sql':
+        `${PREAMBLE}REVOKE ALL PRIVILEGES ON public.things FROM PUBLIC, anon, authenticated;\n` +
+        'GRANT SELECT ON public.things TO authenticated;\n',
     });
     expect(result.stderr, result.stderr).toBe('');
     expect(result.status).toBe(0);
