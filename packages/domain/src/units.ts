@@ -31,8 +31,14 @@ export type QuantityError =
   | { readonly kind: 'negative'; readonly received: number }
   | { readonly kind: 'above_maximum'; readonly received: number; readonly maximum: number };
 
-/** Loose upper bounds. They catch unit mistakes and fat fingers, not world records. */
-const MAXIMUM_BY_UNIT: Readonly<Record<Unit, number>> = {
+/**
+ * Loose upper bounds. They catch unit mistakes and fat fingers, not world records.
+ *
+ * Exported because a runtime shape check at a boundary has to apply the same bound the
+ * constructor does: a value the factory would refuse must not become valid by arriving as JSON
+ * (packages/contracts/src/primitives.ts carries the same table for the wire).
+ */
+export const MAXIMUM_BY_UNIT: Readonly<Record<Unit, number>> = {
   kg: 1_000,
   m: 1_000_000,
   s: 86_400,

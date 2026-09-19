@@ -66,9 +66,13 @@ export type MeasurementError =
   | { readonly kind: 'incline_out_of_range'; readonly received: number }
   | { readonly kind: 'notes_too_long'; readonly length: number; readonly maximum: number };
 
-const MAX_NOTES_LENGTH = 2_000;
-const MAX_INCLINE_PERCENT = 40;
-const MIN_INCLINE_PERCENT = -20;
+/**
+ * Exported so the runtime shape check in session.ts applies the same bounds these factories do.
+ * A second copy of a number is how a boundary drifts from the contract it is meant to enforce.
+ */
+export const MAX_NOTES_LENGTH = 2_000;
+export const MAX_INCLINE_PERCENT = 40;
+export const MIN_INCLINE_PERCENT = -20;
 
 function validateRepetitions(repetitions: number): MeasurementError | undefined {
   if (!Number.isInteger(repetitions) || repetitions < 1) {
