@@ -13,9 +13,11 @@ application, follow a plan the device holds, log sets, rest, finish, and reopen 
 — with the network off from start to finish. The server side now exists too, against a
 development database: the schema is applied, deny-by-default is measured with real signed-in
 identities on every relation, the proposal store passes the port contract suite, and a mutation
-and its idempotency key commit together. Every write now goes through a database function that
-derives the identity, the revisions, the transitions, the timestamps and the replay comparison
-from rows it locks; a signed-in user may read its own rows and nothing more.
+and its idempotency key commit together. Every write goes through a database function that
+derives the identity, the revisions, the transitions, the timestamps, the session's plan facts
+and the replay comparison from rows it locks; a signed-in user may read its own rows and nothing
+more. ADR-0012 states that trust model as a matrix of invariants, each with the component that
+is authoritative for it and the test that proves it.
 
 Done: the domain and application layer (1.1–1.6); the device side of offline durability (4.1–
 4.11 except 4.3's server half, now also done); export and import (8.1, 8.2); the schema, its
