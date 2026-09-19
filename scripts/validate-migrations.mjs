@@ -73,14 +73,31 @@ function grantedTables(sql) {
   return new Set([...sql.matchAll(pattern)].map((match) => qualify(match[1])));
 }
 
-/** Tables the migration revokes from PUBLIC or anon: deny-by-default, stated. */
+/**
+ * Tables the migration revokes from a role, by role.
+ *
+ * `anon` and `PUBLIC` are the deny-by-default half. `authenticated` is the half that was
+ * missed: Supabase's default privileges grant ALL on a table created in `public` to it, so a
+ * migration that only revokes from `PUBLIC, anon` leaves every signed-in user able to INSERT,
+ * UPDATE and DELETE, bounded by row-level security but not by the functions that are supposed
+ * to own the writes. That is how a caller could rewrite a stored revision and make a stale
+ * proposal acceptable (review of d535b3f..cc91a55, fixed by 20260919110000).
+ *
+ * One REVOKE can name several tables and several roles, so both sides are split.
+ */
 function revokedTables(sql) {
-  const pattern = /\bREVOKE\s+[^;]*?\bON\s+(?:TABLE\s+)?([a-z_][\w.]*)\s+FROM\s+([^;]+)/gi;
-  const revoked = new Set();
+  const pattern =
+    /\bREVOKE\s+[^;]*?\bON\s+(?:TABLE\s+)?([a-z_][\w.]*(?:\s*,\s*[a-z_][\w.]*)*)\s+FROM\s+([^;]+)/gi;
+  const fromAnon = new Set();
+  const fromAuthenticated = new Set();
   for (const match of sql.matchAll(pattern)) {
-    if (/\b(public|anon)\b/i.test(match[2])) revoked.add(qualify(match[1]));
+    const tables = match[1].split(',').map((table) => qualify(table.trim()));
+    for (const table of tables) {
+      if (/\b(public|anon)\b/i.test(match[2])) fromAnon.add(table);
+      if (/\bauthenticated\b/i.test(match[2])) fromAuthenticated.add(table);
+    }
   }
-  return revoked;
+  return { fromAnon, fromAuthenticated };
 }
 
 /**
@@ -144,6 +161,10 @@ function leadingIndexedColumns(sql) {
 }
 
 const problems = [];
+/** Public tables and the migration that created them, for the cumulative checks below. */
+const createdIn = new Map();
+/** Tables any migration has revoked write privileges from `authenticated` on. */
+const writesRevoked = new Set();
 const timestamps = [];
 
 for (const file of files) {
@@ -185,7 +206,11 @@ for (const file of files) {
   const created = createdTables(sql);
   const secured = securedTables(sql);
   const granted = grantedTables(sql);
-  const revoked = revokedTables(sql);
+  const revoked = revokedTables(sql).fromAnon;
+  for (const table of revokedTables(sql).fromAuthenticated) writesRevoked.add(table);
+  for (const table of created) {
+    if (table.startsWith('public.')) createdIn.set(table, file);
+  }
   const predicates = policyPredicateColumns(sql);
   const indexed = leadingIndexedColumns(sql);
 
@@ -214,6 +239,22 @@ for (const file of files) {
         );
       }
     }
+  }
+}
+
+/**
+ * Every table must have its write privileges taken away from `authenticated` somewhere.
+ *
+ * Checked across the whole set rather than per file, because a table created before this rule
+ * existed is corrected by a later migration, and an applied migration is not rewritten.
+ */
+for (const [table, file] of createdIn) {
+  if (!writesRevoked.has(table)) {
+    problems.push(
+      `${table} (created in ${file}) is never revoked from authenticated, and Supabase's ` +
+        'default privileges grant ALL on a new table in public to that role, so every ' +
+        'signed-in user may write it directly',
+    );
   }
 }
 

@@ -26,23 +26,33 @@ CREATE TABLE IF NOT EXISTS public.things (
   PRIMARY KEY (user_id, id)
 );
 ALTER TABLE public.things ENABLE ROW LEVEL SECURITY;
-REVOKE ALL ON public.things FROM PUBLIC, anon;
+REVOKE ALL ON public.things FROM PUBLIC, anon, authenticated;
 GRANT SELECT ON public.things TO authenticated;
 CREATE POLICY things_owner ON public.things
   FOR ALL TO authenticated
   USING (user_id = (SELECT auth.uid()));
 `;
 
-function run(sql: string): { status: number; stderr: string; stdout: string } {
+function runAll(migrations: Record<string, string>): {
+  status: number;
+  stderr: string;
+  stdout: string;
+} {
   const directory = mkdtempSync(join(tmpdir(), 'migration-gate-'));
   try {
     mkdirSync(join(directory, 'supabase', 'migrations'), { recursive: true });
-    writeFileSync(join(directory, 'supabase', 'migrations', '20260101000000_probe.sql'), sql);
+    for (const [name, sql] of Object.entries(migrations)) {
+      writeFileSync(join(directory, 'supabase', 'migrations', name), sql);
+    }
     const result = spawnSync('node', [GATE], { cwd: directory, encoding: 'utf8' });
     return { status: result.status ?? -1, stderr: result.stderr, stdout: result.stdout };
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+}
+
+function run(sql: string): { status: number; stderr: string; stdout: string } {
+  return runAll({ '20260101000000_probe.sql': sql });
 }
 
 describe('the migration gate', () => {
@@ -65,9 +75,33 @@ describe('the migration gate', () => {
   });
 
   it('rejects a table that does not revoke from anon', () => {
-    const result = run(CORRECT.replace('REVOKE ALL ON public.things FROM PUBLIC, anon;', ''));
+    const result = run(
+      CORRECT.replace('REVOKE ALL ON public.things FROM PUBLIC, anon, authenticated;', ''),
+    );
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('deny by default');
+  });
+
+  it('rejects a table left writable by every signed-in user', () => {
+    // Supabase's default privileges grant ALL on a new table in `public` to `authenticated`, so
+    // revoking from PUBLIC and anon leaves a signed-in user able to write it directly - past
+    // the functions that own those writes. The gate missed this until a caller proved it
+    // (review of d535b3f..cc91a55).
+    const result = run(CORRECT.replace('FROM PUBLIC, anon, authenticated;', 'FROM PUBLIC, anon;'));
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('is never revoked from authenticated');
+  });
+
+  it('accepts the revocation arriving in a later migration, since an applied one is not rewritten', () => {
+    const result = runAll({
+      '20260101000000_probe.sql': CORRECT.replace(
+        'FROM PUBLIC, anon, authenticated;',
+        'FROM PUBLIC, anon;',
+      ),
+      '20260102000000_lock_writes.sql': `${PREAMBLE}REVOKE INSERT, UPDATE, DELETE ON public.things FROM authenticated;\n`,
+    });
+    expect(result.stderr, result.stderr).toBe('');
+    expect(result.status).toBe(0);
   });
 
   it('rejects a secured table with no policy, which would be unreadable', () => {
