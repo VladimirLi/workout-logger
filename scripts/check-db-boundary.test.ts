@@ -33,6 +33,14 @@ const BOUNDARY = [
   ['apply_workout_mutation', '"p_key" "uuid", "p_mutation" "jsonb"'],
 ] as const;
 
+/**
+ * Every helper the migrations define, including the five that migration 20260919170000 added.
+ *
+ * The check used to carry its own list of these, so a helper added by a later migration was
+ * audited by nobody: it could be granted to `authenticated` and the check would still say OK.
+ * The list is now derived from the dump, and these names are here to prove the derivation covers
+ * them rather than to drive it.
+ */
 const HELPERS = [
   'is_valid_measurement',
   'json_is_positive_integer',
@@ -40,6 +48,11 @@ const HELPERS = [
   'json_is_nonempty_string',
   'json_is_quantity',
   'json_timestamptz',
+  'json_has_only',
+  'json_is_notes',
+  'json_is_strength_exertion',
+  'json_is_cardio_exertion',
+  'json_is_incline',
 ];
 
 /** A dump of a project configured exactly as ADR-0012 requires. */
@@ -195,12 +208,38 @@ describe('the deployed-boundary check', () => {
     expect(result.stderr).toContain('is not SECURITY DEFINER');
   });
 
-  it('rejects a validation helper a client role can call', () => {
+  it.each(HELPERS)('rejects %s when a client role can call it', (helper) => {
+    // One case per helper, so a helper a later migration adds cannot be the one nobody audits.
     const result = run(
-      `${aCorrectDump()}GRANT ALL ON FUNCTION "public"."is_valid_measurement"("p" "jsonb") TO "authenticated";\n`,
+      `${aCorrectDump()}GRANT ALL ON FUNCTION "public"."${helper}"("p" "jsonb") TO "authenticated";\n`,
     );
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain('is_valid_measurement is executable by authenticated');
+    expect(result.stderr).toContain(`${helper} is executable by authenticated`);
+  });
+
+  it('rejects a function nobody has heard of when a client role can call it', () => {
+    // The point of deriving the set from the dump: a function this repository never wrote, or
+    // wrote after this check, is still audited.
+    const result = run(
+      `${aCorrectDump()}CREATE OR REPLACE FUNCTION "public"."some_new_helper"("p" "jsonb") RETURNS "boolean"\n    LANGUAGE "sql" IMMUTABLE\n    SET "search_path" TO 'pg_catalog'\n    AS $$SELECT true;$$;\n` +
+        `ALTER FUNCTION "public"."some_new_helper"("p" "jsonb") OWNER TO "postgres";\n` +
+        `GRANT ALL ON FUNCTION "public"."some_new_helper"("p" "jsonb") TO "anon";\n`,
+    );
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('some_new_helper is executable by anon');
+  });
+
+  it('accepts the platform’s own function, which Supabase grants to client roles', () => {
+    // `rls_auto_enable` is Supabase's event-trigger function, recorded in ADR-0011. It is not
+    // this repository's to revoke, and failing on it would make the check red for something
+    // deliberately left alone.
+    const result = run(
+      `${aCorrectDump()}CREATE OR REPLACE FUNCTION "public"."rls_auto_enable"() RETURNS "event_trigger"\n    LANGUAGE "plpgsql" SECURITY DEFINER\n    SET "search_path" TO 'pg_catalog'\n    AS $$BEGIN END;$$;\n` +
+        `ALTER FUNCTION "public"."rls_auto_enable"() OWNER TO "postgres";\n` +
+        `GRANT ALL ON FUNCTION "public"."rls_auto_enable"() TO "anon";\n`,
+    );
+    expect(result.stderr, result.stderr).toBe('');
+    expect(result.status).toBe(0);
   });
 
   it('rejects a withdrawn function that is still deployed', () => {
