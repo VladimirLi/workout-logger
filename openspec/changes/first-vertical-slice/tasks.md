@@ -67,10 +67,14 @@
       SELECT; `node scripts/check-db-boundary.mjs` reads the deployed schema back and asserts the
       exact privilege set per role, the function owners and the pinned `search_path`, and
       deployed-boundary.provider.ts runs it as part of the provider suite. Both halves derive the
-      set of functions they audit rather than listing it — the deployed check from the schema, the
-      provider suite from the migrations — so the eleven functions in `public` are all covered and
-      a twelfth is covered the day it is added; each provider refusal is paired with the same call
-      as a role that does hold EXECUTE, because PostgREST answers 404 either way. All of it runs against
+      set of functions they audit rather than listing it, which covers all fifteen functions this
+      repository defines in `public`: the four a client calls, and the eleven the boundary calls
+      internally. The two derivations differ on purpose — the provider suite reads the migrations,
+      so it asserts what this repository intends, while the deployed check reads the schema, so it
+      also catches a function the migrations never wrote and exempts Supabase's own
+      `rls_auto_enable` by name. A helper added by a later migration is covered by both on the day
+      it is added; each provider refusal is paired with the same call as a role that does hold
+      EXECUTE, because PostgREST answers 404 either way. All of it runs against
       the development project, 2026-09-19; none of it runs in CI until repository secrets exist,
       which is G-2's remaining half)
 - [x] 2.4 Index every column used by a row-level security predicate, and verify the
