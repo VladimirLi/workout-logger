@@ -1,3 +1,5 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { serverConfig } from './config.js';
 import { select, upsert } from './rest.js';
@@ -39,6 +41,41 @@ const rest = { url: server.url, key: server.serviceRoleKey };
 const admin = { apikey: server.serviceRoleKey, Authorization: `Bearer ${server.serviceRoleKey}` };
 
 let user: { id: string; accessToken: string };
+
+/** The four functions a signed-in user is meant to call. Everything else in `public` is internal. */
+const BOUNDARY_FUNCTIONS = [
+  'accept_proposal',
+  'reject_proposal',
+  'mark_proposal_stale_if_pending',
+  'apply_workout_mutation',
+];
+
+/**
+ * Every other function the migrations define, read from the migrations themselves.
+ *
+ * The deployed half of this is `scripts/check-db-boundary.mjs`, which derives the same set from
+ * the schema. Both stopped being lists for the same reason: migration 20260919170000 added five
+ * helpers and neither audit knew about them.
+ */
+function helperFunctionsInMigrations(): string[] {
+  const directory = resolve('supabase/migrations');
+  const names = new Set<string>();
+  for (const file of readdirSync(directory).filter((name) => name.endsWith('.sql'))) {
+    const sql = readFileSync(join(directory, file), 'utf8');
+    for (const match of sql.matchAll(
+      /\bCREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+public\.([a-z_][a-z0-9_]*)/gi,
+    )) {
+      names.add(match[1]);
+    }
+    // A function a later migration withdrew is not deployed and cannot be called.
+    for (const match of sql.matchAll(
+      /\bDROP\s+FUNCTION\s+(?:IF\s+EXISTS\s+)?public\.([a-z_][a-z0-9_]*)/gi,
+    )) {
+      names.delete(match[1]);
+    }
+  }
+  return [...names].filter((name) => !BOUNDARY_FUNCTIONS.includes(name)).sort();
+}
 
 const PLAN = 'plan-rpc';
 const SESSION = 'workout-1';
@@ -981,20 +1018,62 @@ describe('writing to the tables directly, as the signed-in user', () => {
     expect(corrections[0]?.previous).toEqual({ repetitions: 8 });
   });
 
-  it('cannot execute the validation helpers the boundary uses (I-4)', async () => {
-    // They are called inside the definer functions, which run as their owner. Exposing them to
-    // a client role would be surface with no purpose.
+  it('cannot execute any function the boundary calls (I-4)', async () => {
+    // Derived from the migrations rather than written down here: a list is how the five helpers
+    // migration 20260919170000 added ended up audited by nobody. Anything this repository
+    // defines in `public` that is not one of the four a client calls must be unreachable.
     await reset();
-    for (const helper of [
-      'is_valid_measurement',
-      'json_is_positive_integer',
-      'json_is_nonnegative_number',
-      'json_is_nonempty_string',
-      'json_timestamptz',
-    ]) {
-      const outcome = await callAsUser(helper, { p: 1, p_measurement: {} });
+    const helpers = helperFunctionsInMigrations();
+
+    // Coverage first, so this case cannot quietly stop covering something.
+    expect(helpers).toEqual(expect.arrayContaining(['json_has_only', 'json_is_notes']));
+    expect(helpers).toEqual(
+      expect.arrayContaining([
+        'json_is_strength_exertion',
+        'json_is_cardio_exertion',
+        'json_is_incline',
+      ]),
+    );
+    expect(helpers.length).toBeGreaterThanOrEqual(11);
+
+    // Called with the arguments each one really takes, so a refusal is about privilege and not
+    // about a signature that never matched. The control below shows a call with the right
+    // arguments does reach a function the role may execute.
+    const argumentsFor = (helper: string): Record<string, unknown> => {
+      if (helper === 'is_valid_measurement') return { p_measurement: A_MEASUREMENT };
+      if (helper === 'json_is_quantity') return { p: { unit: 'kg', value: 1 }, p_unit: 'kg' };
+      if (helper === 'json_has_only') return { p: {}, p_keys: ['unit'] };
+      return { p: A_MEASUREMENT };
+    };
+
+    for (const helper of helpers) {
+      const args = argumentsFor(helper);
+      const outcome = await callAsUser(helper, args);
       expect(outcome.status, helper).toBeGreaterThanOrEqual(400);
+      expect(
+        JSON.stringify(outcome.body ?? ''),
+        `${helper} answered rather than refusing`,
+      ).not.toMatch(/^(true|false)$/);
+
+      // The same arguments, as a role that does hold EXECUTE. Without this the refusal above
+      // could be a signature that never matched rather than a privilege that is not there -
+      // PostgREST answers 404 for both.
+      const asServiceRole = await fetch(`${server.url}/rest/v1/rpc/${helper}`, {
+        method: 'POST',
+        headers: { ...admin, 'Content-Type': 'application/json' },
+        body: JSON.stringify(args),
+      });
+      expect(asServiceRole.status, `${helper} was called with arguments it does not take`).toBe(
+        200,
+      );
     }
+
+    // The control: the same mechanism, on a function this role may execute.
+    const permitted = await callAsUser('apply_workout_mutation', {
+      p_key: aKey(),
+      p_mutation: aStartSession(SESSION),
+    });
+    expect(permitted.status, JSON.stringify(permitted.body)).toBe(200);
   });
 
   it('can still read everything of its own, which is what the app needs (I-3)', async () => {
