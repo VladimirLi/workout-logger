@@ -23,7 +23,8 @@ export class PostgrestError extends Error {
   readonly status: number;
 
   constructor(status: number, message: string) {
-    super(`PostgREST ${status}: ${message}`);
+    // The message may already carry the prefix when it is rethrown with the retry header.
+    super(message.startsWith('PostgREST ') ? message : `PostgREST ${status}: ${message}`);
     this.name = 'PostgrestError';
     this.status = status;
   }
@@ -76,6 +77,50 @@ export async function rpc<T>(
     body: JSON.stringify(args),
   });
   return parse<T>(response);
+}
+
+export interface RpcResponse<T> {
+  readonly body: T;
+  /** The server's own instruction to wait, when it sent one. Preserved, never invented. */
+  readonly retryAfter: string | undefined;
+}
+
+/**
+ * An RPC call whose response headers the caller needs.
+ *
+ * Delivery honours a `Retry-After` longer than its own backoff (offline-sync spec), and it can
+ * only do that if the header survives the trip out of here.
+ */
+export async function rpcWithHeaders<T>(
+  config: RestConfig,
+  name: string,
+  args: Record<string, unknown>,
+): Promise<RpcResponse<T>> {
+  const response = await fetch(`${config.url}/rest/v1/rpc/${name}`, {
+    method: 'POST',
+    headers: headers(config),
+    body: JSON.stringify(args),
+  });
+  const retryAfter = response.headers.get('retry-after') ?? undefined;
+  try {
+    return { body: await parse<T>(response), retryAfter };
+  } catch (error) {
+    if (error instanceof PostgrestError) {
+      throw new PostgrestErrorWithRetry(error.status, error.message, retryAfter);
+    }
+    throw error;
+  }
+}
+
+/** A PostgREST failure that carried the server's own retry instruction. */
+export class PostgrestErrorWithRetry extends PostgrestError {
+  readonly retryAfter: string | undefined;
+
+  constructor(status: number, message: string, retryAfter: string | undefined) {
+    super(status, message);
+    this.name = 'PostgrestErrorWithRetry';
+    this.retryAfter = retryAfter;
+  }
 }
 
 /** Upsert rows, returning what was written so a caller can verify by read-back. */

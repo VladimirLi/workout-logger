@@ -18,9 +18,11 @@ import { type RestConfig, rpc, select } from './rest.js';
  * base (D-018). The functions are in supabase/migrations; this class only calls them and
  * translates the outcome.
  *
- * It filters by `user_id` explicitly even though row-level security also filters, so a client
- * that bypasses row-level security - the server's own service role - still cannot reach
- * another user's rows by omission.
+ * It acts as one signed-in user. The port names a user on every call because an in-memory
+ * store can hold many; this one cannot act for anybody but the user whose token it holds, so a
+ * call naming another user is answered the way the database answers it - the row is not there.
+ * It filters by `user_id` explicitly as well, so a mistake here cannot reach another user's
+ * rows even from a client that bypasses row-level security.
  *
  * The same contract suite the in-memory reference runs is run against this
  * (packages/adapters-supabase/src/proposal-store.contract.test.ts), against a real database.
@@ -54,15 +56,68 @@ function toProposal(row: ProposalRow): Proposal {
   };
 }
 
+/** What `decide_proposal` returns. Checked at runtime, never asserted (review warning). */
+type DecisionOutcome =
+  | { kind: 'committed'; revision: number }
+  | { kind: 'revision_changed'; currentRevision: number }
+  | { kind: 'status_changed'; currentStatus: ProposalStatus }
+  | { kind: 'expired' }
+  | { kind: 'not_found' };
+
+function decisionOf(body: unknown): DecisionOutcome | undefined {
+  if (typeof body !== 'object' || body === null) return undefined;
+  const record = body as Record<string, unknown>;
+  switch (record['kind']) {
+    case 'committed':
+      return typeof record['revision'] === 'number'
+        ? { kind: 'committed', revision: record['revision'] }
+        : undefined;
+    case 'revision_changed':
+      return typeof record['currentRevision'] === 'number'
+        ? { kind: 'revision_changed', currentRevision: record['currentRevision'] }
+        : undefined;
+    case 'status_changed':
+      return typeof record['currentStatus'] === 'string'
+        ? { kind: 'status_changed', currentStatus: record['currentStatus'] as ProposalStatus }
+        : undefined;
+    case 'expired':
+      return { kind: 'expired' };
+    case 'not_found':
+      return { kind: 'not_found' };
+    default:
+      return undefined;
+  }
+}
+
+/** The user a store acts as: an id to answer the port with, and the token that proves it. */
+export interface SignedInUser {
+  readonly id: string;
+  readonly accessToken: string;
+}
+
 export class SupabaseProposalStore implements ProposalStore {
   readonly #rest: RestConfig;
+  readonly #userId: string;
 
-  constructor(config: ServerSupabaseConfig, accessToken?: string) {
-    this.#rest = {
-      url: config.url,
-      key: config.serviceRoleKey,
-      ...(accessToken ? { accessToken } : {}),
-    };
+  /**
+   * @param user the signed-in user. Every decision is taken by the server from the identity in
+   * the token, so the adapter cannot decide on anyone else's behalf; the id is here only to
+   * answer the port truthfully when a call names somebody else.
+   */
+  constructor(config: ServerSupabaseConfig, user: SignedInUser) {
+    this.#rest = { url: config.url, key: config.anonKey, accessToken: user.accessToken };
+    this.#userId = user.id;
+  }
+
+  /**
+   * Whether this store can act for the named user at all.
+   *
+   * The write functions take their identity from the token, so asking one to act for another
+   * user is not expressible. Refusing here keeps that honest: without it a call naming someone
+   * else would silently be carried out against this user's own rows.
+   */
+  #actsFor(userId: string): boolean {
+    return userId === this.#userId;
   }
 
   get projectUrl(): string {
@@ -92,65 +147,94 @@ export class SupabaseProposalStore implements ProposalStore {
     return row ? toProposal(row) : undefined;
   }
 
+  /**
+   * The decision, not its consequences.
+   *
+   * The port carries the expected revision and status because an in-memory store needs them.
+   * The server does not: it reads the proposal's own base revision and the plan's, both under
+   * lock, and stamps the time itself. Sending them would be offering a caller the chance to
+   * be wrong about its own decision.
+   */
   async commitDecision(request: CommitDecisionRequest): Promise<CommitDecisionOutcome> {
-    const outcome = await rpc<{
-      kind: 'committed' | 'revision_changed' | 'status_changed' | 'not_found';
-      revision?: number;
-      currentRevision?: number;
-      currentStatus?: ProposalStatus;
-    }>(this.#rest, 'commit_proposal_decision', {
-      p_user_id: request.userId,
-      p_proposal_id: request.proposal.id,
-      p_status: request.proposal.status,
-      p_expected_revision: request.expectedRevision,
-      p_expected_status: request.expectedStatus,
-      p_decided_at: new Date().toISOString(),
-      p_advance_revision: request.advanceRevision,
-    });
+    if (!this.#actsFor(request.userId)) return { kind: 'not_found' };
+    const decision =
+      request.proposal.status === 'accepted'
+        ? 'accept'
+        : request.proposal.status === 'rejected'
+          ? 'reject'
+          : undefined;
+    if (!decision) {
+      // Only the two transitions a user can make are expressible. Rather than echo the
+      // caller's expectation back, report what is actually there: a proposal that is not
+      // stored cannot have been left in any status.
+      const stored = await this.findById(request.userId, request.proposal.id);
+      return stored
+        ? { kind: 'status_changed', currentStatus: stored.status }
+        : { kind: 'not_found' };
+    }
 
-    switch (outcome.kind) {
+    const outcome = decisionOf(
+      await rpc<unknown>(this.#rest, 'decide_proposal', {
+        p_proposal_id: request.proposal.id,
+        p_decision: decision,
+      }),
+    );
+
+    switch (outcome?.kind) {
       case 'committed':
-        return { kind: 'committed', revision: (outcome.revision ?? 0) as Revision };
+        return { kind: 'committed', revision: outcome.revision as Revision };
       case 'revision_changed':
-        return {
-          kind: 'revision_changed',
-          currentRevision: (outcome.currentRevision ?? 0) as Revision,
-        };
+        return { kind: 'revision_changed', currentRevision: outcome.currentRevision as Revision };
       case 'status_changed':
-        return { kind: 'status_changed', currentStatus: outcome.currentStatus ?? 'pending' };
+        return { kind: 'status_changed', currentStatus: outcome.currentStatus };
+      case 'expired':
+        // Terminal, and not a status the port names for a commit. Reported as what it is.
+        return { kind: 'status_changed', currentStatus: 'expired' };
       case 'not_found':
         return { kind: 'not_found' };
+      default:
+        throw new Error('decide_proposal returned a body this version does not understand');
     }
   }
 
   async markStaleIfPending(userId: string, proposalId: string): Promise<MarkStaleOutcome> {
-    return rpc<MarkStaleOutcome>(this.#rest, 'mark_proposal_stale_if_pending', {
-      p_user_id: userId,
+    if (!this.#actsFor(userId)) return 'not_found';
+    const outcome = await rpc<unknown>(this.#rest, 'mark_proposal_stale_if_pending', {
       p_proposal_id: proposalId,
-      p_decided_at: new Date().toISOString(),
     });
+    if (outcome === 'marked' || outcome === 'not_pending' || outcome === 'not_found') {
+      return outcome;
+    }
+    throw new Error('mark_proposal_stale_if_pending returned an unrecognised outcome');
   }
 
   async rejectIfPending(userId: string, proposalId: string): Promise<RejectOutcome> {
-    const outcome = await rpc<{
-      kind: 'rejected' | 'not_pending' | 'not_found';
-      status?: ProposalStatus;
-    }>(this.#rest, 'reject_proposal_if_pending', {
-      p_user_id: userId,
-      p_proposal_id: proposalId,
-      p_decided_at: new Date().toISOString(),
-    });
+    if (!this.#actsFor(userId)) return { kind: 'not_found' };
+    const outcome = decisionOf(
+      await rpc<unknown>(this.#rest, 'decide_proposal', {
+        p_proposal_id: proposalId,
+        p_decision: 'reject',
+      }),
+    );
 
-    switch (outcome.kind) {
-      case 'rejected': {
+    switch (outcome?.kind) {
+      case 'committed': {
         const proposal = await this.findById(userId, proposalId);
         if (!proposal) return { kind: 'not_found' };
         return { kind: 'rejected', proposal };
       }
-      case 'not_pending':
-        return { kind: 'not_pending', status: outcome.status ?? 'pending' };
+      case 'status_changed':
+        return { kind: 'not_pending', status: outcome.currentStatus };
+      case 'expired':
+        return { kind: 'not_pending', status: 'expired' };
+      case 'revision_changed':
+        // A rejection never reads the revision, so this cannot happen; if it ever does, it is
+        // a server this version does not understand rather than a silent wrong answer.
+        throw new Error('a rejection reported a revision change');
       case 'not_found':
         return { kind: 'not_found' };
+      default:
+        throw new Error('decide_proposal returned a body this version does not understand');
     }
   }
 }
