@@ -12,6 +12,11 @@ nvm install "$NODE_VERSION"
 nvm alias default "$NODE_VERSION"
 nvm use "$NODE_VERSION"
 
+BASHRC="$HOME/.bashrc"
+if ! grep -qF 'nvm use default' "$BASHRC" 2>/dev/null; then
+  printf '\n%s\n' 'nvm use default >/dev/null 2>&1 || true' >>"$BASHRC"
+fi
+
 corepack enable
 
 pnpm install --frozen-lockfile
