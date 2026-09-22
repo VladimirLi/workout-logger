@@ -1,0 +1,10 @@
+{
+  "name": "Workout Logger",
+  "install": "bash .cursor/install.sh",
+  "terminals": [
+    {
+      "name": "web",
+      "command": "pnpm dev"
+    }
+  ]
+}
