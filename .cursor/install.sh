@@ -16,4 +16,4 @@ corepack enable
 
 pnpm install --frozen-lockfile
 
-pnpm exec playwright install --with-deps chromium
+pnpm exec playwright install --with-deps chromium || pnpm exec playwright install chromium
