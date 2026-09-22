@@ -36,7 +36,7 @@ const BASE_REF = process.env.GUARDRAIL_BASE_REF ?? 'origin/main';
 function git(args) {
   // stderr is suppressed because a missing ref is an expected, handled condition
   // here, not something the operator needs to see as a fatal error.
-  return execFileSync('git', args, {
+  return execFileSync('git', ['-c', 'safe.directory=*', ...args], {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'ignore'],
   }).trim();
