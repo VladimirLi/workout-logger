@@ -24,6 +24,7 @@ concurrency:
 jobs:
   codeql:
     name: codeql
+    if: ${{ !github.event.repository.private }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -78,7 +79,7 @@ jobs:
   dependency-review:
     name: dependency review
     # Pull requests only: the action diffs a base against a head.
-    if: github.event_name == 'pull_request'
+    if: ${{ github.event_name == 'pull_request' && !github.event.repository.private }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:

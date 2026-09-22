@@ -184,6 +184,12 @@ functions**, and `pnpm test:deps`, `pnpm test:licenses`, and `pnpm test:secrets`
 operative controls. Both jobs are kept in the workflow, with the limitation recorded in the
 job, rather than deleted — deleting them would erase the fact that this coverage is missing.
 
+**Owner direction 2026-09-22 (Vladimir).** Until the repository is public (or org-owned with
+GHAS), `codeql` and `dependency-review` are skipped via `if: !github.event.repository.private`
+so they do not fail CI while ineligible. Absence of those two jobs is formally accepted for
+this private personal repository; the local gates above remain the operative coverage. When
+visibility becomes public, the same jobs run without a further workflow change.
+
 GitHub also recommends CodeQL **default setup** (a repository setting) over an
 advanced-setup workflow for JavaScript/TypeScript. If the repository ends up eligible,
 prefer default setup and delete the `codeql` job rather than maintaining YAML.
