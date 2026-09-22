@@ -15,6 +15,8 @@ nvm alias default "$NODE_VERSION"
 nvm use "$NODE_VERSION"
 
 NODE_BIN="$NVM_DIR/versions/node/v${NODE_VERSION}/bin"
+export PATH="$NODE_BIN:$PATH"
+
 BASHRC="$HOME/.bashrc"
 MARKER="# workout-logger: pinned node on PATH"
 if [ -f "$BASHRC" ]; then
@@ -22,8 +24,8 @@ if [ -f "$BASHRC" ]; then
 fi
 printf '%s\n' "export PATH=\"$NODE_BIN:\$PATH\" $MARKER" >>"$BASHRC"
 
-corepack enable
+"$NODE_BIN/corepack" enable
 
-pnpm install --frozen-lockfile
+"$NODE_BIN/pnpm" install --frozen-lockfile
 
-pnpm exec playwright install --with-deps chromium || pnpm exec playwright install chromium
+"$NODE_BIN/pnpm" exec playwright install --with-deps chromium || "$NODE_BIN/pnpm" exec playwright install chromium
