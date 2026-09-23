@@ -40,7 +40,7 @@ export class SupabaseWorkoutTransport implements WorkoutTransport {
    * there is no user argument to get wrong, and a delivery without one is refused.
    */
   constructor(config: ServerSupabaseConfig, accessToken: string) {
-    this.#rest = { url: config.url, key: config.anonKey, accessToken };
+    this.#rest = { url: config.url, key: config.publishableKey, accessToken };
   }
 
   async send(request: {

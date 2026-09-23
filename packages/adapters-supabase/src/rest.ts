@@ -31,12 +31,14 @@ export class PostgrestError extends Error {
 }
 
 function headers(config: RestConfig, extra: Record<string, string> = {}): Record<string, string> {
-  return {
+  const base: Record<string, string> = {
     apikey: config.key,
-    Authorization: `Bearer ${config.accessToken ?? config.key}`,
     'Content-Type': 'application/json',
-    ...extra,
   };
+  if (config.accessToken) {
+    base['Authorization'] = `Bearer ${config.accessToken}`;
+  }
+  return { ...base, ...extra };
 }
 
 async function parse<T>(response: Response): Promise<T> {

@@ -29,23 +29,23 @@ import { type DevelopmentIdentity, signInDevelopmentUser } from './test-identity
  */
 
 const url = process.env['NEXT_PUBLIC_SUPABASE_URL'];
-const anonKey = process.env['NEXT_PUBLIC_SUPABASE_ANON_KEY'];
-const serviceRoleKey = process.env['SUPABASE_SERVICE_ROLE_KEY'];
+const publishableKey = process.env['NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY'];
+const secretKey = process.env['SUPABASE_SECRET_KEY'];
 
-if (!url || !anonKey || !serviceRoleKey) {
+if (!url || !publishableKey || !secretKey) {
   throw new Error('the provider suite needs .env.local; run `pnpm test:provider`.');
 }
 
-const config = serverConfig({ url, anonKey, serviceRoleKey });
+const config = serverConfig({ url, publishableKey, secretKey });
 if (!config.ok) throw new Error(`invalid Supabase configuration: ${JSON.stringify(config.error)}`);
 const server = config.value;
-const rest = { url: server.url, key: server.serviceRoleKey };
-const admin = { apikey: server.serviceRoleKey, Authorization: `Bearer ${server.serviceRoleKey}` };
+const rest = { url: server.url, key: server.secretKey };
+const admin = { apikey: server.secretKey };
 
-/** A request as that user: their token, and the anonymous key as the API key, like a browser. */
+/** A request as that user: their token, and the publishable key as the API key, like a browser. */
 function asUser(identity: DevelopmentIdentity): Record<string, string> {
   return {
-    apikey: server.anonKey,
+    apikey: server.publishableKey,
     Authorization: `Bearer ${identity.accessToken}`,
     'Content-Type': 'application/json',
   };
