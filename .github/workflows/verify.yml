@@ -9,6 +9,10 @@ name: verify
 # would not run to notice - and it would have to wait for an install that executes
 # this repository's own lifecycle hooks first.
 #
+# Jobs are parallelized for wall-clock speed. Every gate still runs; the aggregator
+# job named `verify` is the required status check and fails closed if any worker
+# fails, is cancelled, or is skipped.
+#
 # GUARDRAIL FILE. An implementing agent may not change this in the same change as
 # the product code it judges (D-035).
 
@@ -31,17 +35,21 @@ env:
   OPENSPEC_TELEMETRY: '0'
   DO_NOT_TRACK: '1'
 
+# Pinned Playwright image, by digest: the same Chromium build and system fonts the Linux
+# visual baselines were generated in (DESIGN_SYSTEM.md, Visual regression). Used on every
+# worker job so Node/setup paths stay identical and visual fonts cannot drift.
+#
+# Browser jobs also run `build` + `storybook:build` via `pnpm verify` subsets: Playwright's
+# webServer starts the production Next app and the static Storybook lab.
+
 jobs:
-  verify:
-    name: verify
+  fast:
+    name: fast
     runs-on: ubuntu-latest
-    # The pinned Playwright image, by digest: the same Chromium build and system fonts the Linux
-    # visual baselines were generated in (DESIGN_SYSTEM.md, Visual regression). A runner image
-    # with different fonts would fail the visual gate for reasons unrelated to the change.
     container:
       image: mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
       options: --ipc=host
-    timeout-minutes: 45
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -80,15 +88,165 @@ jobs:
         # the point: CI must install exactly what was reviewed.
         run: pnpm install --frozen-lockfile
 
-      - name: Verify
-        # The aggregate gate. Every required non-deployment check, in one command.
-        run: pnpm verify
+      - name: Verify (non-browser gates)
+        run: >-
+          pnpm verify
+          format:check lint typecheck test test:integration build storybook:build
+          test:architecture test:licenses test:deps test:secrets test:migrations
+          test:guardrails spec:validate sbom:generate
+
+  browser-e2e:
+    name: browser-e2e
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
+      options: --ipc=host
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Audit guardrail separation
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          node scripts/check-guardrails.mjs --range HEAD
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify (e2e)
+        run: pnpm verify build storybook:build test:e2e
 
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: playwright-report
+          name: playwright-report-e2e
           path: playwright-report/
           retention-days: 7
           if-no-files-found: ignore
+
+  browser-a11y:
+    name: browser-a11y
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
+      options: --ipc=host
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Audit guardrail separation
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          node scripts/check-guardrails.mjs --range HEAD
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify (a11y)
+        run: pnpm verify build storybook:build test:a11y
+
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report-a11y
+          path: playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  browser-visual:
+    name: browser-visual
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
+      options: --ipc=host
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Audit guardrail separation
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          node scripts/check-guardrails.mjs --range HEAD
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify (visual)
+        run: pnpm verify build storybook:build test:visual
+
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report-visual
+          path: playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  verify:
+    name: verify
+    # Fail closed: run even when a needed job fails/cancels/skips so the required
+    # check named `verify` is red rather than missing.
+    if: ${{ always() }}
+    needs: [fast, browser-e2e, browser-a11y, browser-visual]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Confirm every gate job succeeded
+        run: |
+          set -euo pipefail
+          failed=0
+          for pair in \
+            "fast:${{ needs.fast.result }}" \
+            "browser-e2e:${{ needs.browser-e2e.result }}" \
+            "browser-a11y:${{ needs.browser-a11y.result }}" \
+            "browser-visual:${{ needs.browser-visual.result }}"; do
+            job="${pair%%:*}"
+            result="${pair##*:}"
+            echo "$job → $result"
+            if [ "$result" != "success" ]; then
+              failed=1
+            fi
+          done
+          if [ "$failed" -ne 0 ]; then
+            echo "One or more verify workers did not succeed; failing closed."
+            exit 1
+          fi
