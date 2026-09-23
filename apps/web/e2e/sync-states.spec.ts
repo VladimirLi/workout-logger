@@ -198,10 +198,9 @@ test.describe('product sync states (task 5.7)', () => {
     page,
   }) => {
     await openWorkoutWithQueuedOutbox(page);
-    await page.getByRole('button', { name: 'Log set' }).click();
-    await page.getByRole('button', { name: 'Skip rest' }).click();
     await page.getByRole('button', { name: 'Done' }).click();
-    await page.waitForURL('**/summary/**');
+    await page.waitForURL('**/summary?session=**');
+    await expect(page.getByRole('heading', { name: 'Finished' })).toBeVisible();
 
     await setOutboxDelivery(page, {
       state: 'needs_attention',
