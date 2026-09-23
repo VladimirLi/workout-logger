@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { cardioMeasurement, strengthMeasurement } from './measurement.js';
 import {
   activatePlan,
+  applyPlanDiff,
   changeExercisePrescription,
   changeScheduledSession,
   findScheduledSession,
@@ -172,6 +173,39 @@ describe('the monotonic plan revision', () => {
     const replaced = unwrap(replacePlanSessions(plan, [wednesday]));
     expect(replaced.revision).toBeGreaterThan(plan.revision);
     expect(replaced.sessions).toEqual([wednesday]);
+  });
+
+  it('applies a replace_plan diff through applyPlanDiff', () => {
+    const plan = firstPlan();
+    const applied = unwrap(applyPlanDiff(plan, { op: 'replace_plan', sessions: [wednesday] }));
+    expect(applied.sessions).toEqual([wednesday]);
+    expect(applied.revision).toBeGreaterThan(plan.revision);
+  });
+
+  it('applies a change_scheduled_session diff through applyPlanDiff', () => {
+    const plan = firstPlan();
+    const applied = unwrap(
+      applyPlanDiff(plan, {
+        op: 'change_scheduled_session',
+        sessionId: 'session-mon',
+        scheduledFor: '2026-09-19',
+      }),
+    );
+    expect(findScheduledSession(applied, 'session-mon')?.scheduledFor).toBe('2026-09-19');
+  });
+
+  it('refuses to treat a completed-session correction as a plan change', () => {
+    const plan = firstPlan();
+    expect(
+      applyPlanDiff(plan, {
+        op: 'correct_completed_session',
+        sessionId: 'session-1',
+        corrections: [],
+      }),
+    ).toEqual({
+      ok: false,
+      error: { kind: 'not_a_plan_change', op: 'correct_completed_session' },
+    });
   });
 
   it('does not advance when the plan is read', () => {

@@ -3,27 +3,37 @@ import {
   cryptoIds,
   FlushTriggers,
   IndexedDbArchive,
+  IndexedDbDeletionStore,
   IndexedDbDeviceIdentity,
   IndexedDbPlanStore,
+  IndexedDbProposalStore,
   IndexedDbWorkoutStore,
   requestPersistentStorage,
 } from '@workout/adapters-browser';
 import {
   clearLocalDataAfterExport,
   completeWorkout,
+  type DeletionPorts,
   deriveSyncState,
   discardWorkout,
   drainOutbox,
   exportArchive,
   exportHistoryCsv,
   logSet,
+  type PendingDeletion,
+  purgeExpiredDeletion,
+  type ReviewDecision,
+  recoverDeletion,
+  reviewAndApplyProposal,
   type SyncState,
+  scheduleRecoverableDeletion,
   startWorkout,
   type WorkoutPorts,
 } from '@workout/application';
 import {
   kilograms,
   type LoadSemantics,
+  type Proposal,
   type Result,
   type Side,
   strengthExertion,
@@ -62,6 +72,8 @@ export const displaySyncState = (state: SyncState | undefined): DisplaySyncState
 export interface Device {
   readonly ports: WorkoutPorts;
   readonly archive: IndexedDbArchive;
+  readonly deletions: IndexedDbDeletionStore;
+  readonly proposals: IndexedDbProposalStore;
   readonly identity: IndexedDbDeviceIdentity;
   readonly plans: IndexedDbPlanStore;
   /** Who the device records for until an account claims it (identity spec, task 3.6). */
@@ -79,6 +91,9 @@ export function deviceOf(): Device {
   const store = new IndexedDbWorkoutStore();
   const plans = new IndexedDbPlanStore();
   const identity = new IndexedDbDeviceIdentity();
+  const archive = new IndexedDbArchive();
+  const deletions = new IndexedDbDeletionStore();
+  const proposals = new IndexedDbProposalStore();
   const ports: WorkoutPorts = {
     store,
     plans,
@@ -89,12 +104,48 @@ export function deviceOf(): Device {
 
   device = {
     ports,
-    archive: new IndexedDbArchive(),
+    archive,
+    deletions,
+    proposals,
     identity,
     plans,
     userId: async () => (await identity.current()).userId,
   };
   return device;
+}
+
+function deletionPorts(): DeletionPorts & { readonly userId: () => Promise<string> } {
+  const { archive, deletions, ports, userId } = deviceOf();
+  return {
+    source: archive,
+    sink: archive,
+    eraser: archive,
+    deletions,
+    clock: ports.clock,
+    userId,
+  };
+}
+
+export async function readPendingDeletion(): Promise<PendingDeletion | undefined> {
+  const ports = deletionPorts();
+  const user = await ports.userId();
+  const pending = await ports.deletions.get(user);
+  if (!pending) return undefined;
+  if (ports.clock.now().getTime() >= pending.recoverableUntil.getTime()) {
+    await purgeExpiredDeletion(ports, user);
+    return undefined;
+  }
+  return pending;
+}
+
+export async function deleteAllHistory() {
+  const ports = deletionPorts();
+  return scheduleRecoverableDeletion(ports, await ports.userId());
+}
+
+export async function restoreDeletedHistory() {
+  const ports = deletionPorts();
+  return recoverDeletion(ports, await ports.userId());
 }
 
 /** What the plan screen needs: the plan as last downloaded, and any session in progress. */
@@ -276,6 +327,35 @@ export async function clearEverything() {
   return clearLocalDataAfterExport(
     { source: archive, outbox: ports.store, eraser: archive, clock: ports.clock },
     await userId(),
+  );
+}
+
+export async function listPendingProposals(): Promise<readonly Proposal[]> {
+  const { proposals, userId } = deviceOf();
+  return proposals.listPending(await userId());
+}
+
+export async function readProposal(proposalId: string): Promise<{
+  readonly proposal: Proposal | undefined;
+  readonly plan: Awaited<ReturnType<IndexedDbPlanStore['activePlan']>>;
+  readonly revision: number;
+}> {
+  const { proposals, plans, userId } = deviceOf();
+  const user = await userId();
+  const [proposal, plan, revision] = await Promise.all([
+    proposals.findById(user, proposalId),
+    plans.activePlan(user),
+    proposals.currentRevision(user),
+  ]);
+  return { proposal, plan, revision };
+}
+
+export async function decideOnProposal(proposalId: string, decision: ReviewDecision) {
+  const { proposals, plans, ports, userId } = deviceOf();
+  const user = await userId();
+  return reviewAndApplyProposal(
+    { proposals, plans, clock: ports.clock },
+    { userId: user, proposalId, decision },
   );
 }
 

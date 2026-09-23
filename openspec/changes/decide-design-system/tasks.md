@@ -72,8 +72,11 @@
       identically twice in every project, and `CI=1 pnpm verify` passing all gates inside
       `mcr.microsoft.com/playwright:v1.63.0-noble` (linux/amd64); `.github/workflows/verify.yml`
       runs in that image by digest (`pnpm test`: policy-consistency.test.ts)
-- [ ] 5.4a Verify the GitHub Actions verify workflow passes on GitHub (OPEN: no remote or
-      Actions run exists, gate G-1)
+- [x] 5.4a Verify the GitHub Actions verify workflow passes on GitHub
+      (https://github.com/VladimirLi/workout-logger/actions/runs/35830673692 on
+      `0a121f0`: `fast`, `browser-e2e`, `browser-a11y`, `browser-visual`, and the
+      aggregate `verify` job all success; security secret-scan success on the same
+      head)
 - [ ] 5.5 Have the owner approve the baselines in a visual-change PR, and record the approval
       (PARTLY DONE. 2026-09-18: Vladimir visually reviewed the baseline artifact and approved
       the 56 product-route baselines committed through `edf4c1b` — today, workout,

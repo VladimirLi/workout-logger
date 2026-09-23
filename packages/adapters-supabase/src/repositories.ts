@@ -260,6 +260,18 @@ export class SupabaseProposalStore implements ProposalStore {
     return row === undefined ? undefined : toProposal(row);
   }
 
+  async listPending(userId: string): Promise<readonly Proposal[]> {
+    if (!this.#actsFor(userId)) return [];
+    const rows = rowsOf(
+      await select<unknown>(
+        this.#rest,
+        'proposals',
+        `user_id=eq.${encodeURIComponent(userId)}&status=eq.pending&select=*&order=created_at.desc`,
+      ),
+    );
+    return rows.map((row) => toProposal(row));
+  }
+
   /**
    * The decision, and the expectations it was made against (ADR-0012, I-5 and I-6).
    *

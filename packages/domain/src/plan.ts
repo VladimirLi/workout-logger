@@ -1,5 +1,11 @@
 import type { Measurement } from './measurement.js';
-import type { CalendarDate, ExercisePrescription, ScheduledSession } from './plan-diff.js';
+import {
+  assertNeverPlanDiff,
+  type CalendarDate,
+  type ExercisePrescription,
+  type PlanDiff,
+  type ScheduledSession,
+} from './plan-diff.js';
 import { err, ok, type Result } from './result.js';
 import { nextRevision, type Revision } from './revision.js';
 
@@ -203,4 +209,27 @@ export function replacePlanSessions(
   sessions: readonly ScheduledSession[],
 ): Result<ActivePlan, PlanError> {
   return withSessions(plan, sessions);
+}
+
+export type ApplyPlanDiffError =
+  | PlanError
+  | { readonly kind: 'not_a_plan_change'; readonly op: 'correct_completed_session' };
+
+export function applyPlanDiff(plan: Plan, diff: PlanDiff): Result<ActivePlan, ApplyPlanDiffError> {
+  switch (diff.op) {
+    case 'replace_plan':
+      return replacePlanSessions(plan, diff.sessions);
+    case 'change_scheduled_session':
+      return changeScheduledSession(plan, {
+        sessionId: diff.sessionId,
+        ...(diff.scheduledFor !== undefined ? { scheduledFor: diff.scheduledFor } : {}),
+        ...(diff.exercises !== undefined ? { exercises: diff.exercises } : {}),
+      });
+    case 'change_exercise_prescription':
+      return changeExercisePrescription(plan, diff.sessionId, diff.exerciseId, diff.prescription);
+    case 'correct_completed_session':
+      return err({ kind: 'not_a_plan_change', op: 'correct_completed_session' });
+    default:
+      return assertNeverPlanDiff(diff);
+  }
 }

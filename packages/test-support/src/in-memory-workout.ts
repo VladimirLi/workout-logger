@@ -189,6 +189,11 @@ export class InMemoryPlanReader implements PlanReader {
     const plan = this.#plans.get(userId);
     return Promise.resolve(plan?.status === 'active' ? plan : undefined);
   }
+
+  save(userId: string, plan: Plan): Promise<void> {
+    this.#plans.set(userId, plan);
+    return Promise.resolve();
+  }
 }
 
 /** Deterministic UUIDs: 00000000-0000-4000-8000-000000000001, ...002, and so on. */

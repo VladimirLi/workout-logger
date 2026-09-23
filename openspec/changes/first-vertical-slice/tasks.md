@@ -258,11 +258,17 @@
       not editable (`pnpm test:e2e`: workout-journey.spec.ts — the entered RIR reaches the
       stored set, and no control on the page offers to type an RPE; the RPE is derived by the
       domain from the RIR, so a screen cannot store one that does not follow)
-- [ ] 5.9 **[UI]** Implement unilateral entry capturing side and load semantics, and verify
+- [x] 5.9 **[UI]** Implement unilateral entry capturing side and load semantics, and verify
       both are stored explicitly (owner decision 2026-09-18: each side is its own result, load
-      defaults to per-side, and combined load is available only where the plan configures it)
-- [ ] 5.9a Refuse combined-load semantics for an exercise the plan does not configure to permit
-      them, and verify the refusal (owner decision 2026-09-18)
+      defaults to per-side, and combined load is available only where the plan configures it;
+      `pnpm test:e2e`: apps/web/e2e/workout-journey.spec.ts, "unilateral entry" — left then
+      right as separate results both `per_side` by default; combined load offered and stored
+      as `total` only when the plan permits it; `pnpm test`: packages/domain/src/unilateral.test.ts)
+- [x] 5.9a Refuse combined-load semantics for an exercise the plan does not configure to permit
+      them, and verify the refusal (owner decision 2026-09-18; domain refuses `total` when the
+      exercise is absent from `combinedLoadExercises` — `pnpm test`:
+      packages/domain/src/unilateral.test.ts; the product does not offer the control when the
+      plan forbids it — `pnpm test:e2e`: workout-journey.spec.ts, "Load counts" has count 0)
 
 ## 6. Remote MCP
 
@@ -285,12 +291,17 @@
 
 ## 7. Proposal review
 
-- [ ] 7.1 **[UI]** Present pending proposals with base revision, diff, rationale, and creation
-      time, and verify each field is shown
-- [ ] 7.2 **[UI]** Implement accept and verify the plan revision advances
-- [ ] 7.3 **[UI]** Implement reject and verify the proposal reaches a terminal status
-- [ ] 7.4 **[UI]** Verify accepting a proposal whose base revision moved tells the user it is
-      stale and applies nothing
+- [x] 7.1 **[UI]** Present pending proposals with base revision, diff, rationale, and creation
+      time, and verify each field is shown (`pnpm test:e2e`: apps/web/e2e/proposal-review.spec.ts
+      — list and detail show base revision, structured diff, rationale, and Accept/Reject)
+- [x] 7.2 **[UI]** Implement accept and verify the plan revision advances
+      (`pnpm test:e2e`: proposal-review.spec.ts — accept leaves revision 2 in the device store
+      and replaces plan sessions with the accepted `replace_plan` diff)
+- [x] 7.3 **[UI]** Implement reject and verify the proposal reaches a terminal status
+      (`pnpm test:e2e`: proposal-review.spec.ts — reject returns to an empty pending list)
+- [x] 7.4 **[UI]** Verify accepting a proposal whose base revision moved tells the user it is
+      stale and applies nothing (`pnpm test:e2e`: proposal-review.spec.ts — stale copy stays at
+      revision 2 and shows the nothing-applied message)
 
 ## 8. Export and deletion
 
@@ -307,10 +318,17 @@
       (`pnpm test:integration`: archive.integration.test.ts — load_kg, duration_s, distance_m,
       incline_percent, the exertion scale per row, and a check that no bare quantity name
       appears in the header)
-- [ ] 8.3 **[UI]** Implement 30-day recoverable deletion and verify recovery within the window
-- [ ] 8.4 Implement verified hard deletion after the window and verify the data is gone
-- [ ] 8.5 **[UI]** Verify the deletion interface explains when backup copies stop containing
-      the deleted data
+- [x] 8.3 **[UI]** Implement 30-day recoverable deletion and verify recovery within the window
+      (`pnpm test:integration`: packages/test-support/src/deletion.integration.test.ts;
+      `pnpm test:e2e`: apps/web/e2e/deletion.spec.ts — delete, confirm /today has no plan,
+      restore, plan returns)
+- [x] 8.4 Implement verified hard deletion after the window and verify the data is gone
+      (`pnpm test:integration`: deletion.integration.test.ts — recovery refused after 30 days,
+      purge removes the pending copy and verifies it is gone)
+- [x] 8.5 **[UI]** Verify the deletion interface explains when backup copies stop containing
+      the deleted data (`pnpm test:e2e`: deletion.spec.ts — settings and the confirm dialog
+      state there are no scheduled backups on the private slice and that pre-migration dumps
+      stop containing deleted data when retired under the backup runbook)
 
 ## 9. Evidence
 
@@ -319,7 +337,9 @@
       journey" — with the network off: start a session, log two sets, reload, finish, open the
       summary, then read the device's queue and require all four changes to be present. The
       webServer runs `next start` on the production build)
-- [ ] 9.2 Add end-to-end coverage of the proposal review journey including the stale path
+- [x] 9.2 Add end-to-end coverage of the proposal review journey including the stale path
+      (`pnpm test:e2e`: apps/web/e2e/proposal-review.spec.ts — pending fields, accept, reject,
+      and stale base revision against the production build)
 - [x] 9.3 Run `pnpm verify` end to end and record the result (clean clone at 99030db on darwin:
       18/18 gates, 296.8 s; and `CI=1 pnpm verify` in the pinned Playwright image
       (mcr.microsoft.com/playwright:v1.63.0-noble, linux/amd64) on the same commit: 18/18

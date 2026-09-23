@@ -252,6 +252,30 @@ export const PROPOSAL_STORE_CASES: readonly Case<ContractHarness>[] = [
     },
   },
   {
+    name: 'lists only pending proposals for the named user, newest first',
+    async run(harness) {
+      const older = aProposal({
+        id: 'prop_old',
+        createdAt: new Date('2026-09-16T09:00:00.000Z'),
+      });
+      const newer = aProposal({
+        id: 'prop_new',
+        createdAt: new Date('2026-09-16T11:00:00.000Z'),
+      });
+      const decided = aProposal({ id: 'prop_done', status: 'accepted' });
+      await harness.seed(who(harness), older, aRevision(1));
+      await harness.seed(who(harness), newer, aRevision(1));
+      await harness.seed(who(harness), decided, aRevision(1));
+      await harness.seed(other(harness), aProposal({ id: 'prop_other' }), aRevision(1));
+
+      const listed = await harness.store.listPending(who(harness));
+      deepStrictEqual(
+        listed.map((proposal) => proposal.id),
+        ['prop_new', 'prop_old'],
+      );
+    },
+  },
+  {
     name: 'lets exactly one of a rejection and a stale marking win',
     async run(harness) {
       const proposal = aProposal({ baseRevision: aRevision(5) });

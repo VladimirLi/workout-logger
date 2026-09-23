@@ -15,6 +15,8 @@ export const SHELL_ROUTES = [
   '/workout',
   '/summary',
   '/diagnostics',
+  '/settings',
+  '/proposals',
 ] as const;
 
 /**
@@ -31,6 +33,8 @@ const SETTLED: Partial<Record<(typeof SHELL_ROUTES)[number], string>> = {
   '/workout': 'No workout in progress',
   '/diagnostics': 'Storage',
   '/summary': 'That session is not on this device',
+  '/settings': 'Your data',
+  '/proposals': 'No pending proposals',
 };
 
 /** Opens a product route and waits until it has finished reading the device. */

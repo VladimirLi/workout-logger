@@ -1,9 +1,11 @@
 'use client';
 
+import type { Route } from 'next';
 import { useCallback, useEffect, useState } from 'react';
 import {
   Heading,
   ListRow,
+  messages,
   Screen,
   Skeleton,
   Stack,
@@ -95,7 +97,9 @@ export default function DiagnosticsPage() {
       )}
 
       <Stack as="ul" gap={1}>
-        <ListRow href="/today" title="Back to today" />
+        <ListRow href={'/proposals' as Route} title="Plan changes" />
+        <ListRow href={'/settings' as Route} title={messages.nav.settings} />
+        <ListRow href={'/today' as Route} title="Back to today" />
       </Stack>
     </Screen>
   );
