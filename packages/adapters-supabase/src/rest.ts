@@ -36,7 +36,7 @@ function headers(config: RestConfig, extra: Record<string, string> = {}): Record
     'Content-Type': 'application/json',
   };
   if (config.accessToken) {
-    base.Authorization = `Bearer ${config.accessToken}`;
+    base['Authorization'] = `Bearer ${config.accessToken}`;
   }
   return { ...base, ...extra };
 }
