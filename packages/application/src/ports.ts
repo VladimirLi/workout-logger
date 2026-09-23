@@ -84,6 +84,9 @@ export interface ProposalStore {
 
   findById(userId: string, proposalId: string): Promise<Proposal | undefined>;
 
+  /** Pending proposals for the user, newest first. */
+  listPending(userId: string): Promise<readonly Proposal[]>;
+
   commitDecision(request: CommitDecisionRequest): Promise<CommitDecisionOutcome>;
 
   /**

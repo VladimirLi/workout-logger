@@ -70,6 +70,15 @@ export class InMemoryProposalStore implements ProposalStore {
     return Promise.resolve(this.#proposals.get(this.#key(userId, proposalId)));
   }
 
+  listPending(userId: string): Promise<readonly Proposal[]> {
+    const prefix = `${userId}::`;
+    const pending = [...this.#proposals.entries()]
+      .filter(([key, proposal]) => key.startsWith(prefix) && proposal.status === 'pending')
+      .map(([, proposal]) => proposal)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    return Promise.resolve(pending);
+  }
+
   /**
    * Status-only transition. It reads and writes the proposal record and never looks
    * at the revision, which is the whole point: staleness stays true no matter what
