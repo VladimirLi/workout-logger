@@ -88,22 +88,25 @@ describe('removing a queued mutation', () => {
     }
   });
 
-  it('is asked for only by the use case that exports first', () => {
+  it('is asked for only by use cases that take an export or pending copy first', () => {
     const files = readdirSync(APPLICATION).filter((name) => name.endsWith('.ts'));
     expect(files.length, 'the application scan found no files').toBeGreaterThan(3);
+
+    const allowed = new Map<string, string>([
+      ['archive.ts', 'export async function clearLocalDataAfterExport'],
+      ['deletion.ts', 'export async function scheduleRecoverableDeletion'],
+    ]);
 
     for (const name of files) {
       const source = readFileSync(join(APPLICATION, name), 'utf8');
       const calls = [...source.matchAll(/\.clearAll\(/g)];
       if (calls.length === 0) continue;
-      expect(name, 'clearAll is called outside archive.ts').toBe('archive.ts');
-      // In archive.ts it may appear only inside the pre-destructive export use case.
-      const useCase = source.slice(
-        source.indexOf('export async function clearLocalDataAfterExport'),
-      );
+      const marker = allowed.get(name);
+      expect(marker, 'clearAll is called outside archive.ts or deletion.ts').toBeDefined();
+      const useCase = source.slice(source.indexOf(marker ?? ''));
       expect(
         [...useCase.matchAll(/\.clearAll\(/g)].length,
-        'clearAll is called outside clearLocalDataAfterExport',
+        `clearAll is called outside ${marker}`,
       ).toBe(calls.length);
     }
   });
