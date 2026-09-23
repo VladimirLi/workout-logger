@@ -19,8 +19,8 @@ import { PostgrestError } from './rest.js';
 
 const config = serverConfig({
   url: 'https://example.supabase.co',
-  anonKey: 'anon-key-for-tests',
-  serviceRoleKey: 'service-role-key-for-tests',
+  publishableKey: 'sb_publishable_test_key',
+  secretKey: 'sb_secret_test_key',
 });
 if (!config.ok) throw new Error('the test configuration should be valid');
 const server = config.value;
@@ -134,13 +134,10 @@ describe('the Supabase proposal store', () => {
     const calls = stubFetch({ status: 200, body: '[]' });
     await new SupabaseProposalStore(server, USER).findById('user-1', 'prop-1');
 
-    expect(calls[0]?.url).not.toContain('service-role-key-for-tests');
-    expect(calls[0]?.url).not.toContain('anon-key-for-tests');
+    expect(calls[0]?.url).not.toContain('sb_secret_test_key');
+    expect(calls[0]?.url).not.toContain('sb_publishable_test_key');
     expect(calls[0]?.url).not.toContain('a-user-access-token');
-    // It travels in headers, where a log or a referrer will not carry it.
-    // The anonymous key plus the user's token, exactly as a browser sends them. The
-    // service-role key never leaves the server, so the adapter does not carry it.
-    expect(calls[0]?.headers['apikey']).toBe('anon-key-for-tests');
+    expect(calls[0]?.headers['apikey']).toBe('sb_publishable_test_key');
     expect(calls[0]?.headers['Authorization']).toBe('Bearer a-user-access-token');
   });
 

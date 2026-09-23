@@ -15,8 +15,8 @@ import { SupabaseWorkoutTransport } from './workout-transport.js';
 
 const config = serverConfig({
   url: 'https://example.supabase.co',
-  anonKey: 'anon-key-for-tests',
-  serviceRoleKey: 'service-role-key-for-tests',
+  publishableKey: 'sb_publishable_test_key',
+  secretKey: 'sb_secret_test_key',
 });
 if (!config.ok) throw new Error('the test configuration should be valid');
 const transport = new SupabaseWorkoutTransport(config.value, 'a-user-access-token');

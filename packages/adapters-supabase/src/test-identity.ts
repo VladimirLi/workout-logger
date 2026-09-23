@@ -20,8 +20,7 @@ export async function signInDevelopmentUser(
   email: string,
 ): Promise<DevelopmentIdentity> {
   const admin = {
-    apikey: server.serviceRoleKey,
-    Authorization: `Bearer ${server.serviceRoleKey}`,
+    apikey: server.secretKey,
     'Content-Type': 'application/json',
   };
 
@@ -43,7 +42,7 @@ export async function signInDevelopmentUser(
 
   const verified = await fetch(`${server.url}/auth/v1/verify`, {
     method: 'POST',
-    headers: { apikey: server.anonKey, 'Content-Type': 'application/json' },
+    headers: { apikey: server.publishableKey, 'Content-Type': 'application/json' },
     body: JSON.stringify({ type: 'magiclink', token_hash: linkBody.hashed_token }),
   });
   const session = (await verified.json()) as {

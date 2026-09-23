@@ -27,22 +27,22 @@ import { signInDevelopmentUser } from './test-identity.js';
  */
 
 const url = process.env['NEXT_PUBLIC_SUPABASE_URL'];
-const anonKey = process.env['NEXT_PUBLIC_SUPABASE_ANON_KEY'];
-const serviceRoleKey = process.env['SUPABASE_SERVICE_ROLE_KEY'];
+const publishableKey = process.env['NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY'];
+const secretKey = process.env['SUPABASE_SECRET_KEY'];
 
-if (!url || !anonKey || !serviceRoleKey) {
+if (!url || !publishableKey || !secretKey) {
   throw new Error(
-    'the provider suite needs NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY and ' +
-      'SUPABASE_SERVICE_ROLE_KEY. Run `pnpm test:provider`, which loads .env.local.',
+    'the provider suite needs NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY and ' +
+      'SUPABASE_SECRET_KEY. Run `pnpm test:provider`, which loads .env.local.',
   );
 }
 
-const config = serverConfig({ url, anonKey, serviceRoleKey });
+const config = serverConfig({ url, publishableKey, secretKey });
 if (!config.ok) {
   throw new Error(`the Supabase configuration is invalid: ${JSON.stringify(config.error)}`);
 }
 const server = config.value;
-const rest = { url: server.url, key: server.serviceRoleKey };
+const rest = { url: server.url, key: server.secretKey };
 
 /** Two throwaway development identities, created once and reused. */
 const EMAILS = {
@@ -56,7 +56,7 @@ let store: SupabaseProposalStore;
 /** Creates the development user if it is not there, and returns its id either way. */
 async function ensureUser(email: string): Promise<string> {
   const listed = await fetch(`${server.url}/auth/v1/admin/users?per_page=200`, {
-    headers: { apikey: server.serviceRoleKey, Authorization: `Bearer ${server.serviceRoleKey}` },
+    headers: { apikey: server.secretKey },
   });
   const { users } = (await listed.json()) as { users?: { id: string; email: string }[] };
   const existing = users?.find((user) => user.email === email);
@@ -65,8 +65,7 @@ async function ensureUser(email: string): Promise<string> {
   const created = await fetch(`${server.url}/auth/v1/admin/users`, {
     method: 'POST',
     headers: {
-      apikey: server.serviceRoleKey,
-      Authorization: `Bearer ${server.serviceRoleKey}`,
+      apikey: server.secretKey,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ email, email_confirm: true }),
@@ -93,7 +92,7 @@ async function harness(): Promise<ContractHarness> {
   for (const table of ['proposals', 'workout_sessions', 'plans']) {
     await fetch(`${server.url}/rest/v1/${table}?user_id=eq.${userId}`, {
       method: 'DELETE',
-      headers: { apikey: server.serviceRoleKey, Authorization: `Bearer ${server.serviceRoleKey}` },
+      headers: { apikey: server.secretKey },
     });
   }
 
