@@ -88,10 +88,15 @@ export default function ProposalDetailPage() {
         );
         return;
       }
-      setState({
-        kind: 'failed',
-        message: result.error.kind,
-      });
+      const notice =
+        result.error.kind === 'no_active_plan'
+          ? messages.proposal.noActivePlan
+          : result.error.kind === 'not_a_plan_change'
+            ? messages.proposal.couldNotApply
+            : result.error.kind;
+      setState((current) =>
+        current.kind === 'ready' ? { ...current, notice, decided: false } : current,
+      );
       return;
     }
     if (decision === 'reject') {

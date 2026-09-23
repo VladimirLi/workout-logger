@@ -170,4 +170,37 @@ describe('recoverable deletion (tasks 8.3 and 8.4)', () => {
     expect(purged.ok === false && purged.error.kind).toBe('still_recoverable');
     expect(await deletions.get(user)).toBeDefined();
   });
+
+  it('removes the pending copy when erase fails so the device is not stranded', async () => {
+    const { ports, deletions } = await aDeviceWithHistory(T0);
+    const deletionPorts = {
+      source: ports.store,
+      sink: ports.store,
+      eraser: {
+        clearAll: async () => {
+          throw new Error('disk full');
+        },
+      },
+      deletions,
+      clock: ports.clock,
+    };
+    const scheduled = await scheduleRecoverableDeletion(deletionPorts, user);
+    expect(scheduled.ok).toBe(false);
+    expect(scheduled.ok === false && scheduled.error.kind).toBe('erase_failed');
+    expect(await deletions.get(user)).toBeUndefined();
+    expect((await ports.store.sessions(user)).length).toBeGreaterThan(0);
+    expect((await ports.store.plans(user)).length).toBeGreaterThan(0);
+
+    const retry = await scheduleRecoverableDeletion(
+      {
+        source: ports.store,
+        sink: ports.store,
+        eraser: ports.store,
+        deletions,
+        clock: ports.clock,
+      },
+      user,
+    );
+    expect(retry.ok).toBe(true);
+  });
 });

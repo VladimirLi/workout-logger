@@ -24,14 +24,13 @@ import {
   purgeExpiredDeletion,
   type ReviewDecision,
   recoverDeletion,
-  reviewProposal,
+  reviewAndApplyProposal,
   type SyncState,
   scheduleRecoverableDeletion,
   startWorkout,
   type WorkoutPorts,
 } from '@workout/application';
 import {
-  applyPlanDiff,
   kilograms,
   type LoadSemantics,
   type Proposal,
@@ -354,19 +353,10 @@ export async function readProposal(proposalId: string): Promise<{
 export async function decideOnProposal(proposalId: string, decision: ReviewDecision) {
   const { proposals, plans, ports, userId } = deviceOf();
   const user = await userId();
-  const result = await reviewProposal(
-    { proposals, clock: ports.clock },
+  return reviewAndApplyProposal(
+    { proposals, plans, clock: ports.clock },
     { userId: user, proposalId, decision },
   );
-  if (result.ok && decision === 'accept') {
-    const plan = await plans.activePlan(user);
-    const revision = await proposals.currentRevision(user);
-    if (plan?.status === 'active') {
-      const applied = applyPlanDiff(plan, result.value.diff);
-      await plans.save(user, applied.ok ? { ...applied.value, revision } : { ...plan, revision });
-    }
-  }
-  return result;
 }
 
 export { drainOutbox, FlushTriggers };

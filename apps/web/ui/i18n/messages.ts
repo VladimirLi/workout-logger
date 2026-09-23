@@ -97,6 +97,8 @@ export const messages = {
     reject: 'Reject',
     changesTo: 'changes to',
     staleNothingApplied: 'Nothing was changed. Ask the agent for a new proposal.',
+    couldNotApply: 'That change could not be applied. Nothing was accepted.',
+    noActivePlan: 'There is no plan on this device to apply that change to.',
     replacePlan: 'Replaces the whole plan',
     sessions: (count: number) =>
       formatMessage('{count, plural, one {# session} other {# sessions}}', { count }),
@@ -140,6 +142,7 @@ export const messages = {
     empty: 'There is no workout history on this device to delete.',
     restored: 'Your history is back on this device.',
     purged: 'The recovery window ended. The data is gone from this device.',
+    eraseFailed: 'Could not clear this device. Nothing was marked for deletion.',
     backupNote:
       'Backup copies: none are scheduled while this stays a private single-user slice. Pre-migration dumps, if any exist outside the app, stop containing deleted data when those dumps are retired.',
   },

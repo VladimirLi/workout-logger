@@ -61,7 +61,11 @@ export default function SettingsPage() {
         await load(messages.deletion.empty);
         return;
       }
-      await load(messages.deletion.pendingBody(formatUntil(result.error.recoverableUntil)));
+      if (result.error.kind === 'already_pending') {
+        await load(messages.deletion.pendingBody(formatUntil(result.error.recoverableUntil)));
+        return;
+      }
+      await load(messages.deletion.eraseFailed);
       return;
     }
     await load();

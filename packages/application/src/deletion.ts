@@ -27,7 +27,8 @@ export interface DeletionStore {
 
 export type ScheduleDeletionError =
   | { readonly kind: 'already_pending'; readonly recoverableUntil: Date }
-  | { readonly kind: 'nothing_to_delete' };
+  | { readonly kind: 'nothing_to_delete' }
+  | { readonly kind: 'erase_failed'; readonly detail: string };
 
 export type RecoverDeletionError =
   | { readonly kind: 'not_pending' }
@@ -74,7 +75,15 @@ export async function scheduleRecoverableDeletion(
   };
 
   await ports.deletions.put(pending);
-  await ports.eraser.clearAll(userId);
+  try {
+    await ports.eraser.clearAll(userId);
+  } catch (error) {
+    await ports.deletions.remove(userId);
+    return err({
+      kind: 'erase_failed',
+      detail: error instanceof Error ? error.message : String(error),
+    });
+  }
   return ok(pending);
 }
 
