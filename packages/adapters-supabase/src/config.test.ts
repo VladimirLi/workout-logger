@@ -46,8 +46,8 @@ describe('browser config', () => {
     expect(result.error.kind).toBe('not_a_url');
   });
 
-  it('rejects a legacy anon JWT in place of a publishable key', () => {
-    const result = browserConfig({ url: URL_OK, publishableKey: 'eyJhbGciOiJIUzI1NiJ9.legacy' });
+  it('rejects a key that does not use the publishable prefix', () => {
+    const result = browserConfig({ url: URL_OK, publishableKey: 'not-a-publishable-key' });
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error).toEqual({
@@ -65,11 +65,11 @@ describe('server config', () => {
     expect(result.error).toEqual({ kind: 'missing', variable: 'SUPABASE_SECRET_KEY' });
   });
 
-  it('rejects a legacy service_role JWT in place of a secret key', () => {
+  it('rejects a key that does not use the secret prefix', () => {
     const result = serverConfig({
       url: URL_OK,
       publishableKey: PUBLISHABLE,
-      secretKey: 'eyJhbGciOiJIUzI1NiJ9.legacy',
+      secretKey: 'not-a-secret-key',
     });
     expect(result.ok).toBe(false);
     if (result.ok) return;
