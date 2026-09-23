@@ -291,12 +291,16 @@
 
 ## 7. Proposal review
 
-- [ ] 7.1 **[UI]** Present pending proposals with base revision, diff, rationale, and creation
-      time, and verify each field is shown
-- [ ] 7.2 **[UI]** Implement accept and verify the plan revision advances
-- [ ] 7.3 **[UI]** Implement reject and verify the proposal reaches a terminal status
-- [ ] 7.4 **[UI]** Verify accepting a proposal whose base revision moved tells the user it is
-      stale and applies nothing
+- [x] 7.1 **[UI]** Present pending proposals with base revision, diff, rationale, and creation
+      time, and verify each field is shown (`pnpm test:e2e`: apps/web/e2e/proposal-review.spec.ts
+      — list and detail show base revision, structured diff, rationale, and Accept/Reject)
+- [x] 7.2 **[UI]** Implement accept and verify the plan revision advances
+      (`pnpm test:e2e`: proposal-review.spec.ts — accept leaves revision 2 in the device store)
+- [x] 7.3 **[UI]** Implement reject and verify the proposal reaches a terminal status
+      (`pnpm test:e2e`: proposal-review.spec.ts — reject returns to an empty pending list)
+- [x] 7.4 **[UI]** Verify accepting a proposal whose base revision moved tells the user it is
+      stale and applies nothing (`pnpm test:e2e`: proposal-review.spec.ts — stale copy stays at
+      revision 2 and shows the nothing-applied message)
 
 ## 8. Export and deletion
 
@@ -332,7 +336,9 @@
       journey" — with the network off: start a session, log two sets, reload, finish, open the
       summary, then read the device's queue and require all four changes to be present. The
       webServer runs `next start` on the production build)
-- [ ] 9.2 Add end-to-end coverage of the proposal review journey including the stale path
+- [x] 9.2 Add end-to-end coverage of the proposal review journey including the stale path
+      (`pnpm test:e2e`: apps/web/e2e/proposal-review.spec.ts — pending fields, accept, reject,
+      and stale base revision against the production build)
 - [x] 9.3 Run `pnpm verify` end to end and record the result (clean clone at 99030db on darwin:
       18/18 gates, 296.8 s; and `CI=1 pnpm verify` in the pinned Playwright image
       (mcr.microsoft.com/playwright:v1.63.0-noble, linux/amd64) on the same commit: 18/18
