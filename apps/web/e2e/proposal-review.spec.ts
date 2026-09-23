@@ -173,6 +173,24 @@ test.describe('proposal review (tasks 7.1–7.4 and 9.2)', () => {
         }),
     );
     expect(revision).toBe(2);
+
+    const planSessionId = await page.evaluate(
+      () =>
+        new Promise<string>((resolve, reject) => {
+          const request = indexedDB.open('workout');
+          request.onsuccess = () => {
+            const tx = request.result.transaction('plans', 'readonly');
+            const all = tx.objectStore('plans').getAll();
+            all.onsuccess = () => {
+              const rows = all.result as { plan: { sessions: { id: string }[] } }[];
+              resolve(rows[0]?.plan.sessions[0]?.id ?? '');
+            };
+            all.onerror = () => reject(all.error);
+          };
+          request.onerror = () => reject(request.error);
+        }),
+    );
+    expect(planSessionId).toBe('session-tue');
   });
 
   test('reject reaches a terminal status and leaves the list', async ({ page }) => {

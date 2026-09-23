@@ -295,7 +295,8 @@
       time, and verify each field is shown (`pnpm test:e2e`: apps/web/e2e/proposal-review.spec.ts
       — list and detail show base revision, structured diff, rationale, and Accept/Reject)
 - [x] 7.2 **[UI]** Implement accept and verify the plan revision advances
-      (`pnpm test:e2e`: proposal-review.spec.ts — accept leaves revision 2 in the device store)
+      (`pnpm test:e2e`: proposal-review.spec.ts — accept leaves revision 2 in the device store
+      and replaces plan sessions with the accepted `replace_plan` diff)
 - [x] 7.3 **[UI]** Implement reject and verify the proposal reaches a terminal status
       (`pnpm test:e2e`: proposal-review.spec.ts — reject returns to an empty pending list)
 - [x] 7.4 **[UI]** Verify accepting a proposal whose base revision moved tells the user it is

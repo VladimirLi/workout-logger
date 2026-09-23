@@ -31,6 +31,7 @@ import {
   type WorkoutPorts,
 } from '@workout/application';
 import {
+  applyPlanDiff,
   kilograms,
   type LoadSemantics,
   type Proposal,
@@ -361,7 +362,8 @@ export async function decideOnProposal(proposalId: string, decision: ReviewDecis
     const plan = await plans.activePlan(user);
     const revision = await proposals.currentRevision(user);
     if (plan?.status === 'active') {
-      await plans.save(user, { ...plan, revision });
+      const applied = applyPlanDiff(plan, result.value.diff);
+      await plans.save(user, applied.ok ? { ...applied.value, revision } : { ...plan, revision });
     }
   }
   return result;
