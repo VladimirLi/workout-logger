@@ -6,6 +6,7 @@ import {
   IndexedDbDeletionStore,
   IndexedDbDeviceIdentity,
   IndexedDbPlanStore,
+  IndexedDbProposalStore,
   IndexedDbWorkoutStore,
   requestPersistentStorage,
 } from '@workout/adapters-browser';
@@ -21,7 +22,9 @@ import {
   logSet,
   type PendingDeletion,
   purgeExpiredDeletion,
+  type ReviewDecision,
   recoverDeletion,
+  reviewProposal,
   type SyncState,
   scheduleRecoverableDeletion,
   startWorkout,
@@ -30,6 +33,7 @@ import {
 import {
   kilograms,
   type LoadSemantics,
+  type Proposal,
   type Result,
   type Side,
   strengthExertion,
@@ -69,6 +73,7 @@ export interface Device {
   readonly ports: WorkoutPorts;
   readonly archive: IndexedDbArchive;
   readonly deletions: IndexedDbDeletionStore;
+  readonly proposals: IndexedDbProposalStore;
   readonly identity: IndexedDbDeviceIdentity;
   readonly plans: IndexedDbPlanStore;
   /** Who the device records for until an account claims it (identity spec, task 3.6). */
@@ -88,6 +93,7 @@ export function deviceOf(): Device {
   const identity = new IndexedDbDeviceIdentity();
   const archive = new IndexedDbArchive();
   const deletions = new IndexedDbDeletionStore();
+  const proposals = new IndexedDbProposalStore();
   const ports: WorkoutPorts = {
     store,
     plans,
@@ -100,6 +106,7 @@ export function deviceOf(): Device {
     ports,
     archive,
     deletions,
+    proposals,
     identity,
     plans,
     userId: async () => (await identity.current()).userId,
@@ -321,6 +328,43 @@ export async function clearEverything() {
     { source: archive, outbox: ports.store, eraser: archive, clock: ports.clock },
     await userId(),
   );
+}
+
+export async function listPendingProposals(): Promise<readonly Proposal[]> {
+  const { proposals, userId } = deviceOf();
+  return proposals.listPending(await userId());
+}
+
+export async function readProposal(proposalId: string): Promise<{
+  readonly proposal: Proposal | undefined;
+  readonly plan: Awaited<ReturnType<IndexedDbPlanStore['activePlan']>>;
+  readonly revision: number;
+}> {
+  const { proposals, plans, userId } = deviceOf();
+  const user = await userId();
+  const [proposal, plan, revision] = await Promise.all([
+    proposals.findById(user, proposalId),
+    plans.activePlan(user),
+    proposals.currentRevision(user),
+  ]);
+  return { proposal, plan, revision };
+}
+
+export async function decideOnProposal(proposalId: string, decision: ReviewDecision) {
+  const { proposals, plans, ports, userId } = deviceOf();
+  const user = await userId();
+  const result = await reviewProposal(
+    { proposals, clock: ports.clock },
+    { userId: user, proposalId, decision },
+  );
+  if (result.ok && decision === 'accept') {
+    const plan = await plans.activePlan(user);
+    const revision = await proposals.currentRevision(user);
+    if (plan?.status === 'active') {
+      await plans.save(user, { ...plan, revision });
+    }
+  }
+  return result;
 }
 
 export { drainOutbox, FlushTriggers };

@@ -97,8 +97,9 @@ export default function DiagnosticsPage() {
       )}
 
       <Stack as="ul" gap={1}>
+        <ListRow href={'/proposals' as Route} title="Plan changes" />
         <ListRow href={'/settings' as Route} title={messages.nav.settings} />
-        <ListRow href="/today" title="Back to today" />
+        <ListRow href={'/today' as Route} title="Back to today" />
       </Stack>
     </Screen>
   );
