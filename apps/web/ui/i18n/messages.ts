@@ -125,6 +125,25 @@ export const messages = {
     deleteHistoryAction: 'Delete history',
   },
 
+  deletion: {
+    heading: 'Your data',
+    deleteAction: 'Delete all history',
+    deleteTitle: 'Delete all history?',
+    deleteBody:
+      'Workouts leave this device now and stay recoverable here for 30 days. After that they are permanently removed. There are no scheduled backups on this private single-user slice, so the only recovery path is that 30-day copy. Any pre-migration dump taken before you delete may still hold a copy until that dump is retired under the backup runbook.',
+    deleteConfirm: 'Delete history',
+    deleteCancel: 'Keep history',
+    pendingHeading: 'Deletion pending',
+    pendingBody: (until: string) =>
+      `Your data was removed from active use. You can restore it until ${until}. After that it is permanently deleted from this device.`,
+    restoreAction: 'Restore history',
+    empty: 'There is no workout history on this device to delete.',
+    restored: 'Your history is back on this device.',
+    purged: 'The recovery window ended. The data is gone from this device.',
+    backupNote:
+      'Backup copies: none are scheduled while this stays a private single-user slice. Pre-migration dumps, if any exist outside the app, stop containing deleted data when those dumps are retired.',
+  },
+
   count: {
     sets: (count: number) =>
       formatMessage('{count, plural, one {# set} other {# sets}}', { count }),

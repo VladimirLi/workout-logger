@@ -258,11 +258,17 @@
       not editable (`pnpm test:e2e`: workout-journey.spec.ts — the entered RIR reaches the
       stored set, and no control on the page offers to type an RPE; the RPE is derived by the
       domain from the RIR, so a screen cannot store one that does not follow)
-- [ ] 5.9 **[UI]** Implement unilateral entry capturing side and load semantics, and verify
+- [x] 5.9 **[UI]** Implement unilateral entry capturing side and load semantics, and verify
       both are stored explicitly (owner decision 2026-09-18: each side is its own result, load
-      defaults to per-side, and combined load is available only where the plan configures it)
-- [ ] 5.9a Refuse combined-load semantics for an exercise the plan does not configure to permit
-      them, and verify the refusal (owner decision 2026-09-18)
+      defaults to per-side, and combined load is available only where the plan configures it;
+      `pnpm test:e2e`: apps/web/e2e/workout-journey.spec.ts, "unilateral entry" — left then
+      right as separate results both `per_side` by default; combined load offered and stored
+      as `total` only when the plan permits it; `pnpm test`: packages/domain/src/unilateral.test.ts)
+- [x] 5.9a Refuse combined-load semantics for an exercise the plan does not configure to permit
+      them, and verify the refusal (owner decision 2026-09-18; domain refuses `total` when the
+      exercise is absent from `combinedLoadExercises` — `pnpm test`:
+      packages/domain/src/unilateral.test.ts; the product does not offer the control when the
+      plan forbids it — `pnpm test:e2e`: workout-journey.spec.ts, "Load counts" has count 0)
 
 ## 6. Remote MCP
 
@@ -307,10 +313,17 @@
       (`pnpm test:integration`: archive.integration.test.ts — load_kg, duration_s, distance_m,
       incline_percent, the exertion scale per row, and a check that no bare quantity name
       appears in the header)
-- [ ] 8.3 **[UI]** Implement 30-day recoverable deletion and verify recovery within the window
-- [ ] 8.4 Implement verified hard deletion after the window and verify the data is gone
-- [ ] 8.5 **[UI]** Verify the deletion interface explains when backup copies stop containing
-      the deleted data
+- [x] 8.3 **[UI]** Implement 30-day recoverable deletion and verify recovery within the window
+      (`pnpm test:integration`: packages/test-support/src/deletion.integration.test.ts;
+      `pnpm test:e2e`: apps/web/e2e/deletion.spec.ts — delete, confirm /today has no plan,
+      restore, plan returns)
+- [x] 8.4 Implement verified hard deletion after the window and verify the data is gone
+      (`pnpm test:integration`: deletion.integration.test.ts — recovery refused after 30 days,
+      purge removes the pending copy and verifies it is gone)
+- [x] 8.5 **[UI]** Verify the deletion interface explains when backup copies stop containing
+      the deleted data (`pnpm test:e2e`: deletion.spec.ts — settings and the confirm dialog
+      state there are no scheduled backups on the private slice and that pre-migration dumps
+      stop containing deleted data when retired under the backup runbook)
 
 ## 9. Evidence
 

@@ -3,6 +3,7 @@ import {
   cryptoIds,
   FlushTriggers,
   IndexedDbArchive,
+  IndexedDbDeletionStore,
   IndexedDbDeviceIdentity,
   IndexedDbPlanStore,
   IndexedDbWorkoutStore,
@@ -11,13 +12,18 @@ import {
 import {
   clearLocalDataAfterExport,
   completeWorkout,
+  type DeletionPorts,
   deriveSyncState,
   discardWorkout,
   drainOutbox,
   exportArchive,
   exportHistoryCsv,
   logSet,
+  type PendingDeletion,
+  purgeExpiredDeletion,
+  recoverDeletion,
   type SyncState,
+  scheduleRecoverableDeletion,
   startWorkout,
   type WorkoutPorts,
 } from '@workout/application';
@@ -62,6 +68,7 @@ export const displaySyncState = (state: SyncState | undefined): DisplaySyncState
 export interface Device {
   readonly ports: WorkoutPorts;
   readonly archive: IndexedDbArchive;
+  readonly deletions: IndexedDbDeletionStore;
   readonly identity: IndexedDbDeviceIdentity;
   readonly plans: IndexedDbPlanStore;
   /** Who the device records for until an account claims it (identity spec, task 3.6). */
@@ -79,6 +86,8 @@ export function deviceOf(): Device {
   const store = new IndexedDbWorkoutStore();
   const plans = new IndexedDbPlanStore();
   const identity = new IndexedDbDeviceIdentity();
+  const archive = new IndexedDbArchive();
+  const deletions = new IndexedDbDeletionStore();
   const ports: WorkoutPorts = {
     store,
     plans,
@@ -89,12 +98,47 @@ export function deviceOf(): Device {
 
   device = {
     ports,
-    archive: new IndexedDbArchive(),
+    archive,
+    deletions,
     identity,
     plans,
     userId: async () => (await identity.current()).userId,
   };
   return device;
+}
+
+function deletionPorts(): DeletionPorts & { readonly userId: () => Promise<string> } {
+  const { archive, deletions, ports, userId } = deviceOf();
+  return {
+    source: archive,
+    sink: archive,
+    eraser: archive,
+    deletions,
+    clock: ports.clock,
+    userId,
+  };
+}
+
+export async function readPendingDeletion(): Promise<PendingDeletion | undefined> {
+  const ports = deletionPorts();
+  const user = await ports.userId();
+  const pending = await ports.deletions.get(user);
+  if (!pending) return undefined;
+  if (ports.clock.now().getTime() >= pending.recoverableUntil.getTime()) {
+    await purgeExpiredDeletion(ports, user);
+    return undefined;
+  }
+  return pending;
+}
+
+export async function deleteAllHistory() {
+  const ports = deletionPorts();
+  return scheduleRecoverableDeletion(ports, await ports.userId());
+}
+
+export async function restoreDeletedHistory() {
+  const ports = deletionPorts();
+  return recoverDeletion(ports, await ports.userId());
 }
 
 /** What the plan screen needs: the plan as last downloaded, and any session in progress. */

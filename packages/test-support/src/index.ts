@@ -9,6 +9,7 @@
  * this package unimportable from a Playwright spec.
  */
 export * from './builders.js';
+export * from './in-memory-deletion.js';
 export * from './in-memory-ports.js';
 export * from './in-memory-workout.js';
 export * from './local-workout-store-cases.js';
