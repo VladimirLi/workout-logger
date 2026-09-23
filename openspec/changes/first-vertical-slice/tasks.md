@@ -249,11 +249,13 @@
       jumps 60 seconds in one step, which is what a suspended tab looks like, and the
       remaining time has to have moved by 60 seconds; an interval-accumulating timer would
       not. The component itself is also covered in the lab)
-- [ ] 5.7 **[UI]** Render the three sync states and verify they remain distinguishable in a
-      grayscale rendering (PARTIAL: the routes render the design system's SyncIndicator, and
-      its three states are proved distinguishable without colour by the achromatopsia and
-      forced-colours baselines in the lab. OPEN: with no server the product can only ever show
-      "on device" - syncing and needs attention are unreachable until delivery exists, G-2)
+- [x] 5.7 **[UI]** Render the three sync states and verify they remain distinguishable in a
+      grayscale rendering (`pnpm test:e2e`: apps/web/e2e/sync-states.spec.ts — after a queued
+      start, `updateDelivery` seeds `in_flight` and `needs_attention` on the device outbox so
+      `/workout` shows On device, Syncing, and Needs attention in turn; under Chromium
+      achromatopsia each state keeps its own icon and its own words; `/summary` shows Needs
+      attention when a completed session's outbox entries permanently failed. Lab achromatopsia
+      and forced-colours baselines remain the visual evidence for the indicator itself)
 - [x] 5.8 **[UI]** Implement RIR entry with derived read-only RPE and verify the RPE field is
       not editable (`pnpm test:e2e`: workout-journey.spec.ts — the entered RIR reaches the
       stored set, and no control on the page offers to type an RPE; the RPE is derived by the
