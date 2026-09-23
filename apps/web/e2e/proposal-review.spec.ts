@@ -146,6 +146,7 @@ test.describe('proposal review (tasks 7.1–7.4 and 9.2)', () => {
     await expect(page.getByText(/Add 2\.5 kg because last session left RIR 3/)).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Why' })).toBeVisible();
     await expect(page.getByText(/Replaces the whole plan/)).toBeVisible();
+    await expect(page.getByText(/Created/)).toBeVisible();
     await expect(page.getByRole('button', { name: 'Accept change' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Reject' })).toBeVisible();
   });
@@ -226,5 +227,23 @@ test.describe('proposal review (tasks 7.1–7.4 and 9.2)', () => {
         }),
     );
     expect(revision).toBe(2);
+
+    const planSessionId = await page.evaluate(
+      () =>
+        new Promise<string>((resolve, reject) => {
+          const request = indexedDB.open('workout');
+          request.onsuccess = () => {
+            const tx = request.result.transaction('plans', 'readonly');
+            const all = tx.objectStore('plans').getAll();
+            all.onsuccess = () => {
+              const rows = all.result as { plan: { sessions: { id: string }[] } }[];
+              resolve(rows[0]?.plan.sessions[0]?.id ?? '');
+            };
+            all.onerror = () => reject(all.error);
+          };
+          request.onerror = () => reject(request.error);
+        }),
+    );
+    expect(planSessionId).toBe('session-mon');
   });
 });
