@@ -200,6 +200,24 @@ test.describe('proposal review (tasks 7.1–7.4 and 9.2)', () => {
     await page.getByRole('button', { name: 'Reject' }).click();
     await page.waitForURL('**/proposals');
     await expect(page.getByRole('heading', { name: 'No pending proposals' })).toBeVisible();
+
+    const status = await page.evaluate(
+      () =>
+        new Promise<string>((resolve, reject) => {
+          const request = indexedDB.open('workout-proposals');
+          request.onsuccess = () => {
+            const tx = request.result.transaction('proposals', 'readonly');
+            const all = tx.objectStore('proposals').getAll();
+            all.onsuccess = () => {
+              const rows = all.result as { status: string }[];
+              resolve(rows[0]?.status ?? '');
+            };
+            all.onerror = () => reject(all.error);
+          };
+          request.onerror = () => reject(request.error);
+        }),
+    );
+    expect(status).toBe('rejected');
   });
 
   test('accepting a moved base revision is stale and applies nothing', async ({ page }) => {
