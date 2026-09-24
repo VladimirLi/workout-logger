@@ -113,7 +113,10 @@ export function deviceOf(): Device {
     proposals,
     identity,
     plans,
-    userId: async () => (await identity.current()).userId,
+    userId: async () => {
+      const current = await identity.current();
+      return current.claimedBy ?? current.userId;
+    },
   };
   return device;
 }
@@ -416,6 +419,19 @@ export async function verifySignInCode(email: string, code: string) {
       userId: result.value.userId,
       accessToken: result.value.accessToken,
     });
+    await claimDeviceDataForAccount(result.value.userId);
   }
   return result;
+}
+
+async function claimDeviceDataForAccount(accountId: string): Promise<void> {
+  const { identity, ports } = deviceOf();
+  const current = await identity.current();
+  if (current.claimedBy) return;
+  if (current.userId === accountId) {
+    await identity.markClaimed(accountId, new Date());
+    return;
+  }
+  await ports.store.rekey(current.userId, accountId);
+  await identity.markClaimed(accountId, new Date());
 }
