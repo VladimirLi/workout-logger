@@ -6,6 +6,7 @@ import {
   type AuthorizationFailure,
   authorizeInvocation,
 } from './authorization.js';
+import type { InvocationRateLimiter } from './rate-limit.js';
 import { EXPOSED_TOOLS, READ_TOOLS, type ReadTool, SCOPES } from './tool-surface.js';
 
 export interface ReadToolPorts {
@@ -18,7 +19,12 @@ export interface ReadToolPorts {
 export type ReadToolFailure =
   | { readonly kind: 'unauthorized'; readonly failure: AuthorizationFailure }
   | { readonly kind: 'invalid_args'; readonly message: string }
-  | { readonly kind: 'not_found' };
+  | { readonly kind: 'not_found' }
+  | {
+      readonly kind: 'rate_limited';
+      readonly retryAfterMs: number;
+      readonly retryAt: Date;
+    };
 
 export type ReadToolResult =
   | {
@@ -71,6 +77,7 @@ export interface ReadToolRequest {
   readonly resourceIdentifier: string;
   readonly now: Date;
   readonly ports: ReadToolPorts;
+  readonly rateLimiter: InvocationRateLimiter;
 }
 
 function isReadTool(tool: string): tool is ReadTool {
@@ -112,6 +119,15 @@ export async function invokeReadTool(
     return err({
       kind: 'unauthorized',
       failure: { kind: 'unknown_tool', tool: request.tool },
+    });
+  }
+
+  const limited = request.rateLimiter.check(request.context.clientId, request.now);
+  if (!limited.ok) {
+    return err({
+      kind: 'rate_limited',
+      retryAfterMs: limited.retryAfterMs,
+      retryAt: limited.retryAt,
     });
   }
 

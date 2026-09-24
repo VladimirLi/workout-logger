@@ -7,6 +7,7 @@ import {
 } from '@workout/test-support';
 import { describe, expect, it } from 'vitest';
 import type { AuthorizationContext } from './authorization.js';
+import { InvocationRateLimiter } from './rate-limit.js';
 import { invokeReadTool, type ReadToolPorts } from './read-tools.js';
 
 const RESOURCE = 'https://mcp.gym.vladimirli.com';
@@ -34,6 +35,10 @@ function ports(): ReadToolPorts {
   };
 }
 
+function limiter() {
+  return new InvocationRateLimiter({ maxInvocations: 100, windowMs: 60_000 });
+}
+
 describe('invokeReadTool (task 6.6 / 6.7 pagination)', () => {
   it('returns capabilities without requiring user args', async () => {
     const result = await invokeReadTool({
@@ -43,6 +48,7 @@ describe('invokeReadTool (task 6.6 / 6.7 pagination)', () => {
       resourceIdentifier: RESOURCE,
       now: NOW,
       ports: ports(),
+      rateLimiter: limiter(),
     });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -61,6 +67,7 @@ describe('invokeReadTool (task 6.6 / 6.7 pagination)', () => {
       resourceIdentifier: RESOURCE,
       now: NOW,
       ports: p,
+      rateLimiter: limiter(),
     });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -81,6 +88,7 @@ describe('invokeReadTool (task 6.6 / 6.7 pagination)', () => {
       resourceIdentifier: RESOURCE,
       now: NOW,
       ports: p,
+      rateLimiter: limiter(),
     });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -97,6 +105,7 @@ describe('invokeReadTool (task 6.6 / 6.7 pagination)', () => {
       resourceIdentifier: RESOURCE,
       now: NOW,
       ports: ports(),
+      rateLimiter: limiter(),
     });
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -111,9 +120,36 @@ describe('invokeReadTool (task 6.6 / 6.7 pagination)', () => {
       resourceIdentifier: RESOURCE,
       now: NOW,
       ports: ports(),
+      rateLimiter: limiter(),
     });
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.kind).toBe('unauthorized');
+  });
+
+  it('refuses when the rate limit is exceeded', async () => {
+    const tight = new InvocationRateLimiter({ maxInvocations: 1, windowMs: 60_000 });
+    const first = await invokeReadTool({
+      tool: 'workout.capabilities',
+      args: {},
+      context: context(),
+      resourceIdentifier: RESOURCE,
+      now: NOW,
+      ports: ports(),
+      rateLimiter: tight,
+    });
+    expect(first.ok).toBe(true);
+    const second = await invokeReadTool({
+      tool: 'workout.capabilities',
+      args: {},
+      context: context(),
+      resourceIdentifier: RESOURCE,
+      now: NOW,
+      ports: ports(),
+      rateLimiter: tight,
+    });
+    expect(second.ok).toBe(false);
+    if (second.ok) return;
+    expect(second.error.kind).toBe('rate_limited');
   });
 });
