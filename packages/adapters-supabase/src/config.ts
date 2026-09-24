@@ -1,35 +1,30 @@
 import type { Result } from '@workout/domain';
 import { err, ok } from '@workout/domain';
 
-/**
- * Deterministic configuration validation for the Supabase adapter.
- *
- * No project exists yet (docs/external-gates.md, G-2). What CAN be verified
- * without credentials is that the configuration we would use is well formed, and
- * that we never accidentally ship a service-role key to a browser. Both are
- * checked here and tested offline.
- */
-
 export interface SupabaseConfigInput {
   readonly url: string | undefined;
-  readonly anonKey: string | undefined;
-  readonly serviceRoleKey?: string | undefined;
+  readonly publishableKey: string | undefined;
+  readonly secretKey?: string | undefined;
 }
 
 export interface BrowserSupabaseConfig {
   readonly url: string;
-  readonly anonKey: string;
+  readonly publishableKey: string;
 }
 
 export interface ServerSupabaseConfig extends BrowserSupabaseConfig {
-  readonly serviceRoleKey: string;
+  readonly secretKey: string;
 }
 
 export type ConfigError =
   | { readonly kind: 'missing'; readonly variable: string }
   | { readonly kind: 'not_https'; readonly variable: string }
   | { readonly kind: 'not_a_url'; readonly variable: string }
-  | { readonly kind: 'service_role_key_in_browser_config' };
+  | { readonly kind: 'invalid_key_format'; readonly variable: string }
+  | { readonly kind: 'secret_key_in_browser_config' };
+
+const PUBLISHABLE_PREFIX = 'sb_publishable_';
+const SECRET_PREFIX = 'sb_secret_';
 
 function requireHttpsUrl(value: string | undefined, variable: string): Result<string, ConfigError> {
   if (!value) {
@@ -47,25 +42,39 @@ function requireHttpsUrl(value: string | undefined, variable: string): Result<st
   return ok(value);
 }
 
-/**
- * Browser-safe configuration. Deliberately has no field for the service-role key,
- * and refuses input that carries one, so a copy-paste mistake fails loudly
- * instead of shipping a god credential to a phone (SECURITY.md).
- */
+function requireKeyFormat(
+  value: string | undefined,
+  variable: string,
+  prefix: string,
+): Result<string, ConfigError> {
+  if (!value) {
+    return err({ kind: 'missing', variable });
+  }
+  if (!value.startsWith(prefix)) {
+    return err({ kind: 'invalid_key_format', variable });
+  }
+  return ok(value);
+}
+
 export function browserConfig(
   input: SupabaseConfigInput,
 ): Result<BrowserSupabaseConfig, ConfigError> {
-  if (input.serviceRoleKey) {
-    return err({ kind: 'service_role_key_in_browser_config' });
+  if (input.secretKey) {
+    return err({ kind: 'secret_key_in_browser_config' });
   }
   const url = requireHttpsUrl(input.url, 'NEXT_PUBLIC_SUPABASE_URL');
   if (!url.ok) {
     return url;
   }
-  if (!input.anonKey) {
-    return err({ kind: 'missing', variable: 'NEXT_PUBLIC_SUPABASE_ANON_KEY' });
+  const publishableKey = requireKeyFormat(
+    input.publishableKey,
+    'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY',
+    PUBLISHABLE_PREFIX,
+  );
+  if (!publishableKey.ok) {
+    return publishableKey;
   }
-  return ok({ url: url.value, anonKey: input.anonKey });
+  return ok({ url: url.value, publishableKey: publishableKey.value });
 }
 
 export function serverConfig(
@@ -75,11 +84,21 @@ export function serverConfig(
   if (!url.ok) {
     return url;
   }
-  if (!input.anonKey) {
-    return err({ kind: 'missing', variable: 'NEXT_PUBLIC_SUPABASE_ANON_KEY' });
+  const publishableKey = requireKeyFormat(
+    input.publishableKey,
+    'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY',
+    PUBLISHABLE_PREFIX,
+  );
+  if (!publishableKey.ok) {
+    return publishableKey;
   }
-  if (!input.serviceRoleKey) {
-    return err({ kind: 'missing', variable: 'SUPABASE_SERVICE_ROLE_KEY' });
+  const secretKey = requireKeyFormat(input.secretKey, 'SUPABASE_SECRET_KEY', SECRET_PREFIX);
+  if (!secretKey.ok) {
+    return secretKey;
   }
-  return ok({ url: url.value, anonKey: input.anonKey, serviceRoleKey: input.serviceRoleKey });
+  return ok({
+    url: url.value,
+    publishableKey: publishableKey.value,
+    secretKey: secretKey.value,
+  });
 }

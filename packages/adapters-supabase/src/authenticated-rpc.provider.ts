@@ -28,17 +28,17 @@ import { signInDevelopmentUser } from './test-identity.js';
  */
 
 const url = process.env['NEXT_PUBLIC_SUPABASE_URL'];
-const anonKey = process.env['NEXT_PUBLIC_SUPABASE_ANON_KEY'];
-const serviceRoleKey = process.env['SUPABASE_SERVICE_ROLE_KEY'];
-if (!url || !anonKey || !serviceRoleKey) {
+const publishableKey = process.env['NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY'];
+const secretKey = process.env['SUPABASE_SECRET_KEY'];
+if (!url || !publishableKey || !secretKey) {
   throw new Error('the provider suite needs .env.local; run `pnpm test:provider`.');
 }
 
-const config = serverConfig({ url, anonKey, serviceRoleKey });
+const config = serverConfig({ url, publishableKey, secretKey });
 if (!config.ok) throw new Error(`invalid Supabase configuration: ${JSON.stringify(config.error)}`);
 const server = config.value;
-const rest = { url: server.url, key: server.serviceRoleKey };
-const admin = { apikey: server.serviceRoleKey, Authorization: `Bearer ${server.serviceRoleKey}` };
+const rest = { url: server.url, key: server.secretKey };
+const admin = { apikey: server.secretKey };
 
 let user: { id: string; accessToken: string };
 
@@ -96,7 +96,7 @@ async function callAsUser(
   const response = await fetch(`${server.url}/rest/v1/rpc/${name}`, {
     method: 'POST',
     headers: {
-      apikey: server.anonKey,
+      apikey: server.publishableKey,
       Authorization: `Bearer ${user.accessToken}`,
       'Content-Type': 'application/json',
     },
@@ -115,7 +115,7 @@ async function writeAsUser(
   const response = await fetch(`${server.url}/rest/v1/${path}`, {
     method,
     headers: {
-      apikey: server.anonKey,
+      apikey: server.publishableKey,
       Authorization: `Bearer ${user.accessToken}`,
       'Content-Type': 'application/json',
     },
@@ -1082,7 +1082,7 @@ describe('writing to the tables directly, as the signed-in user', () => {
     for (const table of ['plans', 'workout_sessions', 'proposals', 'idempotency_records']) {
       const response = await fetch(
         `${server.url}/rest/v1/${table}?user_id=eq.${user.id}&select=user_id`,
-        { headers: { apikey: server.anonKey, Authorization: `Bearer ${user.accessToken}` } },
+        { headers: { apikey: server.publishableKey, Authorization: `Bearer ${user.accessToken}` } },
       );
       expect(response.status, table).toBe(200);
     }

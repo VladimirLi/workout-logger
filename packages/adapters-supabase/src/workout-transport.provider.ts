@@ -18,23 +18,23 @@ import { SupabaseWorkoutTransport } from './workout-transport.js';
  */
 
 const url = process.env['NEXT_PUBLIC_SUPABASE_URL'];
-const anonKey = process.env['NEXT_PUBLIC_SUPABASE_ANON_KEY'];
-const serviceRoleKey = process.env['SUPABASE_SERVICE_ROLE_KEY'];
+const publishableKey = process.env['NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY'];
+const secretKey = process.env['SUPABASE_SECRET_KEY'];
 
-if (!url || !anonKey || !serviceRoleKey) {
+if (!url || !publishableKey || !secretKey) {
   throw new Error('the provider suite needs .env.local; run `pnpm test:provider`.');
 }
 
-const config = serverConfig({ url, anonKey, serviceRoleKey });
+const config = serverConfig({ url, publishableKey, secretKey });
 if (!config.ok) throw new Error(`invalid Supabase configuration: ${JSON.stringify(config.error)}`);
 const server = config.value;
-const rest = { url: server.url, key: server.serviceRoleKey };
-const admin = { apikey: server.serviceRoleKey, Authorization: `Bearer ${server.serviceRoleKey}` };
+const rest = { url: server.url, key: server.secretKey };
+const admin = { apikey: server.secretKey };
 
 const EMAIL = 'transport-user@workout-logger.invalid';
 let userId = '';
 /** The user's own REST credentials, for the one assertion that calls the function directly. */
-let asUser = { url: server.url, key: server.anonKey, accessToken: '' };
+let asUser = { url: server.url, key: server.publishableKey, accessToken: '' };
 let transport: SupabaseWorkoutTransport;
 
 /** Empties this user's rows and seeds the plan a session has to belong to. */
@@ -68,7 +68,7 @@ const KEY = '11111111-1111-4111-8111-111111111111';
 beforeAll(async () => {
   const signedIn = await signInDevelopmentUser(server, EMAIL);
   userId = signedIn.id;
-  asUser = { url: server.url, key: server.anonKey, accessToken: signedIn.accessToken };
+  asUser = { url: server.url, key: server.publishableKey, accessToken: signedIn.accessToken };
   transport = new SupabaseWorkoutTransport(server, signedIn.accessToken);
 }, 60_000);
 

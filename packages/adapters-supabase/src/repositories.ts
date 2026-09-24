@@ -205,7 +205,7 @@ export class SupabaseProposalStore implements ProposalStore {
    * answer the port truthfully when a call names somebody else.
    */
   constructor(config: ServerSupabaseConfig, user: SignedInUser) {
-    this.#rest = { url: config.url, key: config.anonKey, accessToken: user.accessToken };
+    this.#rest = { url: config.url, key: config.publishableKey, accessToken: user.accessToken };
     this.#userId = user.id;
   }
 
