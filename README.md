@@ -76,7 +76,8 @@ data — see [ADR-0008](docs/adr/0008-quiet-performance-design-system.md) and
 
 ## Licence
 
-Currently unpublished and `UNLICENSED`. The owner intends to open-source it in a public GitHub
-repository (ADR-0009); the project licence and the licence review that a distribution plan
-requires have not been done. Dependency licence policy:
+Licensed under the **MIT License** — see [`LICENSE`](LICENSE). Copyright (c) 2026 Vladimir Li.
+Owner decision 2026-09-24. Workspace packages remain `"private": true` (not published to npm).
+Making the GitHub repository public is still blocked on the LIC-2026-09-16 condition 5
+exception re-review for that distribution plan (ADR-0009, G-11). Dependency licence policy:
 [docs/license-policy.md](docs/license-policy.md).

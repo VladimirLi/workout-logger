@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "description": "Synthetic builders and provider-agnostic adapter contract suites.",
   "exports": {
     ".": {
