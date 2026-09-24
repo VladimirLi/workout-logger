@@ -120,6 +120,26 @@ export const messages = {
     off: 'Off',
   },
 
+  signIn: {
+    title: 'Sign in',
+    intro: 'Use a one-time code sent to your email. No passwords.',
+    emailLabel: 'Email',
+    codeLabel: 'Code',
+    codeHelp: (email: string) => `Enter the code sent to ${email}.`,
+    sendCode: 'Send code',
+    verifyCode: 'Sign in',
+    sending: 'Sending…',
+    verifying: 'Signing in…',
+    codeSent: 'Check your email for a code.',
+    signedIn: 'You are signed in on this device.',
+    invalidEmail: 'That email address is not valid.',
+    rateLimited: 'Too many codes requested. Try again in a minute.',
+    invalidCode: 'That code did not work. Try again.',
+    expiredCode: 'That code expired. Request a new one.',
+    unavailable: 'Sign-in is unavailable right now.',
+    missingConfig: 'Sign-in is not configured in this environment.',
+  },
+
   confirm: {
     keepHistory: 'Keep history',
     deleteHistory: 'Delete all history?',

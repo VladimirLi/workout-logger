@@ -15,6 +15,7 @@ export { RirPicker } from './patterns/RirPicker';
 export { Screen, TwoPane } from './patterns/Screen';
 export { SetProgress } from './patterns/SetProgress';
 export { type SetRow, SetTable } from './patterns/SetTable';
+export { SignInForm } from './patterns/SignInForm';
 export { type StatusKind, StatusMessage } from './patterns/StatusMessage';
 export { SYNC_STATES, SyncIndicator, type SyncState } from './patterns/SyncIndicator';
 export { ThemeSetting } from './patterns/ThemeSetting';
