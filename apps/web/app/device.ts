@@ -425,14 +425,13 @@ export async function verifySignInCode(email: string, code: string) {
 }
 
 async function claimDeviceDataForAccount(accountId: string): Promise<void> {
-  const { identity, ports } = deviceOf();
+  const { identity, archive } = deviceOf();
   const current = await identity.current();
   if (current.claimedBy) return;
   if (current.userId === accountId) {
     await identity.markClaimed(accountId, new Date());
     return;
   }
-  const store = ports.store as IndexedDbWorkoutStore;
-  await store.rekey(current.userId, accountId);
+  await archive.rekey(current.userId, accountId);
   await identity.markClaimed(accountId, new Date());
 }
