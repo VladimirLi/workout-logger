@@ -18,7 +18,7 @@
  */
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
 const TABLES = [
   'plans',
@@ -29,17 +29,16 @@ const TABLES = [
   'idempotency_records',
 ];
 
-if (!url || !anon) {
+if (!url || !publishableKey) {
   console.error(
-    'check-rls: FAILED — NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are required.\n' +
+    'check-rls: FAILED — NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY are required.\n' +
       '  Run: node --env-file=.env.local scripts/check-rls.mjs',
   );
   process.exit(1);
 }
 
 const headers = {
-  apikey: anon,
-  Authorization: `Bearer ${anon}`,
+  apikey: publishableKey,
   'Content-Type': 'application/json',
 };
 
