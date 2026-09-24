@@ -432,6 +432,7 @@ async function claimDeviceDataForAccount(accountId: string): Promise<void> {
     await identity.markClaimed(accountId, new Date());
     return;
   }
-  await ports.store.rekey(current.userId, accountId);
+  const store = ports.store as IndexedDbWorkoutStore;
+  await store.rekey(current.userId, accountId);
   await identity.markClaimed(accountId, new Date());
 }
