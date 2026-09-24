@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "description": "Single-user workout logger PWA with an agent-facing MCP server. Foundation milestone.",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "type": "module",
   "packageManager": "pnpm@11.5.2",
   "engines": {
