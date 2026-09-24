@@ -28,10 +28,9 @@ const componentOf = (file: string) => /component: (\w+),/.exec(readFileSync(file
 const COVERED_ELSEWHERE: Record<string, string> = {
   Heading: 'Primitives/Typography',
   Value: 'Primitives/Typography',
-  // A screen-reader-only wrapper renders nothing visible to show.
   VisuallyHidden: '',
-  // Sections of reference screens, shown through the screens that use them.
   RestView: 'Reference screens/Rest',
+  SignInForm: 'product route /sign-in; pattern story deferred pending owner visual-change PR',
 };
 
 const PATTERN_CATEGORIES = [
