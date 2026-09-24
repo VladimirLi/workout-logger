@@ -2,12 +2,20 @@ import type {
   Clock,
   CommitDecisionOutcome,
   CommitDecisionRequest,
+  CreatePendingOutcome,
+  CreatePendingRequest,
   MarkStaleOutcome,
   Ports,
   ProposalStore,
   RejectOutcome,
 } from '@workout/application';
-import { markStale, nextRevision, type Proposal, type Revision } from '@workout/domain';
+import {
+  markStale,
+  nextRevision,
+  type Proposal,
+  type Revision,
+  sameRevision,
+} from '@workout/domain';
 import { aRevision } from './builders.js';
 
 /**
@@ -77,6 +85,22 @@ export class InMemoryProposalStore implements ProposalStore {
       .map(([, proposal]) => proposal)
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
     return Promise.resolve(pending);
+  }
+
+  createPending(request: CreatePendingRequest): Promise<CreatePendingOutcome> {
+    if (request.proposal.status !== 'pending') {
+      throw new Error('createPending only records pending proposals');
+    }
+    const current = this.#revisions.get(request.userId) ?? aRevision(1);
+    if (!sameRevision(request.proposal.baseRevision, current)) {
+      return Promise.resolve({
+        kind: 'stale_base_revision',
+        baseRevision: request.proposal.baseRevision,
+        currentRevision: current,
+      });
+    }
+    this.#proposals.set(this.#key(request.userId, request.proposal.id), request.proposal);
+    return Promise.resolve({ kind: 'created', proposal: request.proposal });
   }
 
   /**

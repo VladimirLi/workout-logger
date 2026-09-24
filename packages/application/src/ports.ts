@@ -78,6 +78,19 @@ export type RejectOutcome =
   | { readonly kind: 'not_pending'; readonly status: ProposalStatus }
   | { readonly kind: 'not_found' };
 
+export interface CreatePendingRequest {
+  readonly userId: string;
+  readonly proposal: Proposal;
+}
+
+export type CreatePendingOutcome =
+  | { readonly kind: 'created'; readonly proposal: Proposal }
+  | {
+      readonly kind: 'stale_base_revision';
+      readonly baseRevision: Revision;
+      readonly currentRevision: Revision;
+    };
+
 export interface ProposalStore {
   /** The current authoritative revision of the active plan. */
   currentRevision(userId: string): Promise<Revision>;
@@ -86,6 +99,12 @@ export interface ProposalStore {
 
   /** Pending proposals for the user, newest first. */
   listPending(userId: string): Promise<readonly Proposal[]>;
+
+  /**
+   * Records a pending proposal when its base revision is still current.
+   * Must not mutate the plan. Refuses when the named base is not current.
+   */
+  createPending(request: CreatePendingRequest): Promise<CreatePendingOutcome>;
 
   commitDecision(request: CommitDecisionRequest): Promise<CommitDecisionOutcome>;
 

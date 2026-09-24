@@ -1,6 +1,8 @@
 import type {
   CommitDecisionOutcome,
   CommitDecisionRequest,
+  CreatePendingOutcome,
+  CreatePendingRequest,
   MarkStaleOutcome,
   ProposalStore,
   RejectOutcome,
@@ -383,5 +385,11 @@ export class SupabaseProposalStore implements ProposalStore {
       default:
         throw new Error('the rejection returned a body this version does not understand');
     }
+  }
+
+  createPending(_request: CreatePendingRequest): Promise<CreatePendingOutcome> {
+    return Promise.reject(
+      new Error('createPending requires create_proposal; not deployed on this store yet'),
+    );
   }
 }
