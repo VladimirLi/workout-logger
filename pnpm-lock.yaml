@@ -138,6 +138,9 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 26.6.2
+      '@workout/test-support':
+        specifier: workspace:*
+        version: link:../../packages/test-support
 
   apps/web:
     dependencies:

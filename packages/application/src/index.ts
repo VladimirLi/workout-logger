@@ -1,5 +1,6 @@
 export * from './archive.js';
 export * from './archive-ports.js';
+export * from './create-proposal.js';
 export * from './deletion.js';
 export * from './delivery.js';
 export * from './history-csv.js';

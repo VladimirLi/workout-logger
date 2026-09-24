@@ -1,11 +1,19 @@
 import type {
   CommitDecisionOutcome,
   CommitDecisionRequest,
+  CreatePendingOutcome,
+  CreatePendingRequest,
   MarkStaleOutcome,
   ProposalStore,
   RejectOutcome,
 } from '@workout/application';
-import { markStale, nextRevision, type Proposal, type Revision } from '@workout/domain';
+import {
+  markStale,
+  nextRevision,
+  type Proposal,
+  type Revision,
+  sameRevision,
+} from '@workout/domain';
 
 const DATABASE = 'workout-proposals';
 const VERSION = 1;
@@ -138,6 +146,33 @@ export class IndexedDbProposalStore implements ProposalStore {
       return records
         .map((record) => record.proposal)
         .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    });
+  }
+
+  async createPending(request: CreatePendingRequest): Promise<CreatePendingOutcome> {
+    if (request.proposal.status !== 'pending') {
+      throw new Error('createPending only records pending proposals');
+    }
+    return this.#withStores([PROPOSALS, REVISIONS], 'readwrite', async (transaction) => {
+      const revisionRecord = await promise<RevisionRecord | undefined>(
+        transaction.objectStore(REVISIONS).get(request.userId),
+      );
+      const current = revisionRecord?.revision ?? (1 as Revision);
+      if (!sameRevision(request.proposal.baseRevision, current)) {
+        return {
+          kind: 'stale_base_revision',
+          baseRevision: request.proposal.baseRevision,
+          currentRevision: current,
+        };
+      }
+      transaction.objectStore(PROPOSALS).put({
+        userId: request.userId,
+        id: request.proposal.id,
+        status: request.proposal.status,
+        createdAt: request.proposal.createdAt,
+        proposal: request.proposal,
+      } satisfies ProposalRecord);
+      return { kind: 'created', proposal: request.proposal };
     });
   }
 
