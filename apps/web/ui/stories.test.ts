@@ -30,7 +30,6 @@ const COVERED_ELSEWHERE: Record<string, string> = {
   Value: 'Primitives/Typography',
   VisuallyHidden: '',
   RestView: 'Reference screens/Rest',
-  SignInForm: 'product route /sign-in; pattern story deferred pending owner visual-change PR',
 };
 
 const PATTERN_CATEGORIES = [
