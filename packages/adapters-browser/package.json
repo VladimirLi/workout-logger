@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "description": "Browser implementations of application ports: the IndexedDB workout store and outbox, client idempotency keys, and storage persistence diagnostics.",
   "exports": {
     ".": {

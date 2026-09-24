@@ -43,9 +43,10 @@ contract suites, and section 3 has a fixed relying-party ID.
 
 - **Licence review before publishing.** A public repository with open-source intent is a
   distribution plan. Condition 5 of the owner's licence decision (LIC-2026-09-16) says any
-  distribution plan requires a new review before release. The project licence itself
-  (currently `UNLICENSED`) is not chosen. Both must be settled before the repository is made
-  public.
+  distribution plan requires a new review before release. **Project licence:** MIT, chosen by
+  Vladimir on 2026-09-24 (`LICENSE`, package `"license"` fields). The twelve LIC-2026-09-16
+  exceptions are **not** yet re-reviewed for a public distribution plan; the repository must
+  stay private until that review lands.
 - **Public-repository hygiene.** Nothing private may be committed. The untracked `.lavish/`
   review artifacts stay out of Git.
 - **Preview origins.** Vercel preview deployments are exactly the non-production origins that

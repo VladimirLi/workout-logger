@@ -19,8 +19,9 @@ means.
 **Status:** not performed. No remote exists.
 
 **Decided 2026-09-17 (ADR-0009, D2).** The repository will be **public**, with the intent to
-open-source the project. Before it is made public, the licence review that LIC-2026-09-16
-condition 5 requires for a distribution plan must be done, and the project licence chosen.
+open-source the project. **Project licence chosen 2026-09-24:** MIT. Before it is made public,
+the licence **exception** review that LIC-2026-09-16 condition 5 requires for that distribution
+plan must still be done.
 
 **Required (R-026, ADR-0006).** A ruleset on the default branch with: pull requests only;
 required status checks from named trusted sources; stale review dismissal; linear history;
@@ -330,12 +331,12 @@ been eliminated rather than approved.
 4. CI verifies exact package versions and scopes against the ledger
 5. any distribution plan, material dependency change, or expired review date blocks release and requires new review
 
-**New review required before release (recorded 2026-09-17).** Vladimir's decision to use a
-public GitHub repository with the intent to open-source the project (ADR-0009, D2) is a
-distribution plan under condition 5. The repository cannot be made public, and nothing can be
-released, until the licence exceptions are reviewed for that plan and a project licence is
-chosen. The separately approved Storybook dependency change (2026-09-17) is recorded under
-G-10.
+**New review required before release (recorded 2026-09-17; updated 2026-09-24).** Vladimir's
+decision to use a public GitHub repository with the intent to open-source the project
+(ADR-0009, D2) is a distribution plan under condition 5. **Project licence:** MIT, chosen by
+Vladimir on 2026-09-24. The repository cannot be made public, and nothing can be released,
+until the twelve licence **exceptions** are re-reviewed for that plan. The separately approved
+Storybook dependency change (2026-09-17) is recorded under G-10.
 
 **What reopens this gate.** Any of the following makes `pnpm test:licenses` fail and requires
 new owner review before release:

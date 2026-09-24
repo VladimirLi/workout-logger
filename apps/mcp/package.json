@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "description": "Remote MCP transport adapter. Read tools and proposal tools only; never a direct mutation.",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

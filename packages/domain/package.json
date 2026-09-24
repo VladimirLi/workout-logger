@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "description": "Workout entities, typed quantities, measurement profiles, and invariant rules. No framework, no IO.",
   "exports": {
     ".": {

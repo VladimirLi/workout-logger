@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "description": "Supabase implementations of application ports, over fetch. Proved against a development project; credentials come from the environment and are never stored here.",
   "exports": {
     ".": {
