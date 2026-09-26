@@ -5,7 +5,7 @@ import { TopBar } from './Bars';
 import { Screen } from './Screen';
 import { SignInForm } from './SignInForm';
 
-const meta = {
+const meta: Meta<typeof SignInForm> = {
   title: 'Patterns/Settings/SignInForm',
   component: SignInForm,
   parameters: { pageContext: false, layout: 'fullscreen' },
@@ -22,9 +22,9 @@ const meta = {
       </Screen>
     ),
   ],
-} satisfies Meta<typeof SignInForm>;
+};
 
 export default meta;
-type Story = StoryObj<typeof meta>;
+type Story = StoryObj<typeof SignInForm>;
 
 export const EmailStep: Story = {};
