@@ -1,5 +1,5 @@
 import type { TransportResult, WorkoutTransport } from '@workout/application';
-import type { ServerSupabaseConfig } from './config.js';
+import type { BrowserSupabaseConfig } from './config.js';
 import {
   PostgrestError,
   PostgrestErrorWithRetry,
@@ -39,7 +39,7 @@ export class SupabaseWorkoutTransport implements WorkoutTransport {
    * @param accessToken the signed-in user's token. The server reads the identity from it, so
    * there is no user argument to get wrong, and a delivery without one is refused.
    */
-  constructor(config: ServerSupabaseConfig, accessToken: string) {
+  constructor(config: BrowserSupabaseConfig, accessToken: string) {
     this.#rest = { url: config.url, key: config.publishableKey, accessToken };
   }
 

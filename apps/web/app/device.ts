@@ -10,7 +10,11 @@ import {
   IndexedDbWorkoutStore,
   requestPersistentStorage,
 } from '@workout/adapters-browser';
-import { browserConfig, createEmailAuth } from '@workout/adapters-supabase';
+import {
+  browserConfig,
+  createEmailAuth,
+  SupabaseWorkoutTransport,
+} from '@workout/adapters-supabase';
 import {
   clearLocalDataAfterExport,
   completeWorkout,
@@ -375,6 +379,37 @@ export type AccountSession = {
   readonly accessToken: string;
 };
 
+let flushTriggers: FlushTriggers | undefined;
+
+function flushTriggersOf(): FlushTriggers {
+  if (!flushTriggers) {
+    flushTriggers = new FlushTriggers(
+      {
+        drain: async () => {
+          const session = readAccountSession();
+          if (!session) return;
+          const url = process.env['NEXT_PUBLIC_SUPABASE_URL'];
+          const publishableKey = process.env['NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY'];
+          const config = browserConfig({ url, publishableKey });
+          if (!config.ok) return;
+          const { ports } = deviceOf();
+          await drainOutbox(
+            {
+              store: ports.store,
+              transport: new SupabaseWorkoutTransport(config.value, session.accessToken),
+              clock: ports.clock,
+              random: () => Math.random(),
+            },
+            session.userId,
+          );
+        },
+      },
+      { window, document },
+    );
+  }
+  return flushTriggers;
+}
+
 export function readAccountSession(): AccountSession | undefined {
   if (typeof sessionStorage === 'undefined') return undefined;
   try {
@@ -420,6 +455,7 @@ export async function verifySignInCode(email: string, code: string) {
       accessToken: result.value.accessToken,
     });
     await claimDeviceDataForAccount(result.value.userId);
+    await flushTriggersOf().authenticationRefreshed();
   }
   return result;
 }
