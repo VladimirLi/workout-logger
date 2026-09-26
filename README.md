@@ -78,6 +78,6 @@ data — see [ADR-0008](docs/adr/0008-quiet-performance-design-system.md) and
 
 Licensed under the **MIT License** — see [`LICENSE`](LICENSE). Copyright (c) 2026 Vladimir Li.
 Owner decision 2026-09-24. Workspace packages remain `"private": true` (not published to npm).
-Making the GitHub repository public is still blocked on the LIC-2026-09-16 condition 5
-exception re-review for that distribution plan (ADR-0009, G-11). Dependency licence policy:
-[docs/license-policy.md](docs/license-policy.md).
+The exact dependency exceptions were re-approved for public MIT source on 2026-09-26 through
+2027-09-16; dependency sources and npm/binary bundles remain unpublished (G-11). Dependency
+licence policy: [docs/license-policy.md](docs/license-policy.md).

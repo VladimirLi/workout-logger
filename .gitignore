@@ -31,6 +31,17 @@ artifacts/
 .vscode/*
 !.vscode/extensions.json
 
+# Shared project skills live in .agents/skills/. Claude symlinks to them from .claude/skills/.
+/.agents/*
+!.agents/skills/
+!.agents/skills/**
+/.claude/*
+!.claude/skills/
+!.claude/skills/**
+/.hermes/
+/.lavish/
+/skills-lock.json
+
 # Supabase CLI link state: the project ref and a local session, written by `supabase link`.
 # Generated, per-developer, and never part of the repository.
 supabase/.temp/

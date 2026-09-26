@@ -16,6 +16,33 @@ change and requires human approval.
 
 Run `pnpm verify` before claiming anything is done.
 
+## Minimum implementation
+
+Prefer the smallest maintained solution that satisfies the current requirement:
+
+1. Before writing a custom tool, framework, parser, generator, policy engine, or integration,
+   search the existing toolchain and maintained ecosystem for an applicable solution.
+2. Prefer an existing dependency or platform capability when it fits the requirement, is
+   actively maintained, has acceptable security and licence terms, and costs less to operate
+   than owning custom code.
+3. Write custom code only when a concrete requirement remains unmet or when evidence shows the
+   existing options create greater total risk or maintenance cost. Record that gap in the PR.
+4. Add the minimum code, abstraction, configuration, and tests needed for current behavior. Do
+   not build speculative extension points or duplicate behavior already supplied by a chosen
+   dependency.
+5. Test user-visible behavior, domain invariants, and real failure boundaries. Do not add tests
+   that only pin prose, implementation trivia, or duplicated declarations.
+
+Repository content must remain project-owned and portable. Keep each shared project skill once
+under `.agents/skills/`, Codex's project-skill location. Expose that same directory to Claude Code
+with a relative directory symlink under `.claude/skills/`; never maintain two copies. Do not
+commit Hermes-specific instructions, personal or externally installed skills, external-agent
+prompts or commands, session artifacts, review workspaces, or generated agent references.
+
+OpenSpec generates client-specific copies. Do not run `openspec init` or `openspec update` against
+this repository to refresh agent integrations. Generate an upgrade in a scratch directory, review
+it, update the canonical `.agents/skills/` copy, and preserve the `.claude/skills/` symlinks.
+
 ## Authority model
 
 The human approves **product intent**. Agents own **implementation and execution** within
@@ -96,6 +123,12 @@ route around it.
    (`DESIGN_SYSTEM.md`, ADR-0008). A scaffold default is not a decision.
 10. **Never provision a cloud resource, DNS record, GitHub remote, or deployment.** Those are
     human-authorized gates.
+11. **Never create a custom tool before checking for a maintained existing solution.** Prefer
+    the suitable ecosystem or platform capability; document the concrete gap before owning
+    custom tooling.
+12. **Keep agent configuration portable.** Shared project skills live once in `.agents/skills/`
+    and are linked from `.claude/skills/`; Hermes rules, personal or externally installed skills,
+    prompts, sessions, review workspaces, and generated references stay outside this repository.
 
 ## Working on UI
 
