@@ -7,11 +7,17 @@ import {
   type AuthorizationFailure,
   authorizeInvocation,
 } from './authorization.js';
+import type { InvocationRateLimiter } from './rate-limit.js';
 import { PROPOSAL_TOOLS, type ProposalTool } from './tool-surface.js';
 
 export type ProposalToolFailure =
   | { readonly kind: 'unauthorized'; readonly failure: AuthorizationFailure }
   | { readonly kind: 'invalid_args'; readonly message: string }
+  | {
+      readonly kind: 'rate_limited';
+      readonly retryAfterMs: number;
+      readonly retryAt: Date;
+    }
   | CreateProposalFailure;
 
 export interface ProposalToolRequest {
@@ -21,6 +27,7 @@ export interface ProposalToolRequest {
   readonly resourceIdentifier: string;
   readonly now: Date;
   readonly ports: Ports;
+  readonly rateLimiter: InvocationRateLimiter;
 }
 
 function isProposalTool(tool: string): tool is ProposalTool {
@@ -118,6 +125,15 @@ export async function invokeProposalTool(
     return err({
       kind: 'unauthorized',
       failure: { kind: 'unknown_tool', tool: request.tool },
+    });
+  }
+
+  const limited = request.rateLimiter.check(request.context.clientId, request.now);
+  if (!limited.ok) {
+    return err({
+      kind: 'rate_limited',
+      retryAfterMs: limited.retryAfterMs,
+      retryAt: limited.retryAt,
     });
   }
 

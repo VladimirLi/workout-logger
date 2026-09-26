@@ -2,6 +2,7 @@ import { aRevision, createTestPorts, SYNTHETIC_USER_ID } from '@workout/test-sup
 import { describe, expect, it } from 'vitest';
 import type { AuthorizationContext } from './authorization.js';
 import { invokeProposalTool } from './proposal-tools.js';
+import { InvocationRateLimiter } from './rate-limit.js';
 
 const RESOURCE = 'https://mcp.gym.vladimirli.com';
 const NOW = new Date('2026-09-16T12:00:00.000Z');
@@ -33,6 +34,10 @@ function context(overrides: Partial<AuthorizationContext> = {}): AuthorizationCo
   };
 }
 
+function limiter() {
+  return new InvocationRateLimiter({ maxInvocations: 100, windowMs: 60_000 });
+}
+
 describe('invokeProposalTool', () => {
   it('creates a pending replace_plan proposal without changing the revision', async () => {
     const ports = createTestPorts();
@@ -51,6 +56,7 @@ describe('invokeProposalTool', () => {
       resourceIdentifier: RESOURCE,
       now: NOW,
       ports,
+      rateLimiter: limiter(),
     });
 
     expect(result.ok).toBe(true);
@@ -77,6 +83,7 @@ describe('invokeProposalTool', () => {
       resourceIdentifier: RESOURCE,
       now: NOW,
       ports,
+      rateLimiter: limiter(),
     });
 
     expect(result.ok).toBe(false);
@@ -99,6 +106,7 @@ describe('invokeProposalTool', () => {
       resourceIdentifier: RESOURCE,
       now: NOW,
       ports,
+      rateLimiter: limiter(),
     });
 
     expect(result.ok).toBe(false);
@@ -127,6 +135,7 @@ describe('invokeProposalTool', () => {
       resourceIdentifier: RESOURCE,
       now: NOW,
       ports,
+      rateLimiter: limiter(),
     });
 
     expect(result.ok).toBe(false);
