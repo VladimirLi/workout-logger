@@ -1,5 +1,6 @@
 export * from './archive.js';
 export * from './archive-ports.js';
+export * from './auth-ports.js';
 export * from './create-proposal.js';
 export * from './deletion.js';
 export * from './delivery.js';
@@ -9,3 +10,4 @@ export * from './offline-ports.js';
 export * from './ports.js';
 export * from './review-and-apply-proposal.js';
 export * from './review-proposal.js';
+export * from './sign-in.js';

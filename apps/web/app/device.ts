@@ -10,6 +10,7 @@ import {
   IndexedDbWorkoutStore,
   requestPersistentStorage,
 } from '@workout/adapters-browser';
+import { browserConfig, createEmailAuth } from '@workout/adapters-supabase';
 import {
   clearLocalDataAfterExport,
   completeWorkout,
@@ -24,13 +25,16 @@ import {
   purgeExpiredDeletion,
   type ReviewDecision,
   recoverDeletion,
+  requestEmailSignInCode,
   reviewAndApplyProposal,
   type SyncState,
   scheduleRecoverableDeletion,
   startWorkout,
+  verifyEmailSignInCode,
   type WorkoutPorts,
 } from '@workout/application';
 import {
+  err,
   kilograms,
   type LoadSemantics,
   type Proposal,
@@ -109,7 +113,10 @@ export function deviceOf(): Device {
     proposals,
     identity,
     plans,
-    userId: async () => (await identity.current()).userId,
+    userId: async () => {
+      const current = await identity.current();
+      return current.claimedBy ?? current.userId;
+    },
   };
   return device;
 }
@@ -360,3 +367,71 @@ export async function decideOnProposal(proposalId: string, decision: ReviewDecis
 }
 
 export { drainOutbox, FlushTriggers };
+
+const ACCOUNT_SESSION_KEY = 'workout.account.session';
+
+export type AccountSession = {
+  readonly userId: string;
+  readonly accessToken: string;
+};
+
+export function readAccountSession(): AccountSession | undefined {
+  if (typeof sessionStorage === 'undefined') return undefined;
+  try {
+    const raw = sessionStorage.getItem(ACCOUNT_SESSION_KEY);
+    if (!raw) return undefined;
+    const parsed = JSON.parse(raw) as AccountSession;
+    if (!parsed.userId || !parsed.accessToken) return undefined;
+    return parsed;
+  } catch {
+    return undefined;
+  }
+}
+
+export function storeAccountSession(session: AccountSession): void {
+  sessionStorage.setItem(ACCOUNT_SESSION_KEY, JSON.stringify(session));
+}
+
+export function clearAccountSession(): void {
+  sessionStorage.removeItem(ACCOUNT_SESSION_KEY);
+}
+
+function emailAuthOrUndefined() {
+  const url = process.env['NEXT_PUBLIC_SUPABASE_URL'];
+  const publishableKey = process.env['NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY'];
+  const config = browserConfig({ url, publishableKey });
+  if (!config.ok) return undefined;
+  return createEmailAuth(config.value);
+}
+
+export async function requestSignInCode(email: string) {
+  const auth = emailAuthOrUndefined();
+  if (!auth) return err({ kind: 'missing_config' as const });
+  return requestEmailSignInCode(auth, email);
+}
+
+export async function verifySignInCode(email: string, code: string) {
+  const auth = emailAuthOrUndefined();
+  if (!auth) return err({ kind: 'missing_config' as const });
+  const result = await verifyEmailSignInCode(auth, email, code);
+  if (result.ok) {
+    storeAccountSession({
+      userId: result.value.userId,
+      accessToken: result.value.accessToken,
+    });
+    await claimDeviceDataForAccount(result.value.userId);
+  }
+  return result;
+}
+
+async function claimDeviceDataForAccount(accountId: string): Promise<void> {
+  const { identity, archive } = deviceOf();
+  const current = await identity.current();
+  if (current.claimedBy) return;
+  if (current.userId === accountId) {
+    await identity.markClaimed(accountId, new Date());
+    return;
+  }
+  await archive.rekey(current.userId, accountId);
+  await identity.markClaimed(accountId, new Date());
+}
