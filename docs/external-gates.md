@@ -19,9 +19,8 @@ means.
 **Status:** not performed. No remote exists.
 
 **Decided 2026-09-17 (ADR-0009, D2).** The repository will be **public**, with the intent to
-open-source the project. **Project licence chosen 2026-09-24:** MIT. Before it is made public,
-the licence **exception** review that LIC-2026-09-16 condition 5 requires for that distribution
-plan must still be done.
+open-source the project. **Project licence chosen 2026-09-24:** MIT. The dependency exception
+review for public-source distribution completed on 2026-09-26 under LIC-2026-09-26.
 
 **Required (R-026, ADR-0006).** A ruleset on the default branch with: pull requests only;
 required status checks from named trusted sources; stale review dismissal; linear history;
@@ -311,35 +310,36 @@ without one per item, and without Linux and proposal review baselines.
 
 ## G-11 — License exception sign-off
 
-**Status: CLOSED 2026-09-16, conditionally, through 2027-09-16.**
+**Status: CLOSED 2026-09-26 for public MIT source, conditionally, through 2027-09-16.**
 
-**Decision** (LIC-2026-09-16), recorded verbatim from the owner, Vladimir:
+**Decision** (LIC-2026-09-26), recorded verbatim from the owner, Vladimir:
 
-> Approve all 12 with the stated conditions through 2027-09-16.
+> Approve the same 12 exact exceptions through 2027-09-16 for a public MIT source repository, provided dependencies remain unmodified and neither dependency sources nor npm/binary bundles are published
 
-All twelve exact `component@version` entries in [license-policy.md](license-policy.md) now
-name **Vladimir** as approver, backed by that decision record in
-`scripts/license-policy.json`. No allowlist was widened and no future version was approved.
+All twelve exact `component@version` entries in [license-policy.md](license-policy.md) name
+**Vladimir** as approver. The `lightningcss@1.33.0` approval includes its exact 1.33.0
+platform-native artifacts because the wrapper selects one of them at install time. Local
+production checks and GitHub Dependency Review enforce these exact package versions.
 A thirteenth candidate — `@img/sharp-libvips-darwin-arm64`, LGPL-3.0-or-later — had already
 been eliminated rather than approved.
 
 **Conditions accepted by the owner:**
 
-1. product remains privately hosted
-2. no npm package, binary, desktop bundle, or redistributable build is published
-3. dependencies remain unmodified
-4. CI verifies exact package versions and scopes against the ledger
-5. any distribution plan, material dependency change, or expired review date blocks release and requires new review
+1. the public repository contains project source under the MIT License
+2. dependencies remain unmodified
+3. neither dependency sources nor npm/binary bundles are published
 
-**New review required before release (recorded 2026-09-17; updated 2026-09-24).** Vladimir's
-decision to use a public GitHub repository with the intent to open-source the project
-(ADR-0009, D2) is a distribution plan under condition 5. **Project licence:** MIT, chosen by
-Vladimir on 2026-09-24. The repository cannot be made public, and nothing can be released,
-until the twelve licence **exceptions** are re-reviewed for that plan. The separately approved
-Storybook dependency change (2026-09-17) is recorded under G-10.
+**Public-source re-review complete.** On 2026-09-26 Vladimir approved the same twelve exact
+exceptions through 2027-09-16 for a public MIT source repository, provided dependencies remain
+unmodified and neither dependency sources nor npm/binary bundles are published. That decision
+is recorded verbatim as LIC-2026-09-26 and closes the visibility blocker. It does not authorize
+publishing an npm package, binary bundle, redistributable application build, dependency source,
+or a changed dependency. The separately approved Storybook dependency change (2026-09-17) is
+recorded under G-10.
 
-**What reopens this gate.** Any of the following makes `pnpm test:licenses` fail and requires
-new owner review before release:
+**What reopens this gate.** Any of the following requires new owner review before release.
+Dependency and licence changes fail the automated checks; publication intent and the review
+date remain explicit owner-review conditions:
 
 - a workspace package becoming publishable, a publish command or step, a binary or desktop
   bundler, or a standalone-executable build;

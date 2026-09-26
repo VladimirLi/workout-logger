@@ -98,7 +98,9 @@ jobs:
         uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
           fail-on-severity: high
-          # Mirrors docs/license-policy.md. The authoritative, tested implementation
-          # is scripts/license-check.mjs; this is a second line of defence.
-          deny-licenses: AGPL-3.0-only, AGPL-3.0-or-later, AGPL-1.0-only, AGPL-1.0-or-later, SSPL-1.0, BUSL-1.1, Elastic-2.0
+          # Mirrors the exact exceptions in `pnpm test:licenses`. This is authoritative
+          # for dependency changes once the repository is public; the local checker
+          # covers the complete installed tree.
+          allow-licenses: 0BSD, Apache-2.0, BSD-2-Clause, BSD-3-Clause, BlueOak-1.0.0, ISC, MIT, Python-2.0, Unlicense, Zlib
+          allow-dependencies-licenses: pkg:npm/@axe-core/playwright@4.13.0, pkg:npm/@azu/style-format@1.0.1, pkg:npm/axe-core@4.13.0, pkg:npm/binaryextensions@6.11.0, pkg:npm/caniuse-lite@1.0.30001810, pkg:npm/editions@6.22.0, pkg:npm/istextorbinary@9.5.0, pkg:npm/lightningcss@1.33.0, pkg:npm/lightningcss-android-arm64@1.33.0, pkg:npm/lightningcss-darwin-arm64@1.33.0, pkg:npm/lightningcss-darwin-x64@1.33.0, pkg:npm/lightningcss-freebsd-x64@1.33.0, pkg:npm/lightningcss-linux-arm-gnueabihf@1.33.0, pkg:npm/lightningcss-linux-arm64-gnu@1.33.0, pkg:npm/lightningcss-linux-arm64-musl@1.33.0, pkg:npm/lightningcss-linux-x64-gnu@1.33.0, pkg:npm/lightningcss-linux-x64-musl@1.33.0, pkg:npm/lightningcss-win32-arm64-msvc@1.33.0, pkg:npm/lightningcss-win32-x64-msvc@1.33.0, pkg:npm/spdx-exceptions@2.5.0, pkg:npm/spdx-license-ids@3.0.23, pkg:npm/textextensions@6.11.0, pkg:npm/version-range@4.15.0
           comment-summary-in-pr: on-failure

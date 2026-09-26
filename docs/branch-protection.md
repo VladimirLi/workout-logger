@@ -12,7 +12,7 @@ rather than an enforced fact.
 | Rule | Value | Why |
 |---|---|---|
 | Pull requests only | required | No direct push, including by the owner |
-| Required status checks | `verify`, `codeql`, `secret scan (full history)` | The gate suite |
+| Required status checks | `verify`, `codeql`, `secret scan (full history)`, `dependency review` | The gate suite |
 | Strict status checks | on | A check must have run against the current head |
 | Dismiss stale reviews | on | Any new commit invalidates the verdict (R-025) |
 | Required review approvals | 1 | The independent agent reviewer (D-034) |
@@ -22,9 +22,8 @@ rather than an enforced fact.
 | Deletion | blocked | |
 | Bypass actors | **none** | A routine bypass actor is the whole ruleset, undone |
 
-`dependency review` is intentionally **not** in the required list: on a private repository it
-needs GitHub Advanced Security, and a required check that cannot run blocks every merge. Add
-it once GHAS is in place.
+`dependency review` is required after the repository becomes public, where GitHub provides it
+without GitHub Advanced Security.
 
 ## Applying it
 

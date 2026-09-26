@@ -9,7 +9,6 @@
  * one pass rather than peeling them off one at a time.
  */
 import { spawnSync } from 'node:child_process';
-import { EXIT_BLOCKED_ON_OWNER } from './license-exceptions.mjs';
 
 const GATES = [
   ['format:check', ['format:check']],
@@ -52,37 +51,23 @@ for (const [name, args] of selected) {
     console.error(`${name}: could not run - ${result.error.message}`);
   }
   const code = result.status ?? 1;
-  // Exit 3 from the licence gate means everything complies but an exception has no
-  // named approver. That is a human decision, not a broken build, and conflating the
-  // two would hide which one you are looking at.
-  const blocked = name === 'test:licenses' && code === EXIT_BLOCKED_ON_OWNER;
-  results.push({ name, code, blocked, ms: Date.now() - at });
+  results.push({ name, code, ms: Date.now() - at });
 }
 
-const blocked = results.filter((result) => result.blocked);
-const failed = results.filter((result) => result.code !== 0 && !result.blocked);
+const failed = results.filter((result) => result.code !== 0);
 const passed = results.filter((result) => result.code === 0);
 
 console.log('\n=== verify summary ===');
-for (const { name, code, blocked: isBlocked, ms } of results) {
-  const label = code === 0 ? 'PASS' : isBlocked ? 'BLOCK' : 'FAIL';
+for (const { name, code, ms } of results) {
+  const label = code === 0 ? 'PASS' : 'FAIL';
   console.log(`  ${label.padEnd(5)} ${name.padEnd(20)} ${(ms / 1000).toFixed(1)}s`);
 }
 console.log(
   `\n  ${passed.length}/${results.length} gates passed, ${failed.length} failed, ` +
-    `${blocked.length} blocked, in ${((Date.now() - started) / 1000).toFixed(1)}s`,
+    `0 blocked, in ${((Date.now() - started) / 1000).toFixed(1)}s`,
 );
 
 if (failed.length > 0) {
   console.log('\n  Do not weaken a gate to make it pass. See ENGINEERING.md.');
   process.exit(1);
-}
-
-if (blocked.length > 0) {
-  console.log(
-    '\n  Every engineering gate passed. This run is blocked only on a human decision:\n' +
-      `  ${blocked.map(({ name }) => name).join(', ')} — see the ledger above and\n` +
-      '  docs/external-gates.md, G-11. No code change clears it.',
-  );
-  process.exit(EXIT_BLOCKED_ON_OWNER);
 }

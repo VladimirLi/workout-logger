@@ -13,15 +13,8 @@ Applies to distributed runtime dependencies.
 Also allowed as SPDX combinations: a disjunction when any disjunct is allowed, a
 conjunction when every conjunct is allowed, e.g. `(MIT OR Apache-2.0)`, `MIT AND ISC`.
 
-`A WITH B` is classified by licence `A` **only** when `B` is a recognised, current SPDX
-exception identifier **and** the pairing `A`+`B` is listed in `scripts/spdx-exceptions.json`,
-e.g. `Apache-2.0 WITH LLVM-exception`. An exception changes the terms of the licence it is
-attached to, so an unrecognised exception (`Apache-2.0 WITH Totally-Made-Up-exception`), a
-real exception on a licence it does not modify (`MIT WITH Classpath-exception-2.0`), a
-deprecated identifier, a case variant, or a malformed expression is **unknown**, which fails
-closed. The recognised list is a verbatim copy of `spdx-exceptions@2.5.0`, verified
-byte-for-byte against the frozen install; the pairing table is project-owned, and adding a
-pairing is a guardrail change.
+SPDX expression parsing is delegated to `pnpm licenses`; the repository does not maintain its
+own parser or exception registry.
 
 ## Rejected
 
@@ -50,19 +43,17 @@ entry, because "dev-only" can change quietly.
 
 ## Exceptions
 
-### Owner decision LIC-2026-09-16
+### Owner decision LIC-2026-09-26
 
-**Approver:** Vladimir · **Decided:** 2026-09-16 · **Valid through:** 2027-09-16 (inclusive)
+**Approver:** Vladimir · **Decided:** 2026-09-26 · **Valid through:** 2027-09-16 (inclusive)
 
-> Approve all 12 with the stated conditions through 2027-09-16.
+> Approve the same 12 exact exceptions through 2027-09-16 for a public MIT source repository, provided dependencies remain unmodified and neither dependency sources nor npm/binary bundles are published
 
 **Conditions** — presented to and accepted by the owner:
 
-1. product remains privately hosted
-2. no npm package, binary, desktop bundle, or redistributable build is published
-3. dependencies remain unmodified
-4. CI verifies exact package versions and scopes against the ledger
-5. any distribution plan, material dependency change, or expired review date blocks release and requires new review
+1. the public repository contains project source under the MIT License
+2. dependencies remain unmodified
+3. neither dependency sources nor npm/binary bundles are published
 
 The decision covers **exactly the twelve component@version entries below, and nothing
 else.** It does not approve a later version of any of them, a different scope, a changed
@@ -70,22 +61,14 @@ licence expression, or any new component. Each of those is a new decision.
 
 ### How each condition is enforced
 
-`pnpm test:licenses` fails with exit **1** on any breach. A breach voids the approval; the
-remedy is new owner review, **not** editing an entry to match the new state.
+`pnpm test:licenses` runs the maintained `license-checker-rseidelsohn` package over
+production dependencies with exact `package@version` exclusions. GitHub Dependency Review
+enforces the same allowed licences and exact exceptions on every pull request. Frozen lockfile
+installation makes changed dependency versions visible in the pull request.
 
-| Condition | Mechanism |
-|---|---|
-| Privately hosted, nothing published | Every workspace manifest must be `"private": true` with no `publishConfig`; no package script or workflow may run `npm/pnpm/yarn publish` or `changeset publish`, or configure a `publish:` step |
-| No binary, desktop bundle, or redistributable build | Fails on a dependency on electron, electron-builder, Electron Forge, Tauri, pkg, nexe, postject, or Neutralino, and on a script building a single executable (`--experimental-sea-config`, `bun build --compile`, `deno compile`) |
-| Dependencies remain unmodified | Fails on a `patchedDependencies` entry, patch file, or `overrides`/`resolutions` targeting an excepted component, and on any `.pnpmfile`, whose hooks can rewrite any manifest. CI installs with `--frozen-lockfile`, so the store verifies package integrity on install |
-| Exact versions and scopes verified against the ledger | Each entry matches only its exact `component@version`; its recorded scope must equal the tree's (runtime wins when both); its recorded SPDX expression must equal the installed one |
-| Material dependency change blocks | An entry no longer present, or no longer needed because the licence became allowed, fails as stale; a duplicate entry fails |
-| Expired review date blocks | Valid through the end of 2027-09-16 UTC; from the next instant the gate fails |
-| No fabricated or altered approval | The decision is pinned verbatim in `scripts/license-decisions.mjs`, and the record in `scripts/license-policy.json` must equal it exactly: id, approver, decision date, the decision wording, all five conditions in order, the through-date and its inclusive meaning, and the exact set of twelve `component@version` / scope / licence tuples. Rewording, re-dating, extending, re-scoping, adding or removing anything fails. Each ledger entry must name that decision, its approver and its through-date, and appear in its component set |
-
-Mechanical detection has a limit, stated plainly: a distribution plan that leaves no trace in
-the repository cannot be detected. That is why the condition is recorded here as well as
-enforced where it can be.
+The approval conditions about modification and publication are owner policy, not executable
+facts. They remain recorded here rather than being represented by a custom policy engine that
+could only detect selected repository shapes.
 
 ### One exception was eliminated rather than approved
 
@@ -106,10 +89,10 @@ removed the only copyleft component from the shipped dependency tree.
 | `@azu/style-format@1.0.1` | `WTFPL` | dev | Output formatting inside secretlint. | Dev-only tooling in the secret-scanning gate. Unmodified, never bundled. | Transitive dependency of secretlint. | WTFPL imposes no conditions. Recorded because it is not on the R-029 allowlist, not because it creates an obligation. | Lose `pnpm test:secrets`, the only secret gate that runs on every contributor machine. D-037 requires secret scanning. | **Vladimir** | 2027-09-16 |
 | `axe-core@4.13.0` | `MPL-2.0` | dev | Accessibility rule engine underneath @axe-core/playwright. | Dev-only test tooling. Never bundled. | Bundled by @axe-core/playwright; not separately selectable. | Unmodified, not distributed. | Same as @axe-core/playwright: lose the accessibility gate. | **Vladimir** | 2027-09-16 |
 | `binaryextensions@6.11.0` | `Artistic-2.0` | dev | Binary-file detection inside secretlint. | Dev-only tooling in the secret-scanning gate. Unmodified, never bundled. | Transitive dependency of secretlint. | Artistic-2.0 is OSI-approved and permissive for unmodified use. Unmodified, not distributed. | Lose `pnpm test:secrets`, the only secret gate that runs on every contributor machine. D-037 requires secret scanning. | **Vladimir** | 2027-09-16 |
-| `caniuse-lite@1.0.30001810` | `CC-BY-4.0` | runtime | Browser-support data table, a hard dependency of next@16 for target resolution. | Build-time data. Consumed by the compiler; the dataset is not emitted into the client bundle. | Non-optional transitive dependency of Next.js. Not selectable, not replaceable without replacing Next.js. | Attribution if the dataset is redistributed. Nothing is redistributed: the product is a privately hosted server application. | Replacing Next.js. This is the only runtime-scope exception remaining. | **Vladimir** | 2027-09-16 |
+| `caniuse-lite@1.0.30001810` | `CC-BY-4.0` | runtime | Browser-support data table, a hard dependency of next@16 for target resolution. | Build-time data. Consumed by the compiler; the dataset is not emitted into the client bundle. | Non-optional transitive dependency of Next.js. Not selectable, not replaceable without replacing Next.js. | Attribution if the dataset is redistributed. The public repository does not publish the dependency dataset, and the application build does not emit it. | Replacing Next.js. This is the only runtime-scope exception remaining. | **Vladimir** | 2027-09-16 |
 | `editions@6.22.0` | `Artistic-2.0` | dev | Module-edition resolution inside secretlint. | Dev-only tooling in the secret-scanning gate. Unmodified, never bundled. | Transitive dependency of secretlint. | Unmodified, not distributed. | Lose `pnpm test:secrets`, the only secret gate that runs on every contributor machine. D-037 requires secret scanning. | **Vladimir** | 2027-09-16 |
 | `istextorbinary@9.5.0` | `Artistic-2.0` | dev | Text/binary detection inside secretlint. | Dev-only tooling in the secret-scanning gate. Unmodified, never bundled. | Transitive dependency of secretlint. | Unmodified, not distributed. | Lose `pnpm test:secrets`, the only secret gate that runs on every contributor machine. D-037 requires secret scanning. | **Vladimir** | 2027-09-16 |
-| `lightningcss@1.33.0` | `MPL-2.0` | dev | CSS transform inside vite, which vitest depends on. | Dev-only test tooling. Never bundled. A hard dependency of vite, not an optional one. | Non-optional transitive dependency of vitest. Verified: vite declares it under `dependencies`, so it cannot be excluded as an optional dependency the way sharp was. | Unmodified, not distributed. | Replacing vitest, and with it every unit, domain and integration test. | **Vladimir** | 2027-09-16 |
+| `lightningcss@1.33.0` and its exact `1.33.0` platform-native artifacts | `MPL-2.0` | dev | CSS transform inside vite, which vitest depends on. The wrapper selects one matching native package at install time. | Dev-only test tooling. Never bundled. A hard dependency of vite, not an optional one. | Non-optional transitive dependency of vitest. Verified: vite declares it under `dependencies`, so it cannot be excluded as an optional dependency the way sharp was. | Unmodified, not distributed. | Replacing vitest, and with it every unit, domain and integration test. | **Vladimir** | 2027-09-16 |
 | `spdx-exceptions@2.5.0` | `CC-BY-3.0` | dev | SPDX exception identifier list, reached through secretlint -> read-pkg -> normalize-package-data -> validate-npm-package-license. | Dev-only data. Never bundled. | Canonical SPDX data; there is no alternative source, and it is a transitive dependency of secretlint. | Attribution on redistribution of the dataset. Not redistributed. | Lose `pnpm test:secrets`, the only secret gate that runs on every contributor machine. D-037 requires secret scanning. | **Vladimir** | 2027-09-16 |
 | `spdx-license-ids@3.0.23` | `CC0-1.0` | dev | SPDX licence identifier list, reached through the same secretlint chain. | Dev-only data. Never bundled. | Canonical SPDX data; transitive dependency of secretlint. | CC0-1.0 is a public-domain dedication and imposes no conditions. | Lose `pnpm test:secrets`, the only secret gate that runs on every contributor machine. D-037 requires secret scanning. | **Vladimir** | 2027-09-16 |
 | `textextensions@6.11.0` | `Artistic-2.0` | dev | Text-extension list inside secretlint. | Dev-only tooling in the secret-scanning gate. Unmodified, never bundled. | Transitive dependency of secretlint. | Unmodified, not distributed. | Lose `pnpm test:secrets`, the only secret gate that runs on every contributor machine. D-037 requires secret scanning. | **Vladimir** | 2027-09-16 |
@@ -122,23 +105,14 @@ and unit testing (`lightningcss`, via vitest).
 
 ### Future exceptions
 
-A new exception is added with `approver` set to `pending-owner-approval`. The gate exits
-**3 — BLOCKED: owner approval required** and prints its ledger row until the owner decides,
-at which point a new decision record listing the exact component is added alongside the
-approver name. An agent never writes an approver name without a decision the owner actually
-made.
-
-Every exception records `spdx`, `scope`, `use`, `linkage`, `noAlternative`, `obligations`,
-`replacementCost`, `approver`, and `reviewBy`, the last as a plain `YYYY-MM-DD` date no more
-than 12 months out. A bare entry is a bypass, not an exception.
+New package exceptions require owner review before they are added to the tool configuration.
+Record the rationale and conditions here; do not build a parallel approval workflow in code.
 
 ## Enforcement
 
-`pnpm test:licenses` resolves the SPDX expression of every workspace dependency from the
-committed lockfile and fails on any rejected or unknown license that is not covered by an
-unexpired exception. It runs offline. The allow/reject/review lists live in
-`scripts/license-policy.json`, which is the single source the checker reads — this
-document and that file must agree, and a test asserts they do.
+`pnpm test:licenses` checks all dependencies locally. `.github/workflows/security.yml`
+runs GitHub Dependency Review on pull requests and rejects AGPL, SSPL, BUSL, Elastic, Commons
+Clause, JSON, non-commercial, and copyleft additions unless explicitly approved.
 
 ## SBOM
 

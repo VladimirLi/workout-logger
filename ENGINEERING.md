@@ -52,7 +52,7 @@ inlines its own commands. That is what makes a green local run meaningful.
 | `pnpm test:a11y` | Automated accessibility checks |
 | `pnpm test:visual` | Visual regression against committed per-platform baselines; a missing baseline fails |
 | `pnpm test:architecture` | Dependency direction and cycles |
-| `pnpm test:licenses` | License policy (exit 3 = blocked on owner approval) |
+| `pnpm test:licenses` | Dependency licence policy via `license-checker-rseidelsohn` |
 | `pnpm test:deps` | High/critical vulnerability block |
 | `pnpm test:secrets` | Secret scanning |
 | `pnpm test:migrations` | Migration expand-contract rules |
@@ -77,12 +77,7 @@ Three rules, and they are not negotiable:
    `pnpm test:migrations` passes while `supabase/migrations/` does not exist, prints why,
    and starts enforcing the instant the first migration lands. It is not a stub that
    always passes.
-3. **A gate blocked on a human decision is not a failing gate.** `pnpm test:licenses`
-   exits **3** when every licence complies but an exception has no named approver, and
-   `pnpm verify` reports it as `BLOCK` rather than `FAIL`, runs every other gate, and exits
-   3. That state is real and is not clearable by code. See
-   [docs/external-gates.md](docs/external-gates.md), G-11.
-4. **Never weaken a gate to go green.** Not the coverage threshold, not the severity
+3. **Never weaken a gate to go green.** Not the coverage threshold, not the severity
    level, not the license allowlist, not a lint rule. If a gate is genuinely wrong, fix it
    in a separate guardrail change (below).
 

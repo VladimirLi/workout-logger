@@ -1,0 +1,9 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Synthetic test fixtures that intentionally resemble credentials"
+paths = [
+  '''packages/adapters-supabase/src/config\.test\.ts''',
+  '''packages/test-support/src/offline-ports\.test\.ts''',
+]
