@@ -103,6 +103,23 @@ export default function SettingsPage() {
           <ThemeSetting />
           <FeedbackSettings />
 
+          <Surface tone="card" aria-labelledby="account-heading">
+            <Stack gap={3}>
+              <Heading level={2} id="account-heading">
+                {messages.signIn.title}
+              </Heading>
+              <Text>{messages.signIn.intro}</Text>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  window.location.href = '/sign-in';
+                }}
+              >
+                {messages.signIn.title}
+              </Button>
+            </Stack>
+          </Surface>
+
           <Surface tone="card" aria-labelledby="data-heading">
             <Stack gap={3}>
               <Heading level={2} id="data-heading">
