@@ -250,38 +250,39 @@ describe('end to end: the real gate against a local advisory registry', () => {
     }
   }
 
-  const advisory = (id: number, severity: string, versions: string) => ({
+  const advisory = (id: number, severity: string) => ({
     id,
     url: `https://example.invalid/${id}`,
     title: `Synthetic ${severity} advisory`,
     severity,
-    vulnerable_versions: versions,
+    // Any version: a pinned range stops matching after a routine dependency bump.
+    vulnerable_versions: '*',
     cwe: [],
     cvss: { score: 0 },
     github_advisory_id: `GHSA-synt-hetc-${String(id).padStart(4, '0')}`,
   });
 
   it('blocks a real high advisory on an installed package', async () => {
-    const gate = await gateAgainst({ zod: [advisory(9101, 'high', '<=4.6.5')] });
+    const gate = await gateAgainst({ zod: [advisory(9101, 'high')] });
     expect(gate.status).toBe(1);
     expect(gate.output).toContain('1 high/critical advisories');
     expect(gate.output).toContain('Synthetic high advisory');
   }, 120_000);
 
   it('blocks a real critical advisory on an installed package', async () => {
-    const gate = await gateAgainst({ react: [advisory(9102, 'critical', '<=19.3.0')] });
+    const gate = await gateAgainst({ react: [advisory(9102, 'critical')] });
     expect(gate.status).toBe(1);
     expect(gate.output).toContain('Synthetic critical advisory');
   }, 120_000);
 
   it('passes a completed audit whose only finding is moderate, which is not blocking', async () => {
-    const gate = await gateAgainst({ next: [advisory(9103, 'moderate', '<=16.3.5')] });
+    const gate = await gateAgainst({ next: [advisory(9103, 'moderate')] });
     expect(gate.status).toBe(0);
     expect(gate.output).toContain('moderate=1');
   }, 120_000);
 
   it('passes a completed audit whose only finding is info, which the default level would hide', async () => {
-    const gate = await gateAgainst({ 'caniuse-lite': [advisory(9104, 'info', '<=1.0.30001810')] });
+    const gate = await gateAgainst({ 'caniuse-lite': [advisory(9104, 'info')] });
     expect(gate.status).toBe(0);
     expect(gate.output).toContain('info=1');
   }, 120_000);
