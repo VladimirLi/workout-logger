@@ -7,7 +7,7 @@ packages:
 # cannot drift between packages. See ENGINEERING.md.
 catalog:
   '@axe-core/playwright': 4.13.0
-  '@modelcontextprotocol/sdk': 1.30.0
+  '@modelcontextprotocol/sdk': 1.30.1
   '@playwright/test': 1.63.0
   '@storybook/addon-a11y': 10.6.0
   '@storybook/nextjs-vite': 10.6.0
@@ -21,7 +21,7 @@ catalog:
   react-dom: 19.3.0
   storybook: 10.6.0
   typescript: 6.0.3
-  vite: 8.3.0
+  vite: 8.3.1
   vitest: 5.0.1
   zod: 4.6.5
 
