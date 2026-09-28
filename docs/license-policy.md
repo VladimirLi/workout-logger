@@ -103,6 +103,25 @@ The other eleven are dev tooling for three gates D-037 requires — accessibilit
 (`axe-core`), secret scanning (the `secretlint` chain, which accounts for eight of them),
 and unit testing (`lightningcss`, via vitest).
 
+### Owner decision LIC-2026-09-28
+
+**Approver:** Vladimir · **Decided:** 2026-09-28 · **Valid through:** 2027-09-16 (inclusive)
+
+> Approve `spdx-satisfies@6.0.0` as a dev-only exception in GitHub Dependency Review, under
+> the same conditions as LIC-2026-09-26.
+
+This corrects a detection false positive. GitHub Dependency Review reports the package as
+`Apache-2.0 AND BSD-2-Clause AND GPL-2.0-only AND MIT`. The published tarball declares
+`"license": "MIT"` and ships an MIT `LICENSE` file; `GPL` appears only as data in `index.js`
+(GPL "only" and "or later" range handling) and in README usage examples. `pnpm test:licenses`
+reads the declared licence and passes, so the exception exists only in
+`.github/workflows/security.yml`. The decision covers exactly `spdx-satisfies@6.0.0`; a later
+version is a new decision.
+
+| Component@version | SPDX | Scope | Why present | Linkage / distribution | Why no alternative | Obligations | Cost of removal | Approver | Review by |
+|---|---|---|---|---|---|---|---|---|---|
+| `spdx-satisfies@6.0.0` | `MIT` (detected as `Apache-2.0 AND BSD-2-Clause AND GPL-2.0-only AND MIT`) | dev | SPDX expression matching inside `license-checker-rseidelsohn@5`, which runs `pnpm test:licenses`. | Dev-only tooling in the licence gate. Unmodified, never bundled. | Hard dependency of `license-checker-rseidelsohn@5`. | MIT notice on redistribution. Not redistributed. | Stay on `license-checker-rseidelsohn@4`, or replace the licence gate. | **Vladimir** | 2027-09-16 |
+
 ### Future exceptions
 
 New package exceptions require owner review before they are added to the tool configuration.
