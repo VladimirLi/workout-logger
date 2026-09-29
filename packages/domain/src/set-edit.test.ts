@@ -218,6 +218,17 @@ describe('deleting and restoring a set', () => {
     });
   });
 
+  it('refuses an edit or a delete stamped before the set was recorded', () => {
+    const session = withFourSets();
+    expect(editSet(session, { setId: 'set-3', measurement: strength(9), editedAt: at(1) })).toEqual(
+      { ok: false, error: { kind: 'changed_before_recorded', setId: 'set-3' } },
+    );
+    expect(deleteSet(session, 'set-3', at(1))).toEqual({
+      ok: false,
+      error: { kind: 'changed_before_recorded', setId: 'set-3' },
+    });
+  });
+
   it('is final once the session is completed', () => {
     const deleted = unwrap(deleteSet(withFourSets(), 'set-2', at(8)));
     const done = unwrap(completeSession(deleted, at(20)));

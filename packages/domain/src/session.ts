@@ -98,7 +98,8 @@ export type SessionError =
   | { readonly kind: 'set_not_found'; readonly setId: string }
   | { readonly kind: 'set_deleted'; readonly setId: string }
   | { readonly kind: 'set_not_deleted'; readonly setId: string }
-  | { readonly kind: 'measurement_profile_changed'; readonly setId: string };
+  | { readonly kind: 'measurement_profile_changed'; readonly setId: string }
+  | { readonly kind: 'changed_before_recorded'; readonly setId: string };
 
 export interface StartSessionInput {
   readonly id: string;
@@ -389,6 +390,9 @@ export function editSet(
   }
   return replaceSet(session, input.setId, (set) => {
     if (set.deletedAt !== undefined) return err({ kind: 'set_deleted', setId: set.setId });
+    if (input.editedAt.getTime() < set.recordedAt.getTime()) {
+      return err({ kind: 'changed_before_recorded', setId: set.setId });
+    }
     if (set.measurement.profile !== input.measurement.profile) {
       return err({ kind: 'measurement_profile_changed', setId: set.setId });
     }
@@ -407,9 +411,13 @@ export function deleteSet(
   if (session.status !== 'active') {
     return err({ kind: 'session_not_active', sessionId: session.id });
   }
-  return replaceSet(session, setId, (set) =>
-    set.deletedAt === undefined ? ok({ ...set, deletedAt }) : err({ kind: 'set_deleted', setId }),
-  );
+  return replaceSet(session, setId, (set) => {
+    if (set.deletedAt !== undefined) return err({ kind: 'set_deleted', setId });
+    if (deletedAt.getTime() < set.recordedAt.getTime()) {
+      return err({ kind: 'changed_before_recorded', setId });
+    }
+    return ok({ ...set, deletedAt });
+  });
 }
 
 /** Undoes a delete: the set comes back with the value and the position it had. */
