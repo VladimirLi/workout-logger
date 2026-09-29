@@ -65,6 +65,12 @@ interface SessionBase {
    * must not change what the set the user is about to record is allowed to mean.
    */
   readonly combinedLoadExercises: readonly string[];
+  /**
+   * The exercises that were recorded one side at a time when the session started, snapshotted
+   * for the same reason: a plan revised mid-workout must not change how a set is measured. Absent
+   * only on a session stored before this was kept, where the profile is not known.
+   */
+  readonly unilateralExercises?: readonly string[];
   readonly startedAt: Date;
   readonly sets: readonly RecordedSet[];
 }
@@ -134,6 +140,9 @@ export function startSession(
     ...(Object.keys(exerciseNames).length > 0 ? { exerciseNames } : {}),
     combinedLoadExercises: scheduled.exercises
       .filter((exercise) => exercise.combinedLoadPermitted === true)
+      .map((exercise) => exercise.exerciseId),
+    unilateralExercises: scheduled.exercises
+      .filter((exercise) => exercise.prescription.profile === 'unilateral_strength')
       .map((exercise) => exercise.exerciseId),
     status: 'active',
     startedAt: input.startedAt,

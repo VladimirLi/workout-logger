@@ -63,6 +63,7 @@ describe('starting a session', () => {
       exerciseIds: ['back-squat', 'split-squat'],
       // Snapshotted at start; none of these exercises permits combined load.
       combinedLoadExercises: [],
+      unilateralExercises: ['split-squat'],
       status: 'active',
       startedAt: STARTED_AT,
       sets: [],
@@ -496,6 +497,17 @@ describe('the session snapshot carries names', () => {
     );
     expect(session.name).toBe('Upper A');
     expect(session.exerciseNames).toEqual({ 'back-squat': 'Back squat' });
+  });
+
+  it('snapshots which exercises are one-sided', () => {
+    const session = unwrap(
+      startSession(namedPlan, {
+        id: 'workout-1',
+        scheduledSessionId: 'session-mon',
+        startedAt: STARTED_AT,
+      }),
+    );
+    expect(session.unilateralExercises).toEqual(['split-squat']);
   });
 
   it('carries no name fields when the plan had none', () => {
