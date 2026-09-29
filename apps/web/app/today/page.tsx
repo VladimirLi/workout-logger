@@ -71,20 +71,21 @@ export default function TodayPage() {
       const { plan, active, due, allDone, nextOn } = await readToday();
       setState({
         kind: 'ready',
-        plan: plan
-          ? {
-              name: plan.name ?? displayName(plan.id, 'Your plan'),
-              sessions: due.map((session) => ({
-                id: session.id,
-                name:
-                  session.name ??
-                  displayName(session.id, `Session ${plan.sessions.indexOf(session) + 1}`),
-                scheduledFor: session.scheduledFor,
-              })),
-              allDone,
-              ...(nextOn !== undefined ? { nextOn } : {}),
-            }
-          : undefined,
+        plan:
+          plan && plan.sessions.length > 0
+            ? {
+                name: plan.name ?? displayName(plan.id, 'Your plan'),
+                sessions: due.map((session) => ({
+                  id: session.id,
+                  name:
+                    session.name ??
+                    displayName(session.id, `Session ${plan.sessions.indexOf(session) + 1}`),
+                  scheduledFor: session.scheduledFor,
+                })),
+                allDone,
+                ...(nextOn !== undefined ? { nextOn } : {}),
+              }
+            : undefined,
         ...(active ? { activeId: active.id, activeSets: active.sets.length } : {}),
       });
     } catch (error) {

@@ -379,6 +379,12 @@ test.describe('several sessions on Today (D-22, D-26)', () => {
     await expect(page.getByRole('button', { name: 'Start workout' })).toBeVisible();
   });
 
+  test('a plan with no sessions reads as no plan (T-5)', async ({ page }) => {
+    await openToday(page, { name: 'Empty block', sessions: [] });
+    await expect(page.getByRole('heading', { name: 'No plan on this device yet' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'See your history' })).toBeVisible();
+  });
+
   test('says when nothing is scheduled yet', async ({ page }) => {
     await page.clock.setFixedTime(new Date('2026-09-29T10:00:00Z'));
     await openToday(page, {
