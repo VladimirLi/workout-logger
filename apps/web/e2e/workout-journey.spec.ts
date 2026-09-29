@@ -15,14 +15,19 @@ const ADAPTER = 'packages/adapters-browser/dist/local-workout-store.js';
 /** Seeds a downloaded plan before the app boots, so the first render already has one. */
 async function seedPlan(
   page: Page,
-  options: { unilateral?: boolean; combinedLoad?: boolean } = {},
+  options: { unilateral?: boolean; combinedLoad?: boolean; twoExercises?: boolean } = {},
 ): Promise<void> {
   // `export` is illegal inside a function body, so the keyword is stripped and the classes
   // are returned explicitly. The adapter has no runtime imports, which is what makes this
   // possible; browser-store.spec.ts asserts that and would fail first if it changed.
   const adapter = readFileSync(ADAPTER, 'utf8').replaceAll(/^export /gm, '');
   await page.addInitScript(
-    (input: { source: string; unilateral: boolean; combinedLoad: boolean }) => {
+    (input: {
+      source: string;
+      unilateral: boolean;
+      combinedLoad: boolean;
+      twoExercises: boolean;
+    }) => {
       const { source } = input;
       // The store's own code, running in the page before any route script does.
       const factory = new Function(`${source}\nreturn { IndexedDbPlanStore };`) as () => {
@@ -85,6 +90,19 @@ async function seedPlan(
                         load: { unit: 'kg', value: 80 },
                       },
                     },
+                    ...(input.twoExercises
+                      ? [
+                          {
+                            exerciseId: 'bench-press',
+                            prescription: {
+                              schemaVersion: 1,
+                              profile: 'strength',
+                              repetitions: 5,
+                              load: { unit: 'kg', value: 60 },
+                            },
+                          },
+                        ]
+                      : []),
                   ],
             },
           ],
@@ -95,6 +113,7 @@ async function seedPlan(
       source: adapter,
       unilateral: options.unilateral === true,
       combinedLoad: options.combinedLoad === true,
+      twoExercises: options.twoExercises === true,
     },
   );
 }
@@ -102,7 +121,7 @@ async function seedPlan(
 /** Opens today, makes sure the device identity exists, then seeds and reloads. */
 async function openTodayWithPlan(
   page: Page,
-  options: { unilateral?: boolean; combinedLoad?: boolean } = {},
+  options: { unilateral?: boolean; combinedLoad?: boolean; twoExercises?: boolean } = {},
 ): Promise<void> {
   await seedPlan(page, options);
   await page.goto('/today');
@@ -198,6 +217,29 @@ test.describe('the workout journey', () => {
       page.getByRole('heading', { name: 'That session is not on this device' }),
     ).toBeVisible();
   });
+});
+
+test.describe('a phone held sideways (layout.landscape.two-pane)', () => {
+  for (const twoExercises of [false, true]) {
+    test(`keeps Log set in view at 667 x 375 with ${twoExercises ? 'two exercises' : 'one exercise'}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: 667, height: 375 });
+      await openTodayWithPlan(page, { twoExercises });
+      await page.getByRole('button', { name: 'Start workout' }).click();
+      await page.waitForURL('**/workout');
+      const logSet = page.getByRole('button', { name: 'Log set' });
+      await expect(logSet).toBeVisible();
+
+      const box = await logSet.boundingBox();
+      const viewport = page.viewportSize();
+      expect(box && viewport).toBeTruthy();
+      if (!box || !viewport) return;
+      expect(box.y).toBeGreaterThanOrEqual(0);
+      expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
+      expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
+    });
+  }
 });
 
 test.describe('logging a set', () => {

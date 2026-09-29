@@ -101,13 +101,15 @@
     min-block-size: var(--target-min);
   }
 
+  /*
+   * Stays sticky so the action is in view however tall the page is. A sticky grid item is
+   * confined to its grid area, so it spans both rows and sits at the end of them.
+   */
   .actionBar {
-    position: static;
     grid-column: 2;
-    grid-row: 2;
+    grid-row: 1 / span 2;
+    align-self: end;
     margin-inline: 0;
     padding: 0;
-    border: 0;
-    background: transparent;
   }
 }
