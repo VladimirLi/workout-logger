@@ -81,7 +81,7 @@ export function EditSet({
   onDelete,
 }: {
   exerciseName: string;
-  target: { readonly loadKg: number; readonly reps: number } | undefined;
+  target: { readonly loadKg?: number; readonly reps: number } | undefined;
   config: SetControlsConfig;
   recorded: RecordedValues;
   failure: EditFailure | undefined;

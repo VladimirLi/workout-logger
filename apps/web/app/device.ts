@@ -269,7 +269,7 @@ export async function readActivePrescriptions() {
           session.exerciseNames?.[exercise.exerciseId] ?? exercise.name,
         ),
         target: {
-          loadKg: exercise.prescription.load?.value ?? 0,
+          ...(exercise.prescription.load ? { loadKg: exercise.prescription.load.value } : {}),
           reps: exercise.prescription.repetitions,
         },
         restSeconds: exercise.restSeconds ?? FALLBACK_REST_SECONDS,
@@ -283,25 +283,27 @@ export async function readActivePrescriptions() {
 /**
  * The active session's exercises with no prescription attached, for logging when the plan
  * revision the session started on is gone. Names and combined-load permission come from the
- * session's own snapshot. Whether an exercise is one-sided is not in the snapshot, so it is
- * read from the current plan when the exercise is still there; that is a kind of exercise,
- * never a target, so no number from a later revision reaches the screen.
+ * session's own snapshot, including whether it is one-sided, so nothing here depends on the
+ * plan as it is now and no number or profile from a later revision reaches the screen.
+ *
+ * A session stored before the one-sided snapshot existed has none: its profile is then what
+ * its own recorded sets say, else two-sided.
  */
 export async function readSessionExercises() {
   const { ports, userId } = deviceOf();
   const user = await userId();
   const session = await ports.store.activeSession(user);
   if (!session) return [];
-  const plan = await ports.plans.activePlan(user);
-  const scheduled = plan?.sessions.find((item) => item.id === session.scheduledSessionId);
   return session.exerciseIds.map((exerciseId, index) => ({
     exerciseId,
     name: exerciseName(exerciseId, index, session.exerciseNames?.[exerciseId]),
     target: undefined,
     restSeconds: FALLBACK_REST_SECONDS,
     unilateral:
-      scheduled?.exercises.find((exercise) => exercise.exerciseId === exerciseId)?.prescription
-        .profile === 'unilateral_strength',
+      session.unilateralExercises?.includes(exerciseId) ??
+      session.sets.some(
+        (set) => set.exerciseId === exerciseId && set.measurement.profile === 'unilateral_strength',
+      ),
     combinedLoadPermitted: session.combinedLoadExercises.includes(exerciseId),
   }));
 }

@@ -36,8 +36,9 @@ export function speakLoad(kg: number | undefined): string {
   return `${formatNumber(rounded)} ${rounded === 1 ? 'kilogram' : 'kilograms'}`;
 }
 
-export function formatLoadReps(kg: number, reps: number): string {
-  return `${formatLoad(kg)} × ${formatNumber(reps)}`;
+/** "80 kg × 5"; the reps alone ("5 reps") when there is no load, so no load is invented. */
+export function formatLoadReps(kg: number | undefined, reps: number): string {
+  return kg === undefined ? formatReps(reps) : `${formatLoad(kg)} × ${formatNumber(reps)}`;
 }
 
 /** data.comparison.delta-text: "+2.5 kg vs last". The sign carries the direction, not colour. */

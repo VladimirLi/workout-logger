@@ -13,17 +13,28 @@ import { finishWorkout } from './finish';
 
 const ADAPTER = 'packages/adapters-browser/dist/local-workout-store.js';
 
+type SeedOptions = {
+  unilateral?: boolean;
+  combinedLoad?: boolean;
+  multiple?: boolean;
+  /** The first exercise prescribes reps and no load. */
+  bodyweight?: boolean;
+};
+
 /** Seeds a downloaded plan before the app boots, so the first render already has one. */
-async function seedPlan(
-  page: Page,
-  options: { unilateral?: boolean; combinedLoad?: boolean; multiple?: boolean } = {},
-): Promise<void> {
+async function seedPlan(page: Page, options: SeedOptions = {}): Promise<void> {
   // `export` is illegal inside a function body, so the keyword is stripped and the classes
   // are returned explicitly. The adapter has no runtime imports, which is what makes this
   // possible; browser-store.spec.ts asserts that and would fail first if it changed.
   const adapter = readFileSync(ADAPTER, 'utf8').replaceAll(/^export /gm, '');
   await page.addInitScript(
-    (input: { source: string; unilateral: boolean; combinedLoad: boolean; multiple: boolean }) => {
+    (input: {
+      source: string;
+      unilateral: boolean;
+      combinedLoad: boolean;
+      multiple: boolean;
+      bodyweight: boolean;
+    }) => {
       const { source } = input;
       // The store's own code, running in the page before any route script does.
       const factory = new Function(`${source}\nreturn { IndexedDbPlanStore };`) as () => {
@@ -50,70 +61,116 @@ async function seedPlan(
         return identity();
       };
 
+      type Exercise = { exerciseId: string; prescription: Record<string, unknown> };
+      type Override = {
+        revision?: number;
+        loadKg?: number;
+        reps?: number;
+        /** The first exercise is re-profiled in the new revision. */
+        profile?: 'strength' | 'unilateral_strength';
+        /** The new revision no longer has the exercises the workout started with. */
+        swap?: boolean;
+      };
+      const loadOf = (value: number) => (input.bodyweight ? {} : { load: { unit: 'kg', value } });
+      const reshape = <T extends { sessions: { exercises: Exercise[] }[] }>(
+        plan: T,
+        override: Override | undefined,
+      ): T => {
+        const [session] = plan.sessions;
+        const [first] = session?.exercises ?? [];
+        if (!session || !first || !override) return plan;
+        if (override.swap) {
+          session.exercises = [
+            {
+              exerciseId: 'overhead-press',
+              prescription: {
+                schemaVersion: 1,
+                profile: 'strength',
+                repetitions: 5,
+                load: { unit: 'kg', value: 40 },
+              },
+            },
+          ];
+        } else if (override.profile === 'unilateral_strength') {
+          first.prescription = {
+            ...first.prescription,
+            profile: 'unilateral_strength',
+            side: 'left',
+            loadSemantics: 'per_side',
+          };
+        } else if (override.profile === 'strength') {
+          const { side: _side, loadSemantics: _semantics, ...rest } = first.prescription;
+          first.prescription = { ...rest, profile: 'strength' };
+        }
+        return plan;
+      };
+
       // The override is how a test moves the downloaded plan on to a later revision, which is
       // what the device would hold after a sync. Saving the same plan id overwrites the
       // record, exactly as the adapter does for a real download.
       (
         window as unknown as {
-          __seedPlan: (override?: {
-            revision?: number;
-            loadKg?: number;
-            reps?: number;
-          }) => Promise<void>;
+          __seedPlan: (override?: Override) => Promise<void>;
         }
       ).__seedPlan = async (override) => {
         const userId = await identity();
-        await new IndexedDbPlanStore().save(userId, {
-          status: 'active',
-          id: 'plan-1',
-          revision: override?.revision ?? 1,
-          activatedAt: new Date('2026-09-18T08:00:00Z'),
-          sessions: [
+        await new IndexedDbPlanStore().save(
+          userId,
+          reshape(
             {
-              id: 'session-mon',
-              scheduledFor: '2026-09-18',
-              exercises: input.unilateral
-                ? [
-                    {
-                      exerciseId: 'split-squat',
-                      prescription: {
-                        schemaVersion: 1,
-                        profile: 'unilateral_strength',
-                        side: 'left',
-                        loadSemantics: 'per_side',
-                        repetitions: 10,
-                        load: { unit: 'kg', value: 22.5 },
-                      },
-                      ...(input.combinedLoad ? { combinedLoadPermitted: true } : {}),
-                    },
-                  ]
-                : [
-                    {
-                      exerciseId: 'back-squat',
-                      prescription: {
-                        schemaVersion: 1,
-                        profile: 'strength',
-                        repetitions: override?.reps ?? 8,
-                        load: { unit: 'kg', value: override?.loadKg ?? 80 },
-                      },
-                    },
-                    ...(input.multiple
-                      ? [
-                          {
-                            exerciseId: 'bench-press',
-                            prescription: {
-                              schemaVersion: 1,
-                              profile: 'strength',
-                              repetitions: 6,
-                              load: { unit: 'kg', value: 60 },
-                            },
+              status: 'active',
+              id: 'plan-1',
+              revision: override?.revision ?? 1,
+              activatedAt: new Date('2026-09-18T08:00:00Z'),
+              sessions: [
+                {
+                  id: 'session-mon',
+                  scheduledFor: '2026-09-18',
+                  exercises: input.unilateral
+                    ? [
+                        {
+                          exerciseId: 'split-squat',
+                          prescription: {
+                            schemaVersion: 1,
+                            profile: 'unilateral_strength',
+                            side: 'left',
+                            loadSemantics: 'per_side',
+                            repetitions: 10,
+                            load: { unit: 'kg', value: 22.5 },
                           },
-                        ]
-                      : []),
-                  ],
+                          ...(input.combinedLoad ? { combinedLoadPermitted: true } : {}),
+                        },
+                      ]
+                    : [
+                        {
+                          exerciseId: 'back-squat',
+                          prescription: {
+                            schemaVersion: 1,
+                            profile: 'strength',
+                            repetitions: override?.reps ?? 8,
+                            ...loadOf(override?.loadKg ?? 80),
+                          },
+                        },
+                        ...(input.multiple
+                          ? [
+                              {
+                                exerciseId: 'bench-press',
+                                prescription: {
+                                  schemaVersion: 1,
+                                  profile: 'strength',
+                                  repetitions: 6,
+                                  load: { unit: 'kg', value: 60 },
+                                },
+                              },
+                            ]
+                          : []),
+                      ],
+                },
+              ],
             },
-          ],
-        });
+            override,
+          ),
+        );
       };
     },
     {
@@ -121,15 +178,13 @@ async function seedPlan(
       unilateral: options.unilateral === true,
       combinedLoad: options.combinedLoad === true,
       multiple: options.multiple === true,
+      bodyweight: options.bodyweight === true,
     },
   );
 }
 
 /** Opens today, makes sure the device identity exists, then seeds and reloads. */
-async function openTodayWithPlan(
-  page: Page,
-  options: { unilateral?: boolean; combinedLoad?: boolean; multiple?: boolean } = {},
-): Promise<void> {
+async function openTodayWithPlan(page: Page, options: SeedOptions = {}): Promise<void> {
   await seedPlan(page, options);
   await page.goto('/today');
   await expect(page.getByRole('heading', { name: 'No plan on this device yet' })).toBeVisible();
@@ -1247,6 +1302,51 @@ test.describe('unilateral entry (tasks 5.9 and 5.9a)', () => {
   });
 });
 
+/**
+ * Makes every read from the device fail once the next write has committed, until restored:
+ * the write succeeded and the screen cannot read it back. Nothing in the application changes.
+ */
+async function failReadsAfterNextWrite(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    let armed = false;
+    let failing = false;
+    const control = window as unknown as Record<string, () => void>;
+    control.__failReadsAfterNextWrite = () => {
+      armed = true;
+    };
+    control.__restoreReads = () => {
+      armed = false;
+      failing = false;
+    };
+    const open = IDBDatabase.prototype.transaction;
+    IDBDatabase.prototype.transaction = function (
+      this: IDBDatabase,
+      ...args: Parameters<IDBDatabase['transaction']>
+    ) {
+      const transaction = open.apply(this, args);
+      if (armed && args[1] === 'readwrite' && [args[0]].flat().includes('outbox')) {
+        armed = false;
+        transaction.addEventListener('complete', () => {
+          failing = true;
+        });
+      }
+      return transaction;
+    };
+    for (const prototype of [IDBObjectStore.prototype, IDBIndex.prototype]) {
+      for (const method of ['get', 'getAll'] as const) {
+        const original = prototype[method] as (this: unknown, ...args: unknown[]) => unknown;
+        (prototype as unknown as Record<string, unknown>)[method] = function (
+          this: unknown,
+          ...args: unknown[]
+        ) {
+          if (failing) throw new DOMException('the read failed', 'UnknownError');
+          return original.apply(this, args);
+        };
+      }
+    }
+  });
+}
+
 test.describe('plan-to-workout design conformance (VLA-14, P1 deltas)', () => {
   const noRawIds = async (page: Page): Promise<void> => {
     const text = await page.locator('body').innerText();
@@ -1255,20 +1355,31 @@ test.describe('plan-to-workout design conformance (VLA-14, P1 deltas)', () => {
     expect(text).not.toContain('{"');
   };
 
-  async function startWorkout(page: Page, multiple = true): Promise<void> {
-    await openTodayWithPlan(page, { multiple });
+  async function startWorkout(
+    page: Page,
+    multiple = true,
+    options: SeedOptions = {},
+  ): Promise<void> {
+    await openTodayWithPlan(page, { multiple, ...options });
     await page.getByRole('button', { name: 'Start workout' }).click();
     await page.waitForURL('**/workout');
     await expect(page.getByRole('heading', { name: 'Back squat', level: 1 })).toBeVisible();
   }
 
-  const moveThePlanOn = (page: Page) =>
-    page.evaluate(() =>
-      (
-        window as unknown as {
-          __seedPlan(override: { revision: number; loadKg: number; reps: number }): Promise<void>;
-        }
-      ).__seedPlan({ revision: 2, loadKg: 100, reps: 3 }),
+  type PlanMove = {
+    revision: number;
+    loadKg?: number;
+    reps?: number;
+    profile?: 'strength' | 'unilateral_strength';
+    swap?: boolean;
+  };
+  const moveThePlanOn = (page: Page, move: PlanMove = { revision: 2, loadKg: 100, reps: 3 }) =>
+    page.evaluate(
+      (override) =>
+        (window as unknown as { __seedPlan(override: PlanMove): Promise<void> }).__seedPlan(
+          override,
+        ),
+      move,
     );
 
   test('D-3: with no plan, Today is a heading, one sentence and one secondary button', async ({
@@ -1435,20 +1546,100 @@ test.describe('plan-to-workout design conformance (VLA-14, P1 deltas)', () => {
     await expect(page.getByRole('cell', { name: '100 kilograms' })).toHaveCount(0);
   });
 
-  test('D-16: the empty control still asks for a side when the exercise is one-sided in the current plan', async ({
-    page,
-  }) => {
+  const openUnprescribed = async (page: Page, move: PlanMove, heading: string) => {
     await openTodayWithPlan(page, { unilateral: true });
     await page.getByRole('button', { name: 'Start workout' }).click();
     await page.waitForURL('**/workout');
-    await expect(page.getByRole('heading', { name: 'Split squat' })).toBeVisible();
-    await moveThePlanOn(page);
+    await expect(page.getByRole('heading', { name: heading })).toBeVisible();
+    await moveThePlanOn(page, move);
     await page.reload();
-
     await page.getByRole('button', { name: 'Log a set anyway' }).click();
     await expect(page.getByLabel('Target')).toHaveCount(0);
-    const side = page.getByRole('group', { name: 'Side' });
-    await expect(side.getByRole('radio', { name: 'Left' })).toBeChecked();
     await expect(page.getByRole('spinbutton', { name: 'Load' })).toHaveValue('');
+  };
+
+  const logFiveReps = async (page: Page) => {
+    await page.getByRole('spinbutton', { name: 'Reps' }).fill('5');
+    await page.getByRole('spinbutton', { name: 'Reps' }).blur();
+    await page.getByRole('button', { name: 'Log set' }).click();
+    await expect(page.getByRole('heading', { name: 'Rest' })).toBeVisible();
+  };
+
+  const sideGroup = (page: Page) => page.getByRole('group', { name: 'Side' });
+
+  test('D-16: a one-sided exercise stays one-sided when the plan moves on to two-sided', async ({
+    page,
+  }) => {
+    await openUnprescribed(page, { revision: 2, profile: 'strength' }, 'Split squat');
+    await expect(sideGroup(page).getByRole('radio', { name: 'Left' })).toBeChecked();
+    await sideGroup(page).getByRole('radio', { name: 'Right' }).check({ force: true });
+    await logFiveReps(page);
+    await page.getByRole('button', { name: /^Edit set 1/ }).click();
+    await expect(sideGroup(page).getByRole('radio', { name: 'Right' })).toBeChecked();
+  });
+
+  test('D-16: a two-sided exercise stays two-sided when the plan moves on to one-sided', async ({
+    page,
+  }) => {
+    await startWorkout(page, false);
+    await moveThePlanOn(page, { revision: 2, profile: 'unilateral_strength' });
+    await page.reload();
+    await page.getByRole('button', { name: 'Log a set anyway' }).click();
+    await expect(sideGroup(page)).toHaveCount(0);
+    await logFiveReps(page);
+    await page.getByRole('button', { name: /^Edit set 1/ }).click();
+    await expect(sideGroup(page)).toHaveCount(0);
+  });
+
+  test('D-16: a one-sided exercise stays one-sided when the plan no longer has it', async ({
+    page,
+  }) => {
+    await openUnprescribed(page, { revision: 2, swap: true }, 'Split squat');
+    await expect(sideGroup(page).getByRole('radio', { name: 'Left' })).toBeChecked();
+    await expect(page.getByRole('heading', { name: 'Split squat' })).toBeVisible();
+    await expect(page.getByText('Overhead press')).toHaveCount(0);
+    await logFiveReps(page);
+  });
+
+  test('a prescription with reps and no load shows the reps and leaves Load empty', async ({
+    page,
+  }) => {
+    await startWorkout(page, false, { bodyweight: true });
+    await expect(page.getByLabel('Target')).toContainText('8 reps');
+    await expect(page.getByLabel('Target')).not.toContainText('kg');
+    await expect(page.getByRole('spinbutton', { name: 'Load' })).toHaveValue('');
+    await page.getByRole('button', { name: 'Log set' }).click();
+    await expect(page.getByRole('heading', { name: 'Rest' })).toBeVisible();
+    await expect(page.getByRole('cell', { name: '8', exact: true })).toBeVisible();
+    await expect(page.getByRole('cell', { name: /kilogram/ })).toHaveCount(0);
+  });
+
+  test('a set that saved but could not be read back keeps the workout and Retry only reads', async ({
+    page,
+  }) => {
+    await failReadsAfterNextWrite(page);
+    let failedReads = 0;
+    page.on('console', (message) => {
+      if (message.text().startsWith('workout not read')) failedReads += 1;
+    });
+    await startWorkout(page, false);
+    await page.evaluate(() =>
+      (window as unknown as { __failReadsAfterNextWrite(): void }).__failReadsAfterNextWrite(),
+    );
+    await page.getByRole('button', { name: 'Log set' }).click();
+
+    await expect(page.getByRole('heading', { name: 'Rest' })).toBeVisible();
+    await expect(page.getByText('This screen could not be refreshed')).toBeVisible();
+    await expect(page.getByText('That set was not saved')).toHaveCount(0);
+
+    expect(failedReads).toBe(1);
+    await page.getByRole('button', { name: 'Retry' }).click();
+    await expect.poll(() => failedReads).toBe(2);
+    await expect(page.getByText('This screen could not be refreshed')).toBeVisible();
+
+    await page.evaluate(() => (window as unknown as { __restoreReads(): void }).__restoreReads());
+    await page.getByRole('button', { name: 'Retry' }).click();
+    await expect(page.getByText('This screen could not be refreshed')).toHaveCount(0);
+    await expect(page.getByRole('cell', { name: '80 kilograms' })).toHaveCount(1);
   });
 });

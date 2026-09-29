@@ -44,7 +44,7 @@ export interface Prescription {
    * What the plan asked for. Absent when logging without a prescription: the controls then
    * start empty and no Target is shown, so no number nobody prescribed appears.
    */
-  readonly target: { readonly loadKg: number; readonly reps: number } | undefined;
+  readonly target: { readonly loadKg?: number; readonly reps: number } | undefined;
   readonly restSeconds: number;
   /** A unilateral exercise is recorded one side at a time (owner decision 2026-09-18). */
   readonly unilateral: boolean;

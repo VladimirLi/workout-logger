@@ -190,6 +190,11 @@ function useWorkoutSession() {
   /** The one delete that can still be undone: only the most recent, until it expires. */
   const [pendingUndo, setPendingUndo] = useState<PendingUndo>();
   const [announcement, setAnnouncement] = useState('');
+  /**
+   * Reading the device again failed. After a write that has already committed, the workout
+   * stays on screen with this notice rather than blanking, so nothing looks unsaved.
+   */
+  const [refreshFailed, setRefreshFailed] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -214,8 +219,15 @@ function useWorkoutSession() {
           prescribed,
         },
       });
+      setRefreshFailed(false);
     } catch (error) {
-      setState({ kind: 'failed', message: error instanceof Error ? error.message : String(error) });
+      console.error('workout not read', error);
+      setRefreshFailed(true);
+      setState((current) =>
+        current.kind === 'ready'
+          ? current
+          : { kind: 'failed', message: error instanceof Error ? error.message : String(error) },
+      );
     }
   }, []);
 
@@ -365,6 +377,8 @@ function useWorkoutSession() {
     changeFailure,
     pendingUndo,
     announcement,
+    refreshFailed,
+    reload: load,
     finish,
     logSet,
     editSet,
@@ -686,6 +700,8 @@ export default function WorkoutPage() {
     changeFailure,
     pendingUndo,
     announcement,
+    refreshFailed,
+    reload,
     finish,
     logSet,
     editSet,
@@ -727,10 +743,33 @@ export default function WorkoutPage() {
       {state.kind === 'failed' && (
         <Stack gap={3}>
           <Heading level={1}>Workout</Heading>
-          <StatusMessage kind="error" live="assertive">
+          <StatusMessage
+            kind="error"
+            live="assertive"
+            action={
+              <Button variant="secondary" onClick={() => void reload()}>
+                {messages.actions.retry}
+              </Button>
+            }
+          >
             {state.message}
           </StatusMessage>
         </Stack>
+      )}
+
+      {session && refreshFailed && (
+        <StatusMessage
+          kind="error"
+          live="assertive"
+          action={
+            <Button variant="secondary" onClick={() => void reload()}>
+              {messages.actions.retry}
+            </Button>
+          }
+        >
+          This screen could not be refreshed, so it may not show your latest sets. Everything
+          already recorded is saved.
+        </StatusMessage>
       )}
 
       {state.kind === 'none' && (
