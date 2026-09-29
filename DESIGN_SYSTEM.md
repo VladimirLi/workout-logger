@@ -72,7 +72,7 @@ workbook's recommendation; the owner chose them deliberately.
 - `layout.base-unit.four`: spacing 4, 8, 12, 16, 24, 32, 48, 64.
 - `layout.wide-screen.centered-column`: one 520 px column, centred; extra space stays empty.
 - `layout.primary-action.sticky-bottom`: the action bar sits above the safe area with a separator.
-- `layout.landscape.two-pane`: values left, controls and action right, no scrolling at 667 × 375.
+- `layout.landscape.two-pane`: values left, controls and action right; the action stays in view at the bottom of the right pane. At 667 × 375 an ordinary set fits with no scrolling. A unilateral or combined-load set scrolls its controls inside the right pane, above the action and never under it. The session summary, set table and Done sit below and scroll with the page.
 
 ### Shape
 
