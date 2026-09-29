@@ -1,6 +1,6 @@
 'use client';
 
-import { type FormEvent, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   Button,
   Heading,
@@ -103,6 +103,7 @@ export function LogSet({
     <LogToRest
       restHeadingId={REST_HEADING_ID}
       savedAnnouncement={messages.set.saved(setNumber, prescription.restSeconds)}
+      formRef={form}
       onLog={() => {
         setRestStartedAt(Date.now());
         onLog(read());
@@ -130,66 +131,64 @@ export function LogSet({
         </>
       }
       set={
-        <form ref={form} onSubmit={(event: FormEvent<HTMLFormElement>) => event.preventDefault()}>
-          <TwoPane
-            focus={
-              <Stack gap={3}>
-                <Heading level={1}>{prescription.name}</Heading>
-                {/* The plan model carries no per-exercise set count, so this says which set
+        <TwoPane
+          focus={
+            <Stack gap={3}>
+              <Heading level={1}>{prescription.name}</Heading>
+              {/* The plan model carries no per-exercise set count, so this says which set
                     this is and does not claim a total it cannot know. */}
-                <Text size="label" tone="muted">
-                  Set {setNumber}
-                </Text>
-                <Surface tone="card" aria-label="Target">
-                  <Stack gap={1}>
-                    <Text size="label" tone="muted" weight="label">
-                      Target
-                    </Text>
-                    <Value size="display">
-                      {prescription.loadKg} kg × {prescription.reps}
-                    </Value>
-                  </Stack>
-                </Surface>
-              </Stack>
-            }
-            detail={
-              <Surface tone="panel" aria-label="Actual">
-                <Stack gap={4}>
-                  {/* Each side is its own result, so the side is chosen before logging and
-                      never inferred from the last one. */}
-                  {prescription.unilateral && (
-                    <Segmented
-                      legend="Side"
-                      name="side"
-                      defaultValue="left"
-                      options={[
-                        { value: 'left', label: 'Left' },
-                        { value: 'right', label: 'Right' },
-                      ]}
-                    />
-                  )}
-                  <Stepper quantity="load" name="load" defaultValue={prescription.loadKg} />
-                  <Stepper quantity="reps" name="reps" defaultValue={prescription.reps} />
-                  {/* Offered only where the plan configured it. Where it is not offered, the
-                      load means per side, which is what gets stored. */}
-                  {prescription.unilateral && prescription.combinedLoadPermitted && (
-                    <Segmented
-                      legend="Load counts"
-                      name="loadSemantics"
-                      defaultValue="per_side"
-                      helper="Whether the load is what each side moved, or both together."
-                      options={[
-                        { value: 'per_side', label: 'Per side' },
-                        { value: 'total', label: 'In total' },
-                      ]}
-                    />
-                  )}
-                  <RirPicker />
+              <Text size="label" tone="muted">
+                Set {setNumber}
+              </Text>
+              <Surface tone="card" aria-label="Target">
+                <Stack gap={1}>
+                  <Text size="label" tone="muted" weight="label">
+                    Target
+                  </Text>
+                  <Value size="display">
+                    {prescription.loadKg} kg × {prescription.reps}
+                  </Value>
                 </Stack>
               </Surface>
-            }
-          />
-        </form>
+            </Stack>
+          }
+          detail={
+            <Surface tone="panel" aria-label="Actual">
+              <Stack gap={4}>
+                {/* Each side is its own result, so the side is chosen before logging and
+                      never inferred from the last one. */}
+                {prescription.unilateral && (
+                  <Segmented
+                    legend="Side"
+                    name="side"
+                    defaultValue="left"
+                    options={[
+                      { value: 'left', label: 'Left' },
+                      { value: 'right', label: 'Right' },
+                    ]}
+                  />
+                )}
+                <Stepper quantity="load" name="load" defaultValue={prescription.loadKg} />
+                <Stepper quantity="reps" name="reps" defaultValue={prescription.reps} />
+                {/* Offered only where the plan configured it. Where it is not offered, the
+                      load means per side, which is what gets stored. */}
+                {prescription.unilateral && prescription.combinedLoadPermitted && (
+                  <Segmented
+                    legend="Load counts"
+                    name="loadSemantics"
+                    defaultValue="per_side"
+                    helper="Whether the load is what each side moved, or both together."
+                    options={[
+                      { value: 'per_side', label: 'Per side' },
+                      { value: 'total', label: 'In total' },
+                    ]}
+                  />
+                )}
+                <RirPicker />
+              </Stack>
+            </Surface>
+          }
+        />
       }
     />
   );

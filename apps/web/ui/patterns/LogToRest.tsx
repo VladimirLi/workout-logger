@@ -1,6 +1,6 @@
 'use client';
 
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { type ReactNode, type Ref, useEffect, useRef, useState } from 'react';
 import { messages } from '../i18n/messages';
 import { vibrate } from '../preferences/preferences';
 import { Button } from '../primitives/Button';
@@ -25,6 +25,11 @@ type LogToRestProps = {
    * shows the interaction without performing it.
    */
   onLog?: () => void;
+  /**
+   * Reaches the form that holds the set view's controls. The form is the view itself, not a
+   * wrapper inside it, so in landscape the panes still join this component's grid.
+   */
+  formRef?: Ref<HTMLFormElement>;
 };
 
 type Mode = 'set' | 'leaving' | 'rest';
@@ -38,7 +43,14 @@ const HALF_CROSSFADE_MS = 100;
  * reduced motion), a haptic tick plays (haptics.def.log-tick), focus moves to the rest
  * heading, and a live region that was already on the page announces the save.
  */
-export function LogToRest({ set, rest, restHeadingId, savedAnnouncement, onLog }: LogToRestProps) {
+export function LogToRest({
+  set,
+  rest,
+  restHeadingId,
+  savedAnnouncement,
+  onLog,
+  formRef,
+}: LogToRestProps) {
   const [mode, setMode] = useState<Mode>('set');
   const [announcement, setAnnouncement] = useState('');
   const logged = useRef(false);
@@ -65,9 +77,14 @@ export function LogToRest({ set, rest, restHeadingId, savedAnnouncement, onLog }
         </div>
       ) : (
         <>
-          <div className={styles.view} data-leaving={mode === 'leaving' || undefined}>
+          <form
+            ref={formRef}
+            className={styles.view}
+            data-leaving={mode === 'leaving' || undefined}
+            onSubmit={(event) => event.preventDefault()}
+          >
             {set}
-          </div>
+          </form>
           <StickyActionBar>
             <Button
               variant="primary"

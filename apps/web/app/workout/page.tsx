@@ -136,24 +136,6 @@ export default function WorkoutPage() {
 
       {state.kind === 'ready' && (
         <Stack gap={4}>
-          <Surface tone="card" aria-labelledby="workout-heading">
-            <Stack gap={3}>
-              <Heading level={2} id="workout-heading">
-                In progress
-              </Heading>
-              <Text size="label" tone="muted">
-                Started {state.session.startedAt}
-              </Text>
-              {state.session.sync ? (
-                <SyncIndicator state={state.session.sync} />
-              ) : (
-                <Text size="label" tone="muted">
-                  Nothing waiting to sync
-                </Text>
-              )}
-            </Stack>
-          </Surface>
-
           {state.session.prescription ? (
             <LogSet
               key={setInProgress}
@@ -217,6 +199,24 @@ export default function WorkoutPage() {
               That set was not saved: {logFailure}
             </StatusMessage>
           )}
+
+          <Surface tone="card" aria-labelledby="workout-heading">
+            <Stack gap={3}>
+              <Heading level={2} id="workout-heading">
+                In progress
+              </Heading>
+              <Text size="label" tone="muted">
+                Started {state.session.startedAt}
+              </Text>
+              {state.session.sync ? (
+                <SyncIndicator state={state.session.sync} />
+              ) : (
+                <Text size="label" tone="muted">
+                  Nothing waiting to sync
+                </Text>
+              )}
+            </Stack>
+          </Surface>
 
           <SetTable caption="Sets recorded" rows={state.session.rows} />
 

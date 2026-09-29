@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { expect, type Page, test } from '@playwright/test';
+import { expect, type Locator, type Page, test } from '@playwright/test';
 
 /**
  * The plan, workout, and summary routes (workout-logging spec, tasks 5.1 and 5.2).
@@ -221,23 +221,40 @@ test.describe('the workout journey', () => {
 
 test.describe('a phone held sideways (layout.landscape.two-pane)', () => {
   for (const twoExercises of [false, true]) {
-    test(`keeps Log set in view at 667 x 375 with ${twoExercises ? 'two exercises' : 'one exercise'}`, async ({
+    test(`keeps the set controls and Log set in view without scrolling at 667 x 375 with ${twoExercises ? 'two exercises' : 'one exercise'}`, async ({
       page,
     }) => {
       await page.setViewportSize({ width: 667, height: 375 });
       await openTodayWithPlan(page, { twoExercises });
       await page.getByRole('button', { name: 'Start workout' }).click();
       await page.waitForURL('**/workout');
-      const logSet = page.getByRole('button', { name: 'Log set' });
-      await expect(logSet).toBeVisible();
-
-      const box = await logSet.boundingBox();
       const viewport = page.viewportSize();
-      expect(box && viewport).toBeTruthy();
-      if (!box || !viewport) return;
-      expect(box.y).toBeGreaterThanOrEqual(0);
-      expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
-      expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
+      if (!viewport) throw new Error('no viewport');
+
+      const inView = async (locator: Locator): Promise<void> => {
+        await expect(locator).toBeVisible();
+        const box = await locator.boundingBox();
+        expect(box).not.toBeNull();
+        if (!box) return;
+        expect(box.y).toBeGreaterThanOrEqual(0);
+        expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
+        expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
+      };
+
+      await inView(page.getByRole('button', { name: 'Log set' }));
+      await inView(page.getByLabel('Actual', { exact: true }));
+      await inView(page.getByLabel('Load', { exact: true }));
+      await inView(page.getByLabel('Reps', { exact: true }));
+
+      const actual = await page.getByLabel('Actual', { exact: true }).boundingBox();
+      const logSet = await page.getByRole('button', { name: 'Log set' }).boundingBox();
+      if (!actual || !logSet) throw new Error('missing box');
+      expect(actual.y + actual.height).toBeLessThanOrEqual(logSet.y);
+
+      // The session summary, the recorded sets and Done sit below the set view, so the page
+      // scrolls; the action has to stay in view while it does.
+      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+      await inView(page.getByRole('button', { name: 'Log set' }));
     });
   }
 });
