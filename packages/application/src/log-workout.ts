@@ -2,11 +2,14 @@ import {
   type ActiveSession,
   type CompletedSession,
   completeSession,
+  deleteSet,
+  editSet,
   err,
   type Measurement,
   ok,
   type Result,
   recordSet,
+  restoreSet,
   type SessionError,
   startSession,
   type WorkoutSession,
@@ -132,6 +135,78 @@ export async function logSet(
     kind: 'record_set',
     sessionId: session.id,
     set,
+  });
+}
+
+export type ChangeSetFailure =
+  | { readonly kind: 'session_not_found'; readonly sessionId: string }
+  | SessionError
+  | WorkoutCommitFailure;
+
+/**
+ * Edits, deletes or restores a set of the active workout, and queues that as its own recorded
+ * change (spec D-23, D-24). A delete is a tombstone and an undo is a `restore_set`, so a
+ * replayed queue converges on what the lifter saw instead of resurrecting or losing a set.
+ */
+async function changeSet(
+  ports: WorkoutPorts,
+  command: { readonly userId: string; readonly sessionId: string },
+  change: (session: WorkoutSession) => Result<ActiveSession, SessionError>,
+  mutation: WorkoutMutation,
+): Promise<Result<WorkoutChange<ActiveSession>, ChangeSetFailure>> {
+  const session = await ports.store.findSession(command.userId, command.sessionId);
+  if (!session) return err({ kind: 'session_not_found', sessionId: command.sessionId });
+  const changed = change(session);
+  if (!changed.ok) return changed;
+  return commit(ports, command.userId, changed.value, mutation);
+}
+
+export function editRecordedSet(
+  ports: WorkoutPorts,
+  command: {
+    readonly userId: string;
+    readonly sessionId: string;
+    readonly setId: string;
+    readonly measurement: Measurement;
+  },
+): Promise<Result<WorkoutChange<ActiveSession>, ChangeSetFailure>> {
+  const editedAt = ports.clock.now();
+  return changeSet(
+    ports,
+    command,
+    (session) =>
+      editSet(session, { setId: command.setId, measurement: command.measurement, editedAt }),
+    {
+      kind: 'edit_set',
+      sessionId: command.sessionId,
+      setId: command.setId,
+      measurement: command.measurement,
+      editedAt,
+    },
+  );
+}
+
+export function deleteRecordedSet(
+  ports: WorkoutPorts,
+  command: { readonly userId: string; readonly sessionId: string; readonly setId: string },
+): Promise<Result<WorkoutChange<ActiveSession>, ChangeSetFailure>> {
+  const deletedAt = ports.clock.now();
+  return changeSet(ports, command, (session) => deleteSet(session, command.setId, deletedAt), {
+    kind: 'delete_set',
+    sessionId: command.sessionId,
+    setId: command.setId,
+    deletedAt,
+  });
+}
+
+export function restoreRecordedSet(
+  ports: WorkoutPorts,
+  command: { readonly userId: string; readonly sessionId: string; readonly setId: string },
+): Promise<Result<WorkoutChange<ActiveSession>, ChangeSetFailure>> {
+  return changeSet(ports, command, (session) => restoreSet(session, command.setId), {
+    kind: 'restore_set',
+    sessionId: command.sessionId,
+    setId: command.setId,
   });
 }
 

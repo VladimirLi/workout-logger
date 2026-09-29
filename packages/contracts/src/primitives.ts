@@ -113,6 +113,22 @@ export const identifierSchema = z
   .max(128)
   .regex(/^[A-Za-z0-9_.:-]+$/);
 
+/** The longest a plan, session or exercise name may be; layouts are drawn for this length. */
+export const MAX_NAME_LENGTH = 60;
+
+/**
+ * What a lifter calls a plan, a session or an exercise: plain text, at most `MAX_NAME_LENGTH`
+ * characters, not only whitespace. Mirrors `isValidName` in @workout/domain.
+ */
+export const nameSchema = z
+  .string()
+  .min(1)
+  .max(MAX_NAME_LENGTH)
+  .refine((value) => value.trim().length > 0, { message: 'must not be blank' });
+
+/** Rest after a set, in whole seconds. Mirrors MIN/MAX_REST_SECONDS in @workout/domain. */
+export const restSecondsSchema = z.number().int().min(1).max(3_600);
+
 /** Pagination is mandatory on history reads; result size is capped (R-021). */
 export const paginationSchema = z
   .object({

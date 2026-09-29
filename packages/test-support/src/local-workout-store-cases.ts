@@ -8,9 +8,12 @@ import type {
 import {
   activatePlan,
   completeSession,
+  deleteSet,
+  editSet,
   kilograms,
   type Plan,
   recordSet,
+  restoreSet,
   startSession,
   strengthMeasurement,
   unwrap,
@@ -165,6 +168,81 @@ export const LOCAL_WORKOUT_STORE_CASES: readonly Case<LocalWorkoutStoreHarness>[
       const replay = await store.commit(request);
       deepStrictEqual(replay, first);
       strictEqual((await store.outbox(user)).length, 1);
+    },
+  },
+  {
+    name: 'queues an edit, a delete and a restore in order, keeping the tombstone and its dates',
+    async run({ store }) {
+      const started = aStartedSession('workout-1');
+      await store.commit(startRequest(started, 1));
+      const logged = unwrap(
+        recordSet(started, {
+          setId: 'set-1',
+          exerciseId: 'back-squat',
+          measurement: squat,
+          recordedAt: T0,
+        }),
+      );
+      const set = logged.sets[0];
+      if (!set) throw new Error('expected a set');
+      await store.commit({
+        userId: user,
+        session: logged,
+        mutation: { kind: 'record_set', sessionId: 'workout-1', set },
+        idempotencyKey: key(2),
+        enqueuedAt: T0,
+      });
+      const lighter = unwrap(strengthMeasurement({ repetitions: 8, load: unwrap(kilograms(75)) }));
+      const editedAt = new Date('2026-09-14T10:01:00Z');
+      const deletedAt = new Date('2026-09-14T10:02:00Z');
+      const edited = unwrap(editSet(logged, { setId: 'set-1', measurement: lighter, editedAt }));
+      await store.commit({
+        userId: user,
+        session: edited,
+        mutation: {
+          kind: 'edit_set',
+          sessionId: 'workout-1',
+          setId: 'set-1',
+          measurement: lighter,
+          editedAt,
+        },
+        idempotencyKey: key(3),
+        enqueuedAt: editedAt,
+      });
+      const deleted = unwrap(deleteSet(edited, 'set-1', deletedAt));
+      const deleteRequest: LocalCommitRequest = {
+        userId: user,
+        session: deleted,
+        mutation: { kind: 'delete_set', sessionId: 'workout-1', setId: 'set-1', deletedAt },
+        idempotencyKey: key(4),
+        enqueuedAt: deletedAt,
+      };
+      await store.commit(deleteRequest);
+
+      // The tombstone is stored with its dates, and the delete is a queued fact.
+      deepStrictEqual(await store.findSession(user, 'workout-1'), deleted);
+      // Replaying the delete neither duplicates it nor loses it.
+      await store.commit(deleteRequest);
+      const restored = unwrap(restoreSet(deleted, 'set-1'));
+      await store.commit({
+        userId: user,
+        session: restored,
+        mutation: { kind: 'restore_set', sessionId: 'workout-1', setId: 'set-1' },
+        idempotencyKey: key(5),
+        enqueuedAt: deletedAt,
+      });
+
+      deepStrictEqual(
+        (await store.outbox(user)).map((entry) => [entry.sequence, entry.mutation.kind]),
+        [
+          [1, 'start_session'],
+          [2, 'record_set'],
+          [3, 'edit_set'],
+          [4, 'delete_set'],
+          [5, 'restore_set'],
+        ],
+      );
+      deepStrictEqual(await store.findSession(user, 'workout-1'), restored);
     },
   },
   {
