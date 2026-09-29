@@ -33,13 +33,16 @@ export function aProposal(overrides: ProposalOverrides = {}): Proposal {
     baseRevision: overrides.baseRevision ?? aRevision(1),
     diff: {
       op: 'replace_plan',
+      name: 'Synthetic plan',
       sessions: [
         {
           id: 'sess_synthetic_01',
+          name: 'Synthetic session',
           scheduledFor: '2026-09-20',
           exercises: [
             {
               exerciseId: 'ex_synthetic',
+              name: 'Synthetic exercise',
               prescription: { profile: 'strength', schemaVersion: 1, repetitions: 5 },
             },
           ],

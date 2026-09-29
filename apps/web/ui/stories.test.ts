@@ -29,6 +29,8 @@ const COVERED_ELSEWHERE: Record<string, string> = {
   Heading: 'Primitives/Typography',
   Value: 'Primitives/Typography',
   VisuallyHidden: '',
+  LiveRegion: '',
+  SetFocusLayout: 'Patterns/Workout/LogToRest',
   RestView: 'Reference screens/Rest',
   SignInForm: 'product route /sign-in; pattern story deferred pending owner visual-change PR',
 };

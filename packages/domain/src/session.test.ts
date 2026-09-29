@@ -465,3 +465,42 @@ describe('completing a session', () => {
     });
   });
 });
+
+describe('the session snapshot carries names', () => {
+  const namedPlan = unwrap(
+    activatePlan(undefined, {
+      id: 'plan-1',
+      name: 'Spring strength',
+      activatedAt: new Date('2026-09-13T10:00:00Z'),
+      sessions: [
+        {
+          id: 'session-mon',
+          name: 'Upper A',
+          scheduledFor: '2026-09-14',
+          exercises: [
+            { exerciseId: 'back-squat', name: 'Back squat', prescription: squatTarget },
+            { exerciseId: 'split-squat', prescription: lungeTarget },
+          ],
+        },
+      ],
+    }),
+  ).activated;
+
+  it('copies the session name and the names the plan gave, and leaves out the rest', () => {
+    const session = unwrap(
+      startSession(namedPlan, {
+        id: 'workout-1',
+        scheduledSessionId: 'session-mon',
+        startedAt: STARTED_AT,
+      }),
+    );
+    expect(session.name).toBe('Upper A');
+    expect(session.exerciseNames).toEqual({ 'back-squat': 'Back squat' });
+  });
+
+  it('carries no name fields when the plan had none', () => {
+    const session = started();
+    expect('name' in session).toBe(false);
+    expect('exerciseNames' in session).toBe(false);
+  });
+});

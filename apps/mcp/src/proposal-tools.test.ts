@@ -9,13 +9,16 @@ const NOW = new Date('2026-09-16T12:00:00.000Z');
 
 const REPLACE_DIFF = {
   op: 'replace_plan' as const,
+  name: 'Synthetic plan',
   sessions: [
     {
       id: 'sess_1',
+      name: 'Synthetic session',
       scheduledFor: '2026-09-20',
       exercises: [
         {
           exerciseId: 'ex_squat',
+          name: 'Synthetic exercise',
           prescription: { profile: 'strength' as const, schemaVersion: 1 as const, repetitions: 5 },
         },
       ],

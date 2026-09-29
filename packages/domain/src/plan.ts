@@ -3,6 +3,9 @@ import {
   assertNeverPlanDiff,
   type CalendarDate,
   type ExercisePrescription,
+  MAX_NAME_LENGTH,
+  MAX_REST_SECONDS,
+  MIN_REST_SECONDS,
   type PlanDiff,
   type ScheduledSession,
 } from './plan-diff.js';
@@ -32,6 +35,8 @@ export type PlanStatus = (typeof PLAN_STATUSES)[number];
 
 interface PlanBase {
   readonly id: string;
+  /** What the lifter calls this plan. Optional: plans stored before names existed have none. */
+  readonly name?: string;
   readonly revision: Revision;
   readonly sessions: readonly ScheduledSession[];
   readonly activatedAt: Date;
@@ -53,6 +58,13 @@ export type PlanError =
   | { readonly kind: 'session_not_found'; readonly sessionId: string }
   | { readonly kind: 'exercise_not_found'; readonly sessionId: string; readonly exerciseId: string }
   | { readonly kind: 'duplicate_session'; readonly sessionId: string }
+  | { readonly kind: 'invalid_name'; readonly received: string }
+  | {
+      readonly kind: 'invalid_rest';
+      readonly sessionId: string;
+      readonly exerciseId: string;
+      readonly received: number;
+    }
   | { readonly kind: 'duplicate_exercise'; readonly sessionId: string; readonly exerciseId: string }
   | {
       readonly kind: 'invalid_scheduled_date';
@@ -62,6 +74,7 @@ export type PlanError =
 
 export interface PlanDraft {
   readonly id: string;
+  readonly name?: string;
   readonly sessions: readonly ScheduledSession[];
   readonly activatedAt: Date;
 }
@@ -84,7 +97,19 @@ function isCalendarDate(value: CalendarDate): boolean {
   );
 }
 
+/** A name is one to `MAX_NAME_LENGTH` characters and is not only whitespace. */
+export function isValidName(value: string): boolean {
+  return value.length <= MAX_NAME_LENGTH && value.trim().length > 0;
+}
+
+function isValidRest(seconds: number): boolean {
+  return Number.isInteger(seconds) && seconds >= MIN_REST_SECONDS && seconds <= MAX_REST_SECONDS;
+}
+
 function validateSession(session: ScheduledSession): PlanError | undefined {
+  if (session.name !== undefined && !isValidName(session.name)) {
+    return { kind: 'invalid_name', received: session.name };
+  }
   if (!isCalendarDate(session.scheduledFor)) {
     return {
       kind: 'invalid_scheduled_date',
@@ -93,11 +118,15 @@ function validateSession(session: ScheduledSession): PlanError | undefined {
     };
   }
   const seen = new Set<string>();
-  for (const { exerciseId } of session.exercises) {
+  for (const { exerciseId, name, restSeconds } of session.exercises) {
     if (seen.has(exerciseId)) {
       return { kind: 'duplicate_exercise', sessionId: session.id, exerciseId };
     }
     seen.add(exerciseId);
+    if (name !== undefined && !isValidName(name)) return { kind: 'invalid_name', received: name };
+    if (restSeconds !== undefined && !isValidRest(restSeconds)) {
+      return { kind: 'invalid_rest', sessionId: session.id, exerciseId, received: restSeconds };
+    }
   }
   return undefined;
 }
@@ -126,11 +155,15 @@ export function activatePlan(
   if (current && current.status !== 'active') {
     return err({ kind: 'plan_not_active', planId: current.id });
   }
+  if (draft.name !== undefined && !isValidName(draft.name)) {
+    return err({ kind: 'invalid_name', received: draft.name });
+  }
   const problem = validateSessions(draft.sessions);
   if (problem) return err(problem);
 
   const activated: ActivePlan = {
     id: draft.id,
+    ...(draft.name !== undefined ? { name: draft.name } : {}),
     revision: current ? nextRevision(current.revision) : FIRST_REVISION,
     status: 'active',
     sessions: draft.sessions,
@@ -162,6 +195,7 @@ export function changeExercisePrescription(
   sessionId: string,
   exerciseId: string,
   prescription: Measurement,
+  restSeconds?: number,
 ): Result<ActivePlan, PlanError> {
   if (plan.status !== 'active') return err({ kind: 'plan_not_active', planId: plan.id });
   const session = findScheduledSession(plan, sessionId);
@@ -170,7 +204,9 @@ export function changeExercisePrescription(
     return err({ kind: 'exercise_not_found', sessionId, exerciseId });
   }
   const exercises: readonly ExercisePrescription[] = session.exercises.map((exercise) =>
-    exercise.exerciseId === exerciseId ? { exerciseId, prescription } : exercise,
+    exercise.exerciseId === exerciseId
+      ? { ...exercise, prescription, ...(restSeconds !== undefined ? { restSeconds } : {}) }
+      : exercise,
   );
   return withSessions(
     plan,
@@ -182,6 +218,7 @@ export function changeExercisePrescription(
 
 export interface ScheduledSessionChange {
   readonly sessionId: string;
+  readonly name?: string;
   readonly scheduledFor?: CalendarDate;
   readonly exercises?: readonly ExercisePrescription[];
 }
@@ -195,6 +232,7 @@ export function changeScheduledSession(
   if (!session) return err({ kind: 'session_not_found', sessionId: change.sessionId });
   const changed: ScheduledSession = {
     ...session,
+    ...(change.name !== undefined ? { name: change.name } : {}),
     scheduledFor: change.scheduledFor ?? session.scheduledFor,
     exercises: change.exercises ?? session.exercises,
   };
@@ -207,8 +245,13 @@ export function changeScheduledSession(
 export function replacePlanSessions(
   plan: Plan,
   sessions: readonly ScheduledSession[],
+  name?: string,
 ): Result<ActivePlan, PlanError> {
-  return withSessions(plan, sessions);
+  if (name !== undefined && !isValidName(name))
+    return err({ kind: 'invalid_name', received: name });
+  const replaced = withSessions(plan, sessions);
+  if (!replaced.ok || name === undefined) return replaced;
+  return ok({ ...replaced.value, name });
 }
 
 export type ApplyPlanDiffError =
@@ -218,15 +261,22 @@ export type ApplyPlanDiffError =
 export function applyPlanDiff(plan: Plan, diff: PlanDiff): Result<ActivePlan, ApplyPlanDiffError> {
   switch (diff.op) {
     case 'replace_plan':
-      return replacePlanSessions(plan, diff.sessions);
+      return replacePlanSessions(plan, diff.sessions, diff.name);
     case 'change_scheduled_session':
       return changeScheduledSession(plan, {
         sessionId: diff.sessionId,
+        ...(diff.name !== undefined ? { name: diff.name } : {}),
         ...(diff.scheduledFor !== undefined ? { scheduledFor: diff.scheduledFor } : {}),
         ...(diff.exercises !== undefined ? { exercises: diff.exercises } : {}),
       });
     case 'change_exercise_prescription':
-      return changeExercisePrescription(plan, diff.sessionId, diff.exerciseId, diff.prescription);
+      return changeExercisePrescription(
+        plan,
+        diff.sessionId,
+        diff.exerciseId,
+        diff.prescription,
+        diff.restSeconds,
+      );
     case 'correct_completed_session':
       return err({ kind: 'not_a_plan_change', op: 'correct_completed_session' });
     default:

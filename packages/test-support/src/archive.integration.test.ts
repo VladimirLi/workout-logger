@@ -1,5 +1,7 @@
 import {
   clearLocalDataAfterExport,
+  deleteRecordedSet,
+  editRecordedSet,
   exportArchive,
   exportHistoryCsv,
   HISTORY_CSV_COLUMNS,
@@ -9,6 +11,7 @@ import {
 } from '@workout/application';
 import { ARCHIVE_SCHEMA_VERSION } from '@workout/contracts';
 import {
+  activatePlan,
   cardioMeasurement,
   completeSession,
   kilograms,
@@ -275,5 +278,93 @@ describe('the pre-destructive export (task 4.9)', () => {
       user,
     );
     expect((await ports.store.plans(other)).map((plan) => plan.id)).toEqual(['plan-other']);
+  });
+});
+
+describe('names, rest and edited sets in the export', () => {
+  async function aNamedDeviceWithAnEditedAndADeletedSet() {
+    const ports = createWorkoutTestPorts(T0);
+    const plan = unwrap(
+      activatePlan(undefined, {
+        id: 'plan-named',
+        name: 'Upper / lower',
+        activatedAt: T0,
+        sessions: [
+          {
+            id: 'session-mon',
+            name: 'Lower A',
+            scheduledFor: '2026-09-14',
+            exercises: [
+              {
+                exerciseId: 'back-squat',
+                name: 'Back squat',
+                restSeconds: 150,
+                prescription: squat,
+              },
+            ],
+          },
+        ],
+      }),
+    ).activated;
+    await ports.store.putPlan(user, plan);
+    ports.plans.setActivePlan(user, plan);
+    const started = unwrap(
+      await startWorkout(ports, { userId: user, scheduledSessionId: 'session-mon' }),
+    );
+    const sessionId = started.session.id;
+    for (const _ of [1, 2, 3]) {
+      unwrap(
+        await logSet(ports, {
+          userId: user,
+          sessionId,
+          exerciseId: 'back-squat',
+          measurement: squat,
+        }),
+      );
+    }
+    const [first, second] = (await ports.store.findSession(user, sessionId))?.sets ?? [];
+    unwrap(
+      await editRecordedSet(ports, {
+        userId: user,
+        sessionId,
+        setId: first?.setId ?? '',
+        measurement: unwrap(strengthMeasurement({ repetitions: 8, load: unwrap(kilograms(75)) })),
+      }),
+    );
+    unwrap(await deleteRecordedSet(ports, { userId: user, sessionId, setId: second?.setId ?? '' }));
+    const current = await ports.store.findSession(user, sessionId);
+    if (!current) throw new Error('the session vanished');
+    await ports.store.putSession(user, unwrap(completeSession(current, T0)));
+    return ports;
+  }
+
+  it('round-trips names, rest, the edit and the tombstone', async () => {
+    const ports = await aNamedDeviceWithAnEditedAndADeletedSet();
+    const archive = await exportArchive({ source: ports.store, clock: ports.clock }, user);
+
+    expect(archive.plans[0]?.name).toBe('Upper / lower');
+    expect(archive.plans[0]?.sessions[0]?.exercises[0]).toMatchObject({
+      name: 'Back squat',
+      restSeconds: 150,
+    });
+    expect(archive.sessions[0]?.name).toBe('Lower A');
+    expect(archive.sessions[0]?.exerciseNames).toEqual({ 'back-squat': 'Back squat' });
+    expect(archive.sessions[0]?.sets.map((set) => [set.editedAt, set.deletedAt])).toEqual([
+      [T0.toISOString(), undefined],
+      [undefined, T0.toISOString()],
+      [undefined, undefined],
+    ]);
+
+    const clean = new InMemoryLocalWorkoutStore();
+    expect((await importArchive({ sink: clean, source: clean }, user, archive)).ok).toBe(true);
+    expect(await exportArchive({ source: clean, clock: new FixedClock(T0) }, user)).toEqual(
+      archive,
+    );
+  });
+
+  it('leaves a deleted set out of the CSV', async () => {
+    const ports = await aNamedDeviceWithAnEditedAndADeletedSet();
+    const csv = await exportHistoryCsv({ source: ports.store }, user);
+    expect(csv.trimEnd().split('\r\n')).toHaveLength(3);
   });
 });

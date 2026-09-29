@@ -282,3 +282,120 @@ describe('scheduled session prescriptions', () => {
     expect(prescription?.profile).toBe('cardio');
   });
 });
+
+describe('names and rest', () => {
+  const named: ScheduledSession = {
+    id: 'session-mon',
+    name: 'Upper A',
+    scheduledFor: '2026-09-14',
+    exercises: [
+      {
+        exerciseId: 'back-squat',
+        name: 'Back squat',
+        prescription: squat,
+        restSeconds: 120,
+        combinedLoadPermitted: true,
+      },
+    ],
+  };
+
+  function namedPlan(): Plan {
+    return unwrap(
+      activatePlan(undefined, {
+        id: 'plan-1',
+        name: 'Spring strength',
+        sessions: [named],
+        activatedAt: ACTIVATED_AT,
+      }),
+    ).activated;
+  }
+
+  it('carries the plan, session and exercise names and the exercise rest', () => {
+    const plan = namedPlan();
+    expect(plan.name).toBe('Spring strength');
+    expect(plan.sessions[0]?.name).toBe('Upper A');
+    expect(plan.sessions[0]?.exercises[0]).toMatchObject({ name: 'Back squat', restSeconds: 120 });
+  });
+
+  it('refuses a name that is empty, blank, or longer than 60 characters', () => {
+    for (const received of ['', '   ', 'x'.repeat(61)]) {
+      expect(
+        activatePlan(undefined, {
+          id: 'p',
+          name: received,
+          sessions: [],
+          activatedAt: ACTIVATED_AT,
+        }),
+      ).toEqual({
+        ok: false,
+        error: { kind: 'invalid_name', received },
+      });
+      expect(
+        activatePlan(undefined, {
+          id: 'p',
+          sessions: [{ ...named, name: received }],
+          activatedAt: ACTIVATED_AT,
+        }),
+      ).toEqual({ ok: false, error: { kind: 'invalid_name', received } });
+    }
+    expect(
+      activatePlan(undefined, {
+        id: 'p',
+        name: 'x'.repeat(60),
+        sessions: [],
+        activatedAt: ACTIVATED_AT,
+      }).ok,
+    ).toBe(true);
+  });
+
+  it('refuses a rest that is not whole seconds in range', () => {
+    for (const received of [0, -5, 1.5, 3_601, Number.NaN]) {
+      const result = activatePlan(undefined, {
+        id: 'p',
+        sessions: [
+          { ...named, exercises: [{ ...(named.exercises[0] as never), restSeconds: received }] },
+        ],
+        activatedAt: ACTIVATED_AT,
+      });
+      expect(result.ok, `rest ${received}`).toBe(false);
+    }
+  });
+
+  it('keeps the exercise name, rest and combined-load permission when its prescription changes', () => {
+    const changed = unwrap(
+      changeExercisePrescription(namedPlan(), 'session-mon', 'back-squat', squat),
+    );
+    expect(changed.sessions[0]?.exercises[0]).toMatchObject({
+      name: 'Back squat',
+      restSeconds: 120,
+      combinedLoadPermitted: true,
+    });
+  });
+
+  it('changes an exercise rest through a diff, and the plan name through a replacement', () => {
+    const rested = unwrap(
+      applyPlanDiff(namedPlan(), {
+        op: 'change_exercise_prescription',
+        sessionId: 'session-mon',
+        exerciseId: 'back-squat',
+        prescription: squat,
+        restSeconds: 180,
+      }),
+    );
+    expect(rested.sessions[0]?.exercises[0]?.restSeconds).toBe(180);
+
+    const renamed = unwrap(
+      applyPlanDiff(rested, { op: 'replace_plan', name: 'Summer', sessions: [named] }),
+    );
+    expect(renamed.name).toBe('Summer');
+    const kept = unwrap(applyPlanDiff(renamed, { op: 'replace_plan', sessions: [named] }));
+    expect(kept.name).toBe('Summer');
+  });
+
+  it('renames a scheduled session through a change', () => {
+    const renamed = unwrap(
+      changeScheduledSession(namedPlan(), { sessionId: 'session-mon', name: 'Upper B' }),
+    );
+    expect(renamed.sessions[0]?.name).toBe('Upper B');
+  });
+});

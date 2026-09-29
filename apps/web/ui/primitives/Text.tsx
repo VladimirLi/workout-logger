@@ -73,3 +73,12 @@ export function Value({ children, size, spoken }: ValueProps) {
 export function VisuallyHidden({ children }: { children: ReactNode }) {
   return <span className="visually-hidden">{children}</span>;
 }
+
+/** A polite live region that is always on the page, so a change to its text is announced. */
+export function LiveRegion({ children }: { children: ReactNode }) {
+  return (
+    <p className="visually-hidden" role="status">
+      {children}
+    </p>
+  );
+}

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  displayName,
   formatClock,
   formatDate,
   formatDateTime,
@@ -173,5 +174,18 @@ describe('measurements in words', () => {
 describe('date and time', () => {
   it('shows the day and a 24-hour time in the stored zone', () => {
     expect(formatDateTime(Date.UTC(2026, 8, 13, 9, 30), 'UTC')).toBe('Sun 13 Sept, 09:30');
+  });
+});
+
+describe('displayName', () => {
+  it('de-slugs a readable id into sentence-case words', () => {
+    expect(displayName('barbell-back-squat', 'Exercise 1')).toBe('Barbell back squat');
+    expect(displayName('lower_a', 'Session 1')).toBe('Lower a');
+  });
+
+  it('uses the fallback when the id is not words', () => {
+    expect(displayName('3f2b9c1e-7a44-4d0b-9e1a-0c5d8f6a1b22', 'Exercise 2')).toBe('Exercise 2');
+    expect(displayName('plan-rev-2', 'Your plan')).toBe('Your plan');
+    expect(displayName('', 'Workout')).toBe('Workout');
   });
 });

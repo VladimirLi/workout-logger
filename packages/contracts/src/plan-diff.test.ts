@@ -14,17 +14,19 @@ import { proposalSchema } from './proposal.js';
 
 const SESSION = {
   id: 'sess_01',
+  name: 'Upper A',
   scheduledFor: '2026-09-20',
   exercises: [
     {
       exerciseId: 'ex_bench',
+      name: 'Bench press',
       prescription: { profile: 'strength', schemaVersion: 1, repetitions: 5 },
     },
   ],
 };
 
 const VALID: Record<string, unknown> = {
-  replace_plan: { op: 'replace_plan', sessions: [SESSION] },
+  replace_plan: { op: 'replace_plan', name: 'Spring strength', sessions: [SESSION] },
   change_scheduled_session: {
     op: 'change_scheduled_session',
     sessionId: 'sess_01',
@@ -147,6 +149,67 @@ describe('bounds', () => {
         scheduledFor: 'next tuesday',
       }).success,
     ).toBe(false);
+  });
+});
+
+describe('names and rest', () => {
+  const replace = (session: object, name: unknown = 'Spring strength') => ({
+    op: 'replace_plan',
+    name,
+    sessions: [session],
+  });
+  const exercise = SESSION.exercises[0] as Record<string, unknown>;
+
+  it('requires a name on the plan, every session and every exercise a proposal writes', () => {
+    const { name: _plan, ...noPlanName } = VALID['replace_plan'] as Record<string, unknown>;
+    const { name: _session, ...noSessionName } = SESSION;
+    const { name: _exercise, ...noExerciseName } = exercise;
+    expect(planDiffSchema.safeParse(noPlanName).success).toBe(false);
+    expect(planDiffSchema.safeParse(replace(noSessionName)).success).toBe(false);
+    expect(
+      planDiffSchema.safeParse(replace({ ...SESSION, exercises: [noExerciseName] })).success,
+    ).toBe(false);
+    expect(
+      planDiffSchema.safeParse({
+        op: 'change_scheduled_session',
+        sessionId: 'sess_01',
+        exercises: [noExerciseName],
+      }).success,
+    ).toBe(false);
+  });
+
+  it('bounds a name at 60 characters and refuses a blank one', () => {
+    expect(planDiffSchema.safeParse(replace(SESSION, 'x'.repeat(60))).success).toBe(true);
+    for (const name of ['x'.repeat(61), '', '   ', 7]) {
+      expect(planDiffSchema.safeParse(replace(SESSION, name)).success, String(name)).toBe(false);
+    }
+  });
+
+  it('lets a change rename a session, and counts that as a change', () => {
+    expect(
+      planDiffSchema.safeParse({
+        op: 'change_scheduled_session',
+        sessionId: 'sess_01',
+        name: 'Upper B',
+      }).success,
+    ).toBe(true);
+  });
+
+  it('accepts a rest of whole seconds from 1 to 3600 and nothing else', () => {
+    const withRest = (restSeconds: unknown) =>
+      planDiffSchema.safeParse(replace({ ...SESSION, exercises: [{ ...exercise, restSeconds }] }))
+        .success;
+    expect([1, 90, 3_600].map(withRest)).toEqual([true, true, true]);
+    expect([0, -1, 1.5, 3_601, '90'].map(withRest)).toEqual([false, false, false, false, false]);
+    expect(
+      planDiffSchema.safeParse({
+        op: 'change_exercise_prescription',
+        sessionId: 'sess_01',
+        exerciseId: 'ex_bench',
+        prescription: { profile: 'strength', schemaVersion: 1, repetitions: 8 },
+        restSeconds: 120,
+      }).success,
+    ).toBe(true);
   });
 });
 

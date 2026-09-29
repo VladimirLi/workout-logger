@@ -11,6 +11,7 @@ import {
   COMBINED_LOAD_EXERCISES,
   EXERCISE,
   PRESCRIBED_EXERCISES,
+  SCHEDULED_SESSION,
   SCHEDULED_SESSION_ID,
 } from './test-fixtures.js';
 import { signInDevelopmentUser } from './test-identity.js';
@@ -641,6 +642,209 @@ describe('applying a mutation as the signed-in user', () => {
       `user_id=eq.${user.id}&select=status`,
     );
     expect(sessions[0]?.status).toBe('active');
+  });
+
+  it('snapshots the plan’s names into the session, and refuses a payload that disagrees (I-28)', async () => {
+    await reset({ plan: false });
+    await upsert(rest, 'plans', [
+      aPlanRow(user.id, {
+        id: PLAN,
+        revision: 5,
+        name: 'Upper / lower',
+        sessions: [
+          {
+            ...SCHEDULED_SESSION,
+            name: 'Lower A',
+            exercises: [
+              { ...SCHEDULED_SESSION.exercises[0], name: 'Split squat', restSeconds: 150 },
+            ],
+          },
+        ],
+      }),
+    ]);
+
+    const disagreeing = await callAsUser('apply_workout_mutation', {
+      p_key: aKey(),
+      p_mutation: aStartSession('workout-named', { name: 'Somebody else’s name' }),
+    });
+    expect(disagreeing.status).toBeGreaterThanOrEqual(400);
+    expect(await select(rest, 'workout_sessions', `user_id=eq.${user.id}`)).toEqual([]);
+
+    const started = await callAsUser('apply_workout_mutation', {
+      p_key: aKey(),
+      p_mutation: aStartSession('workout-named'),
+    });
+    expect(started.status, JSON.stringify(started.body)).toBe(200);
+    const sessions = await select<{ name: string; exercise_names: Record<string, string> }>(
+      rest,
+      'workout_sessions',
+      `user_id=eq.${user.id}&select=name,exercise_names`,
+    );
+    expect(sessions).toEqual([
+      { name: 'Lower A', exercise_names: { [EXERCISE.perSide]: 'Split squat' } },
+    ]);
+  });
+
+  describe('editing, deleting and restoring a set', () => {
+    const aRepetitions = (repetitions: number) => ({ ...A_MEASUREMENT, repetitions });
+    const aChange = (kind: string, setId: string, extra: Record<string, unknown> = {}) => ({
+      kind,
+      sessionId: SESSION,
+      setId,
+      ...extra,
+    });
+    const setRows = () =>
+      select<{
+        set_id: string;
+        sequence: number;
+        measurement: { repetitions: number };
+        edited_at: string | null;
+        deleted_at: string | null;
+      }>(
+        rest,
+        'recorded_sets',
+        `user_id=eq.${user.id}&order=sequence&select=set_id,sequence,measurement,edited_at,deleted_at`,
+      );
+    const apply = (mutation: unknown) =>
+      callAsUser('apply_workout_mutation', { p_key: aKey(), p_mutation: mutation });
+
+    async function withTwoSets(): Promise<void> {
+      await reset();
+      await startASession();
+      for (const setId of ['set-1', 'set-2']) {
+        expect((await apply(aRecordSet({ setId }))).status).toBe(200);
+      }
+    }
+
+    it('changes only the result and when it was edited (I-26)', async () => {
+      await withTwoSets();
+      const edit = aChange('edit_set', 'set-1', {
+        editedAt: at(-10),
+        measurement: aRepetitions(12),
+      });
+      expect((await apply(edit)).status).toBe(200);
+
+      const [first, second] = await setRows();
+      expect(first).toMatchObject({ set_id: 'set-1', sequence: 1, deleted_at: null });
+      expect(first?.measurement.repetitions).toBe(12);
+      expect(first?.edited_at).not.toBeNull();
+      expect(second?.measurement.repetitions).toBe(A_MEASUREMENT.repetitions);
+    });
+
+    it('holds an edit to the measurement contract, the profile and the combined-load rule (I-13, I-16, I-26)', async () => {
+      await withTwoSets();
+      const invalid = await apply(
+        aChange('edit_set', 'set-1', { editedAt: at(-10), measurement: aRepetitions(0) }),
+      );
+      const otherProfile = await apply(
+        aChange('edit_set', 'set-1', {
+          editedAt: at(-10),
+          measurement: { schemaVersion: 1, profile: 'cardio', duration: { value: 60, unit: 's' } },
+        }),
+      );
+      expect(
+        (
+          await apply(
+            aRecordSet({
+              setId: 'set-side',
+              measurement: {
+                schemaVersion: 1,
+                profile: 'unilateral_strength',
+                side: 'left',
+                loadSemantics: 'per_side',
+                repetitions: 8,
+                load: { unit: 'kg', value: 20 },
+              },
+            }),
+          )
+        ).status,
+      ).toBe(200);
+      const combined = await apply(
+        aChange('edit_set', 'set-side', {
+          editedAt: at(-10),
+          measurement: {
+            schemaVersion: 1,
+            profile: 'unilateral_strength',
+            side: 'left',
+            loadSemantics: 'total',
+            repetitions: 8,
+            load: { unit: 'kg', value: 40 },
+          },
+        }),
+      );
+      for (const outcome of [invalid, otherProfile, combined]) {
+        expect(outcome.status).toBeGreaterThanOrEqual(400);
+      }
+      expect((await setRows())[0]?.measurement.repetitions).toBe(A_MEASUREMENT.repetitions);
+    });
+
+    it('deletes as a tombstone that keeps its sequence, and restores it (I-27)', async () => {
+      await withTwoSets();
+      expect((await apply(aChange('delete_set', 'set-1', { deletedAt: at(-10) }))).status).toBe(
+        200,
+      );
+      expect((await setRows()).map((row) => [row.set_id, row.deleted_at !== null])).toEqual([
+        ['set-1', true],
+        ['set-2', false],
+      ]);
+
+      // The next set counts past the tombstone, so sequences stay unique.
+      expect((await apply(aRecordSet({ setId: 'set-3' }))).status).toBe(200);
+      expect((await setRows()).map((row) => row.sequence)).toEqual([1, 2, 3]);
+
+      expect((await apply(aChange('restore_set', 'set-1'))).status).toBe(200);
+      expect((await setRows()).every((row) => row.deleted_at === null)).toBe(true);
+    });
+
+    it('refuses to restore a live set, to delete or edit a deleted one, and to touch a missing one (I-27)', async () => {
+      await withTwoSets();
+      const notDeleted = await apply(aChange('restore_set', 'set-1'));
+      expect(notDeleted.status).toBeGreaterThanOrEqual(400);
+
+      await apply(aChange('delete_set', 'set-1', { deletedAt: at(-10) }));
+      for (const mutation of [
+        aChange('delete_set', 'set-1', { deletedAt: at(-9) }),
+        aChange('edit_set', 'set-1', { editedAt: at(-9), measurement: aRepetitions(9) }),
+        aChange('delete_set', 'nope', { deletedAt: at(-9) }),
+      ]) {
+        expect((await apply(mutation)).status).toBeGreaterThanOrEqual(400);
+      }
+    });
+
+    it('refuses a change stamped before the set was recorded (I-29)', async () => {
+      await withTwoSets();
+      const early = await apply(aChange('delete_set', 'set-1', { deletedAt: at(-25) }));
+      expect(early.status).toBeGreaterThanOrEqual(400);
+      expect((await setRows())[0]?.deleted_at).toBeNull();
+    });
+
+    it('is final once the session is finished (I-19)', async () => {
+      await withTwoSets();
+      await apply({ kind: 'complete_session', sessionId: SESSION, completedAt: at(-5) });
+      for (const mutation of [
+        aChange('delete_set', 'set-1', { deletedAt: at(-4) }),
+        aChange('edit_set', 'set-1', { editedAt: at(-4), measurement: aRepetitions(9) }),
+      ]) {
+        expect((await apply(mutation)).status).toBeGreaterThanOrEqual(400);
+      }
+      expect((await setRows()).every((row) => row.deleted_at === null)).toBe(true);
+    });
+
+    it('replays a delete as the same fact, never as a second one (I-22)', async () => {
+      await withTwoSets();
+      const key = aKey();
+      const mutation = aChange('delete_set', 'set-1', { deletedAt: at(-10) });
+      const first = await callAsUser('apply_workout_mutation', {
+        p_key: key,
+        p_mutation: mutation,
+      });
+      const replay = await callAsUser('apply_workout_mutation', {
+        p_key: key,
+        p_mutation: mutation,
+      });
+      expect(first.body).toMatchObject({ kind: 'applied' });
+      expect(replay.body).toMatchObject({ kind: 'replayed' });
+    });
   });
 
   it('keeps the key and the mutation together, or neither (I-21)', async () => {

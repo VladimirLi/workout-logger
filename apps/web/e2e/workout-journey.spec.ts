@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { expect, type Locator, type Page, test } from '@playwright/test';
+import { finishWorkout } from './finish';
 
 /**
  * The plan, workout, and summary routes (workout-logging spec, tasks 5.1 and 5.2).
@@ -15,19 +16,14 @@ const ADAPTER = 'packages/adapters-browser/dist/local-workout-store.js';
 /** Seeds a downloaded plan before the app boots, so the first render already has one. */
 async function seedPlan(
   page: Page,
-  options: { unilateral?: boolean; combinedLoad?: boolean; twoExercises?: boolean } = {},
+  options: { unilateral?: boolean; combinedLoad?: boolean; multiple?: boolean } = {},
 ): Promise<void> {
   // `export` is illegal inside a function body, so the keyword is stripped and the classes
   // are returned explicitly. The adapter has no runtime imports, which is what makes this
   // possible; browser-store.spec.ts asserts that and would fail first if it changed.
   const adapter = readFileSync(ADAPTER, 'utf8').replaceAll(/^export /gm, '');
   await page.addInitScript(
-    (input: {
-      source: string;
-      unilateral: boolean;
-      combinedLoad: boolean;
-      twoExercises: boolean;
-    }) => {
+    (input: { source: string; unilateral: boolean; combinedLoad: boolean; multiple: boolean }) => {
       const { source } = input;
       // The store's own code, running in the page before any route script does.
       const factory = new Function(`${source}\nreturn { IndexedDbPlanStore };`) as () => {
@@ -54,12 +50,23 @@ async function seedPlan(
         return identity();
       };
 
-      (window as unknown as { __seedPlan: () => Promise<void> }).__seedPlan = async () => {
+      // The override is how a test moves the downloaded plan on to a later revision, which is
+      // what the device would hold after a sync. Saving the same plan id overwrites the
+      // record, exactly as the adapter does for a real download.
+      (
+        window as unknown as {
+          __seedPlan: (override?: {
+            revision?: number;
+            loadKg?: number;
+            reps?: number;
+          }) => Promise<void>;
+        }
+      ).__seedPlan = async (override) => {
         const userId = await identity();
         await new IndexedDbPlanStore().save(userId, {
           status: 'active',
           id: 'plan-1',
-          revision: 1,
+          revision: override?.revision ?? 1,
           activatedAt: new Date('2026-09-18T08:00:00Z'),
           sessions: [
             {
@@ -86,18 +93,18 @@ async function seedPlan(
                       prescription: {
                         schemaVersion: 1,
                         profile: 'strength',
-                        repetitions: 8,
-                        load: { unit: 'kg', value: 80 },
+                        repetitions: override?.reps ?? 8,
+                        load: { unit: 'kg', value: override?.loadKg ?? 80 },
                       },
                     },
-                    ...(input.twoExercises
+                    ...(input.multiple
                       ? [
                           {
                             exerciseId: 'bench-press',
                             prescription: {
                               schemaVersion: 1,
                               profile: 'strength',
-                              repetitions: 5,
+                              repetitions: 6,
                               load: { unit: 'kg', value: 60 },
                             },
                           },
@@ -113,7 +120,7 @@ async function seedPlan(
       source: adapter,
       unilateral: options.unilateral === true,
       combinedLoad: options.combinedLoad === true,
-      twoExercises: options.twoExercises === true,
+      multiple: options.multiple === true,
     },
   );
 }
@@ -121,7 +128,7 @@ async function seedPlan(
 /** Opens today, makes sure the device identity exists, then seeds and reloads. */
 async function openTodayWithPlan(
   page: Page,
-  options: { unilateral?: boolean; combinedLoad?: boolean; twoExercises?: boolean } = {},
+  options: { unilateral?: boolean; combinedLoad?: boolean; multiple?: boolean } = {},
 ): Promise<void> {
   await seedPlan(page, options);
   await page.goto('/today');
@@ -132,6 +139,151 @@ async function openTodayWithPlan(
 }
 
 test.describe('the workout journey', () => {
+  test('opens on today rather than the old foundation page', async ({ page }) => {
+    await page.goto('/');
+    await expect(page).toHaveURL(/\/today$/);
+  });
+
+  test('revisits a finished session from history', async ({ page }) => {
+    await openTodayWithPlan(page);
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForURL('**/workout');
+    await page.getByRole('button', { name: 'Log set' }).click();
+    await expect(page.getByRole('cell', { name: '80 kilograms' })).toBeVisible();
+    await finishWorkout(page);
+    await page.waitForURL('**/summary?session=**');
+    await page.getByRole('link', { name: 'Workout history' }).click();
+    await expect(page.getByRole('link', { name: /session mon/i })).toBeVisible();
+    await page.getByRole('link', { name: /session mon/i }).click();
+    await expect(page.getByRole('heading', { name: 'Finished' })).toBeVisible();
+    await expect(page.getByRole('cell', { name: '80 kilograms' })).toBeVisible();
+  });
+
+  test('logs sets for both exercises in the scheduled session', async ({ page }) => {
+    await openTodayWithPlan(page, { multiple: true });
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForURL('**/workout');
+    await page.getByRole('button', { name: 'Log set' }).click();
+    await expect(page.getByRole('cell', { name: '80 kilograms' })).toBeVisible();
+    // Which exercise is current must reach assistive tech, not only the button's colour.
+    await expect(page.getByRole('button', { name: 'Back squat', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await expect(page.getByRole('button', { name: 'Bench press', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    await page.getByRole('button', { name: 'Bench press' }).click();
+    await expect(page.getByRole('button', { name: 'Bench press', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await expect(page.getByText('60 kg × 6')).toBeVisible();
+    await page.getByRole('button', { name: 'Log set' }).click();
+    await expect(page.getByRole('cell', { name: '60 kilograms' })).toBeVisible();
+    await finishWorkout(page);
+    await page.waitForURL('**/summary?session=**');
+    await expect(page.getByRole('cell', { name: '80 kilograms' })).toBeVisible();
+    await expect(page.getByRole('cell', { name: '60 kilograms' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Back squat' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Bench press' })).toBeVisible();
+  });
+
+  test('never retargets a workout already in progress when the plan revision moves on', async ({
+    page,
+  }) => {
+    // A started workout is a snapshot of one plan revision (session.ts). If a sync downloads a
+    // later revision mid-workout the screen must not quietly show the new numbers as this
+    // workout's targets, because the device keeps only the newest revision of a plan.
+    await openTodayWithPlan(page);
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForURL('**/workout');
+    await expect(page.getByText('80 kg × 8')).toBeVisible();
+    await page.getByRole('button', { name: 'Log set' }).click();
+    await expect(page.getByRole('cell', { name: '80 kilograms' })).toBeVisible();
+
+    await page.evaluate(() =>
+      (
+        window as unknown as {
+          __seedPlan(override: { revision: number; loadKg: number; reps: number }): Promise<void>;
+        }
+      ).__seedPlan({ revision: 2, loadKg: 100, reps: 3 }),
+    );
+    await page.reload();
+
+    await expect(page.getByRole('heading', { name: 'In progress' })).toBeVisible();
+    await expect(page.getByText('100 kg × 3')).toHaveCount(0);
+    await expect(page.getByText('The plan changed after this workout started')).toBeVisible();
+    // Recorded facts and the way out of the workout both survive.
+    await expect(page.getByRole('cell', { name: '80 kilograms' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Finish workout' })).toBeVisible();
+  });
+
+  test('keeps each recorded set under its own exercise when the plan revision moves on', async ({
+    page,
+  }) => {
+    await openTodayWithPlan(page, { multiple: true });
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForURL('**/workout');
+    await page.getByRole('button', { name: 'Log set' }).click();
+    await expect(page.getByRole('cell', { name: '80 kilograms' })).toBeVisible();
+    await page.getByRole('button', { name: 'Bench press' }).click();
+    await page.getByRole('button', { name: 'Log set' }).click();
+    await expect(page.getByRole('cell', { name: '60 kilograms' })).toBeVisible();
+
+    await page.evaluate(() =>
+      (
+        window as unknown as {
+          __seedPlan(override: { revision: number; loadKg: number; reps: number }): Promise<void>;
+        }
+      ).__seedPlan({ revision: 2, loadKg: 100, reps: 3 }),
+    );
+    await page.reload();
+
+    await expect(page.getByText('The plan changed after this workout started')).toBeVisible();
+    // The chips still filter the table; each exercise keeps only its own sets.
+    const table = page.getByRole('table', { name: 'Sets recorded' });
+    await expect(table.getByRole('cell', { name: '80 kilograms' })).toBeVisible();
+    await expect(table.getByRole('cell', { name: '60 kilograms' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Bench press' }).click();
+    await expect(table.getByRole('cell', { name: '60 kilograms' })).toBeVisible();
+    await expect(table.getByRole('cell', { name: '80 kilograms' })).toHaveCount(0);
+    await expect(page.getByRole('cell', { name: '100 kilograms' })).toHaveCount(0);
+
+    await finishWorkout(page);
+    await page.waitForURL('**/summary?session=**');
+    await expect(page.getByRole('heading', { name: 'Back squat' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Bench press' })).toBeVisible();
+  });
+
+  test('ignores Finish workout while a set is still being saved', async ({ page }) => {
+    await openTodayWithPlan(page);
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForURL('**/workout');
+    await expect(page.getByRole('button', { name: 'Log set' })).toBeVisible();
+    // Finish is confirmed one task after Log set, while the set's write is still in flight. The
+    // write and the completion each put a whole session snapshot, so an overlap would lose one.
+    await page.evaluate(async () => {
+      const press = (label: string, within = 'body') =>
+        [...document.querySelectorAll(`${within} button`)]
+          .find((b) => b.textContent?.trim() === label)
+          ?.click();
+      press('Log set');
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      press('Finish workout');
+      press('Finish workout', 'dialog');
+    });
+    await expect(
+      page
+        .getByRole('button', { name: 'Next set' })
+        .or(page.getByRole('cell', { name: '80 kilograms' })),
+    ).toBeVisible();
+    if (!page.url().includes('/summary')) await finishWorkout(page);
+    await page.waitForURL('**/summary?session=**');
+    await expect(page.getByRole('cell', { name: '80 kilograms' })).toBeVisible();
+  });
+
   test('says plainly that no plan has reached the device', async ({ page }) => {
     // The honest empty state. Nothing can sync yet, and the screen says so rather than
     // showing an invented plan.
@@ -199,7 +351,7 @@ test.describe('the workout journey', () => {
     await openTodayWithPlan(page);
     await page.getByRole('button', { name: 'Start workout' }).click();
     await page.waitForURL('**/workout');
-    await page.getByRole('button', { name: 'Done' }).click();
+    await finishWorkout(page);
 
     await page.waitForURL('**/summary?session=**');
     await expect(page.getByRole('heading', { name: 'Finished' })).toBeVisible();
@@ -238,12 +390,12 @@ const isPainted = (control: Locator): Promise<boolean> =>
     return hit !== null && (hit === element || element.contains(hit) || hit.contains(element));
   });
 
-type LandscapePlan = { unilateral?: boolean; combinedLoad?: boolean; twoExercises?: boolean };
+type LandscapePlan = { unilateral?: boolean; combinedLoad?: boolean; multiple?: boolean };
 
 test.describe('a phone held sideways (layout.landscape.two-pane)', () => {
   const PROFILES: readonly { name: string; plan: LandscapePlan; scrolls: boolean }[] = [
     { name: 'one exercise', plan: {}, scrolls: false },
-    { name: 'two exercises', plan: { twoExercises: true }, scrolls: false },
+    { name: 'two exercises', plan: { multiple: true }, scrolls: false },
     { name: 'a unilateral exercise', plan: { unilateral: true }, scrolls: true },
     {
       name: 'a unilateral exercise with combined load',
@@ -531,7 +683,7 @@ test.describe('logging a set', () => {
     await openTodayWithPlan(page);
     await page.getByRole('button', { name: 'Start workout' }).click();
     await page.waitForURL('**/workout');
-    await expect(page.getByRole('heading', { name: 'back-squat' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Back squat' })).toBeVisible();
   }
 
   test('records a set performed as prescribed in one action', async ({ page }) => {
@@ -660,7 +812,7 @@ test('@a11y the live set view fits a 375 by 667 phone with no sideways scrolling
   await openTodayWithPlan(page);
   await page.getByRole('button', { name: 'Start workout' }).click();
   await page.waitForURL('**/workout');
-  await expect(page.getByRole('heading', { name: 'back-squat' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Back squat' })).toBeVisible();
 
   const overflow = await page.evaluate(() => ({
     scrollWidth: document.documentElement.scrollWidth,
@@ -694,6 +846,8 @@ test.describe('the offline journey', () => {
     await expect(
       page.getByRole('heading', { name: 'That session is not on this device' }),
     ).toBeVisible();
+    await page.goto('/history');
+    await expect(page.getByRole('heading', { name: 'No finished workouts yet' })).toBeVisible();
     await page.goto('/today');
     await expect(page.getByRole('button', { name: 'Start workout' })).toBeVisible();
 
@@ -701,7 +855,7 @@ test.describe('the offline journey', () => {
 
     await page.getByRole('button', { name: 'Start workout' }).click();
     await page.waitForURL('**/workout');
-    await expect(page.getByRole('heading', { name: 'back-squat' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Back squat' })).toBeVisible();
 
     await page.getByRole('button', { name: 'Log set' }).click();
     await expect(page.getByRole('cell', { name: '80 kilograms' })).toBeVisible();
@@ -714,7 +868,7 @@ test.describe('the offline journey', () => {
     await page.getByRole('button', { name: 'Log set' }).click();
     await expect(page.getByRole('cell', { name: '82.5 kilograms' })).toBeVisible();
 
-    await page.getByRole('button', { name: 'Done' }).click();
+    await finishWorkout(page);
     await page.waitForURL('**/summary?session=**');
     await expect(page.getByRole('heading', { name: 'Finished' })).toBeVisible();
 
@@ -738,6 +892,12 @@ test.describe('the offline journey', () => {
         }),
     );
     expect(queued, 'a change recorded offline was lost').toBe(4);
+
+    // History is a primary tab, so it has to survive the network being off like the rest of the
+    // journey: the shell comes from the service worker and the finished session from IndexedDB.
+    // Without /history in the precache list this lands on /offline instead.
+    await page.goto('/history');
+    await expect(page.getByRole('list', { name: 'Workouts' })).toBeVisible();
 
     await context.setOffline(false);
   });
@@ -837,83 +997,86 @@ test.describe('discarding a workout (task 5.3)', () => {
   });
 });
 
-test.describe('a full device (task 4.8)', () => {
-  /**
-   * Makes the next write meet a full device, using the browser's own error.
-   *
-   * Chromium's quota override does not reject a small IndexedDB write even with the quota at
-   * one byte (see browser-store.spec.ts), so the store is given a factory that raises the real
-   * QuotaExceededError from the next put. Nothing in the application is modified for the test.
-   */
-  async function failTheNextWrite(page: Page): Promise<void> {
-    await page.addInitScript(() => {
-      const forward = (target: object, prop: string | symbol) => {
-        const value = Reflect.get(target, prop, target);
-        return typeof value === 'function' ? (value as () => unknown).bind(target) : value;
-      };
-      const setOnTarget = (target: object, prop: string | symbol, value: unknown) => {
-        Reflect.set(target, prop, value, target);
-        return true;
-      };
-      let armed = false;
-      (window as unknown as { __failNextWrite(): void }).__failNextWrite = () => {
-        armed = true;
-      };
+/**
+ * Makes the next write meet a full device, using the browser's own error.
+ *
+ * Chromium's quota override does not reject a small IndexedDB write even with the quota at
+ * one byte (see browser-store.spec.ts), so the store is given a factory that raises the real
+ * QuotaExceededError from the next put. Nothing in the application is modified for the test.
+ */
+async function failTheNextWrite(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const forward = (target: object, prop: string | symbol) => {
+      const value = Reflect.get(target, prop, target);
+      return typeof value === 'function' ? (value as () => unknown).bind(target) : value;
+    };
+    const setOnTarget = (target: object, prop: string | symbol, value: unknown) => {
+      Reflect.set(target, prop, value, target);
+      return true;
+    };
+    let armed: string | undefined;
+    (window as unknown as { __failNextWrite(name?: string): void }).__failNextWrite = (
+      name = 'QuotaExceededError',
+    ) => {
+      armed = name;
+    };
 
-      const wrapStore = (store: IDBObjectStore) =>
-        new Proxy(store, {
-          set: setOnTarget,
-          get(target, prop) {
-            if (prop === 'put' && armed) {
-              armed = false;
-              return () => {
-                throw new DOMException('the device is full', 'QuotaExceededError');
-              };
-            }
-            return forward(target, prop);
-          },
-        });
-      const wrapTransaction = (transaction: IDBTransaction) =>
-        new Proxy(transaction, {
-          set: setOnTarget,
-          get: (target, prop) =>
-            prop === 'objectStore'
-              ? (name: string) => wrapStore(target.objectStore(name))
-              : forward(target, prop),
-        });
-      const wrapDatabase = (database: IDBDatabase) =>
-        new Proxy(database, {
-          set: setOnTarget,
-          get: (target, prop) =>
-            prop === 'transaction'
-              ? (...args: unknown[]) =>
-                  wrapTransaction(
-                    (target.transaction as (...a: unknown[]) => IDBTransaction)(...args),
-                  )
-              : forward(target, prop),
-        });
-
-      const open = indexedDB.open.bind(indexedDB);
-      Object.defineProperty(indexedDB, 'open', {
-        configurable: true,
-        value: (name: string, version?: number) => {
-          const request = open(name, version);
-          return new Proxy(request, {
-            set: setOnTarget,
-            get: (target, prop) =>
-              prop === 'result' ? wrapDatabase(target.result) : forward(target, prop),
-          });
+    const wrapStore = (store: IDBObjectStore) =>
+      new Proxy(store, {
+        set: setOnTarget,
+        get(target, prop) {
+          if (prop === 'put' && armed) {
+            const name = armed;
+            armed = undefined;
+            return () => {
+              throw new DOMException('the write failed', name);
+            };
+          }
+          return forward(target, prop);
         },
       });
-    });
-  }
+    const wrapTransaction = (transaction: IDBTransaction) =>
+      new Proxy(transaction, {
+        set: setOnTarget,
+        get: (target, prop) =>
+          prop === 'objectStore'
+            ? (name: string) => wrapStore(target.objectStore(name))
+            : forward(target, prop),
+      });
+    const wrapDatabase = (database: IDBDatabase) =>
+      new Proxy(database, {
+        set: setOnTarget,
+        get: (target, prop) =>
+          prop === 'transaction'
+            ? (...args: unknown[]) =>
+                wrapTransaction(
+                  (target.transaction as (...a: unknown[]) => IDBTransaction)(...args),
+                )
+            : forward(target, prop),
+      });
 
+    const open = indexedDB.open.bind(indexedDB);
+    Object.defineProperty(indexedDB, 'open', {
+      configurable: true,
+      value: (name: string, version?: number) => {
+        const request = open(name, version);
+        return new Proxy(request, {
+          set: setOnTarget,
+          get: (target, prop) =>
+            prop === 'result' ? wrapDatabase(target.result) : forward(target, prop),
+        });
+      },
+    });
+  });
+}
+
+test.describe('a full device (task 4.8)', () => {
   test('refuses the set, says the device is full, and offers the export', async ({ page }) => {
     await failTheNextWrite(page);
     await openTodayWithPlan(page);
     await page.getByRole('button', { name: 'Start workout' }).click();
     await page.waitForURL('**/workout');
-    await expect(page.getByRole('heading', { name: 'back-squat' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Back squat' })).toBeVisible();
 
     await page.evaluate(() => (window as unknown as { __failNextWrite(): void }).__failNextWrite());
     await page.getByRole('button', { name: 'Log set' }).click();
@@ -923,6 +1086,26 @@ test.describe('a full device (task 4.8)', () => {
     await expect(page.getByRole('button', { name: 'Export everything' })).toBeVisible();
     // Nothing was recorded, and what was already queued is untouched.
     await expect(page.getByRole('cell', { name: '80 kilograms' })).toHaveCount(0);
+  });
+
+  test('a failed finish says so, offers the export, and the next finish completes', async ({
+    page,
+  }) => {
+    await failTheNextWrite(page);
+    await openTodayWithPlan(page);
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForURL('**/workout');
+    await expect(page.getByRole('heading', { name: 'Back squat' })).toBeVisible();
+
+    await page.evaluate(() => (window as unknown as { __failNextWrite(): void }).__failNextWrite());
+    await finishWorkout(page);
+
+    await expect(page.getByText('the workout was not finished')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Export everything' })).toBeVisible();
+    expect(page.url()).toContain('/workout');
+
+    await finishWorkout(page);
+    await page.waitForURL('**/summary?session=**');
   });
 
   test('the export the offer produces is the whole archive', async ({ page }) => {
@@ -958,7 +1141,7 @@ test.describe('unilateral entry (tasks 5.9 and 5.9a)', () => {
     await openTodayWithPlan(page, { unilateral: true });
     await page.getByRole('button', { name: 'Start workout' }).click();
     await page.waitForURL('**/workout');
-    await expect(page.getByRole('heading', { name: 'split-squat' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Split squat' })).toBeVisible();
 
     // The side is asked for, and left is where it starts.
     const side = page.getByRole('group', { name: 'Side' });
@@ -1061,5 +1244,211 @@ test.describe('unilateral entry (tasks 5.9 and 5.9a)', () => {
     await semantics.getByRole('radio', { name: 'Per side' }).focus();
     await page.keyboard.press('ArrowRight');
     await expect(semantics.getByRole('radio', { name: 'In total' })).toBeChecked();
+  });
+});
+
+test.describe('plan-to-workout design conformance (VLA-14, P1 deltas)', () => {
+  const noRawIds = async (page: Page): Promise<void> => {
+    const text = await page.locator('body').innerText();
+    expect(text).not.toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:/);
+    expect(text).not.toMatch(/\b(back|bench|split)-(squat|press)\b/);
+    expect(text).not.toContain('{"');
+  };
+
+  async function startWorkout(page: Page, multiple = true): Promise<void> {
+    await openTodayWithPlan(page, { multiple });
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForURL('**/workout');
+    await expect(page.getByRole('heading', { name: 'Back squat', level: 1 })).toBeVisible();
+  }
+
+  const moveThePlanOn = (page: Page) =>
+    page.evaluate(() =>
+      (
+        window as unknown as {
+          __seedPlan(override: { revision: number; loadKg: number; reps: number }): Promise<void>;
+        }
+      ).__seedPlan({ revision: 2, loadKg: 100, reps: 3 }),
+    );
+
+  test('D-3: with no plan, Today is a heading, one sentence and one secondary button', async ({
+    page,
+  }) => {
+    await page.goto('/today');
+    await expect(page.getByRole('heading', { name: 'No plan on this device yet' })).toBeVisible();
+    await expect(
+      page.getByText('A plan arrives when this device syncs. There is no server to sync with yet.'),
+    ).toBeVisible();
+    await expect(page.getByText(/saved on the device first/)).toHaveCount(0);
+    await page.getByRole('button', { name: 'See your history' }).click();
+    await page.waitForURL('**/history');
+
+    await page.goto('/settings');
+    await expect(page.getByText(/saved on the device first/)).toBeVisible();
+  });
+
+  test('D-1, D-2: Today, History and Summary show names and dates, never ids or ISO times', async ({
+    page,
+  }) => {
+    await openTodayWithPlan(page);
+    await expect(page.getByText(/Session mon, Fri 18 Sept/)).toBeVisible();
+    await noRawIds(page);
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForURL('**/workout');
+    await expect(page.getByText(/^Started \w{3} \d{1,2} \w{3}/)).toBeVisible();
+    await noRawIds(page);
+    await finishWorkout(page);
+    await page.waitForURL('**/summary?session=**');
+    await expect(page.getByRole('heading', { name: 'Back squat', level: 2 })).toBeVisible();
+    await noRawIds(page);
+    await page.goto('/history');
+    await expect(page.getByText('1 exercise · 0 sets')).toBeVisible();
+    await noRawIds(page);
+  });
+
+  test('D-4, D-5: the workout bar shows position and sync, and Close leaves without ending', async ({
+    page,
+  }) => {
+    await startWorkout(page);
+    await expect(page.getByText('Exercise 1 of 2')).toBeVisible();
+    await expect(page.getByText('On device')).toBeVisible();
+    await expect(page.getByText('Nothing waiting to sync')).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Workout', level: 1 })).toHaveCount(0);
+
+    await page.getByRole('button', { name: 'Bench press' }).click();
+    await expect(page.getByText('Exercise 2 of 2')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Close' }).click();
+    await page.waitForURL('**/today');
+    await expect(page.getByRole('heading', { name: 'A workout is in progress' })).toBeVisible();
+  });
+
+  test('D-7: the selected chip carries a check as well as aria-pressed; a single exercise has no chips', async ({
+    page,
+  }) => {
+    await startWorkout(page);
+    const selected = page.getByRole('button', { name: 'Back squat' });
+    const other = page.getByRole('button', { name: 'Bench press' });
+    await expect(selected).toHaveAttribute('aria-pressed', 'true');
+    await expect(selected.locator('svg')).toHaveCount(1);
+    await expect(other).toHaveAttribute('aria-pressed', 'false');
+    await expect(other.locator('svg')).toHaveCount(0);
+
+    await other.click();
+    await expect(other.locator('svg')).toHaveCount(1);
+    await expect(selected.locator('svg')).toHaveCount(0);
+  });
+
+  test('D-7: no chip row for a single-exercise session', async ({ page }) => {
+    await startWorkout(page, false);
+    await expect(page.getByRole('button', { name: 'Back squat' })).toHaveCount(0);
+    await expect(page.getByText('Exercise 1 of 1')).toBeVisible();
+  });
+
+  test('D-12: Log set is the one primary button and Finish workout is secondary', async ({
+    page,
+  }) => {
+    await startWorkout(page);
+    const primaries = page.locator('button[data-variant="primary"]:visible');
+    await expect(primaries).toHaveCount(1);
+    await expect(primaries).toHaveText('Log set');
+    await expect(page.getByRole('button', { name: 'Finish workout' })).toHaveAttribute(
+      'data-variant',
+      'secondary',
+    );
+  });
+
+  test('D-13: Finish workout asks first, Keep going loses nothing, confirming replaces history', async ({
+    page,
+  }) => {
+    await startWorkout(page);
+    await page.getByRole('button', { name: 'Log set' }).click();
+    await expect(page.getByRole('cell', { name: '80 kilograms' })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Finish workout' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Finish this workout?' });
+    await expect(dialog).toContainText('You have recorded 1 set.');
+    await dialog.getByRole('button', { name: 'Keep going' }).click();
+    await expect(dialog).toBeHidden();
+    expect(page.url()).toContain('/workout');
+    await expect(page.getByRole('cell', { name: '80 kilograms' })).toBeVisible();
+
+    await finishWorkout(page);
+    await page.waitForURL('**/summary?session=**');
+    await page.goBack();
+    expect(page.url()).not.toContain('/workout');
+  });
+
+  test('D-14: a set that did not save says so in words and Retry resubmits it', async ({
+    page,
+  }) => {
+    await failTheNextWrite(page);
+    await startWorkout(page, false);
+    await page.evaluate(() =>
+      (window as unknown as { __failNextWrite(name: string): void }).__failNextWrite('DataError'),
+    );
+    await page.getByRole('button', { name: 'Log set' }).click();
+
+    await expect(
+      page.getByText('That set was not saved. Nothing already recorded has been lost.'),
+    ).toBeVisible();
+    await noRawIds(page);
+    await page.getByRole('button', { name: 'Retry' }).click();
+    await expect(page.getByRole('heading', { name: 'Rest' })).toBeVisible();
+    await expect(page.getByRole('cell', { name: '80 kilograms' })).toBeVisible();
+    await expect(page.getByText('That set was not saved')).toHaveCount(0);
+  });
+
+  test('D-16: with no prescription there is a stale message, no Target, and an empty control', async ({
+    page,
+  }) => {
+    await startWorkout(page);
+    await page.getByRole('button', { name: 'Log set' }).click();
+    await expect(page.getByRole('cell', { name: '80 kilograms' })).toBeVisible();
+    await moveThePlanOn(page);
+    await page.reload();
+
+    await expect(
+      page.getByText(
+        'The plan changed after this workout started, so there are no targets to show. Everything you have recorded is safe.',
+      ),
+    ).toBeVisible();
+    await expect(page.getByText('100 kg × 3')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Back squat', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Bench press', exact: true })).toBeVisible();
+    await expect(page.getByText('Exercise 1 of 2')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Finish workout' })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Bench press', exact: true }).click();
+    await page.getByRole('button', { name: 'Log a set anyway' }).click();
+    await expect(page.getByLabel('Target')).toHaveCount(0);
+    await expect(page.getByRole('spinbutton', { name: 'Reps' })).toHaveValue('');
+    await expect(page.getByRole('spinbutton', { name: 'Load' })).toHaveValue('');
+
+    await page.getByRole('button', { name: 'Log set' }).click();
+    await expect(page.getByText('Enter how many reps you did')).toBeVisible();
+    await page.getByRole('spinbutton', { name: 'Reps' }).fill('5');
+    await page.getByRole('spinbutton', { name: 'Reps' }).blur();
+    await page.getByRole('button', { name: 'Log set' }).click();
+    await expect(page.getByRole('heading', { name: 'Rest' })).toBeVisible();
+    await expect(page.getByRole('cell', { name: '5', exact: true })).toBeVisible();
+    await expect(page.getByRole('cell', { name: '100 kilograms' })).toHaveCount(0);
+  });
+
+  test('D-16: the empty control still asks for a side when the exercise is one-sided in the current plan', async ({
+    page,
+  }) => {
+    await openTodayWithPlan(page, { unilateral: true });
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForURL('**/workout');
+    await expect(page.getByRole('heading', { name: 'Split squat' })).toBeVisible();
+    await moveThePlanOn(page);
+    await page.reload();
+
+    await page.getByRole('button', { name: 'Log a set anyway' }).click();
+    await expect(page.getByLabel('Target')).toHaveCount(0);
+    const side = page.getByRole('group', { name: 'Side' });
+    await expect(side.getByRole('radio', { name: 'Left' })).toBeChecked();
+    await expect(page.getByRole('spinbutton', { name: 'Load' })).toHaveValue('');
   });
 });

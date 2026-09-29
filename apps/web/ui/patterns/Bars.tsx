@@ -46,6 +46,7 @@ type WorkoutBarProps = {
   exercises?: number;
   /** Omitted until something on the device has actually been read: no claim is made before that. */
   sync?: SyncState;
+  /** Leaves the workout without ending it (navigation.def.exit-workout). */
   onClose?: () => void;
 };
 
@@ -108,9 +109,17 @@ export function BottomTabs({ current, hrefs }: { current: Tab; hrefs: TabHrefs }
  * even where the bar sits after the main content (found by the accessibility-tree evidence,
  * 2026-09-17).
  */
-export function StickyActionBar({ children }: { children: ReactNode }) {
+export function StickyActionBar({
+  children,
+  notice,
+}: {
+  children?: ReactNode;
+  /** A toast stacked directly above the action, never over it, so the action stays reachable. */
+  notice?: ReactNode;
+}) {
   return (
     <section className={styles.actionBar} aria-label={messages.actions.label}>
+      {notice}
       {children}
     </section>
   );

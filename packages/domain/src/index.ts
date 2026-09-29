@@ -11,6 +11,7 @@ export * from './exertion.js';
 export * from './measurement.js';
 export * from './plan.js';
 export * from './plan-diff.js';
+export * from './plan-schedule.js';
 export * from './proposal.js';
 export * from './result.js';
 export * from './revision.js';

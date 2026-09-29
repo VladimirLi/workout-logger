@@ -1,4 +1,4 @@
-import type { PlanDiffPayload } from '@workout/contracts';
+import type { StoredPlanDiffPayload } from '@workout/contracts';
 import type { PlanDiff } from '@workout/domain';
 
 /**
@@ -10,6 +10,9 @@ import type { PlanDiff } from '@workout/domain';
  * that claimed "`pnpm typecheck` fails here" was never checked by anything - a
  * deliberate type error in that file still passed. Here, `tsc --build` evaluates it on
  * every `pnpm typecheck`.
+ *
+ * It compares the stored-proposal schema, where names are optional as in the domain; the
+ * agent-input schema only tightens that by requiring them.
  *
  * The check is structural EQUALITY, not mutual assignability. Assignability is too
  * weak for drift detection: adding an optional field on one side leaves both sides
@@ -46,7 +49,7 @@ type Normalised<T> = ExactOptional<DeepMutable<T>>;
 export type Equals<A, B> =
   (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
 
-type WireEqualsDomain = Equals<Normalised<PlanDiffPayload>, Normalised<PlanDiff>>;
+type WireEqualsDomain = Equals<Normalised<StoredPlanDiffPayload>, Normalised<PlanDiff>>;
 
 /**
  * Fails `pnpm typecheck` if the wire schema and the domain type differ in any operation,

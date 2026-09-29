@@ -18,6 +18,8 @@ type ConfirmDialogProps = {
   cancel: string;
   /** Runs when the permanent action is confirmed. */
   onConfirm?: () => void;
+  /** How loud the trigger is. Tertiary unless the action is the main thing on the screen. */
+  triggerVariant?: 'secondary' | 'tertiary';
 };
 
 /**
@@ -32,6 +34,7 @@ export function ConfirmDialog({
   confirm,
   cancel,
   onConfirm,
+  triggerVariant = 'tertiary',
 }: ConfirmDialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const [open, setOpen] = useState(false);
@@ -46,7 +49,7 @@ export function ConfirmDialog({
 
   return (
     <>
-      <Button variant="tertiary" aria-haspopup="dialog" onClick={() => setOpen(true)}>
+      <Button variant={triggerVariant} aria-haspopup="dialog" onClick={() => setOpen(true)}>
         {trigger}
       </Button>
       <dialog
