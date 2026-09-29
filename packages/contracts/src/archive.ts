@@ -105,6 +105,8 @@ const sessionBase = {
   exerciseNames: z.record(z.string().min(1), nameSchema).optional(),
   /** The exercises that permitted combined load when the session started. */
   combinedLoadExercises: z.array(z.string().min(1)),
+  /** The exercises recorded one side at a time when the session started. */
+  unilateralExercises: z.array(z.string().min(1)).optional(),
   startedAt: instantSchema,
   sets: z.array(recordedSetSchema),
 };

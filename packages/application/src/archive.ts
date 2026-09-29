@@ -76,6 +76,9 @@ function sessionPayload(session: WorkoutSession): ArchivePayload['sessions'][num
     exerciseIds: [...session.exerciseIds],
     ...(session.exerciseNames === undefined ? {} : { exerciseNames: { ...session.exerciseNames } }),
     combinedLoadExercises: [...session.combinedLoadExercises],
+    ...(session.unilateralExercises === undefined
+      ? {}
+      : { unilateralExercises: [...session.unilateralExercises] }),
     startedAt: instant(session.startedAt),
     sets: session.sets.map((set) => ({
       setId: set.setId,
@@ -274,6 +277,9 @@ function sessionFrom(
     exerciseIds: payload.exerciseIds,
     ...(payload.exerciseNames === undefined ? {} : { exerciseNames: payload.exerciseNames }),
     combinedLoadExercises: payload.combinedLoadExercises,
+    ...(payload.unilateralExercises === undefined
+      ? {}
+      : { unilateralExercises: payload.unilateralExercises }),
     startedAt: new Date(payload.startedAt),
     sets,
   };
