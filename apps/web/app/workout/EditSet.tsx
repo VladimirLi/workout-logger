@@ -1,6 +1,13 @@
 'use client';
 
-import { type FormEvent, type ReactNode, useEffect, useRef, useState } from 'react';
+import {
+  type FormEvent,
+  type ReactNode,
+  type SyntheticEvent,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import {
   Button,
   formatLoadReps,
@@ -16,8 +23,6 @@ import {
 } from '../../ui';
 import { downloadEverything } from '../device';
 import {
-  pickerRir,
-  pickerSide,
   readSetValues,
   type SetControlDefaults,
   SetControls,
@@ -45,17 +50,20 @@ export interface RecordedValues extends SetValues {
 export type EditFailure = { readonly op: 'save' | 'delete'; readonly full: boolean };
 
 /**
- * What to save: what the controls say, except where the lifter did not touch a control that
+ * What to save: what the controls say, except for a control the lifter did not touch that
  * cannot show the recorded value (an RIR of 5 or 3.5, a side of both). Those keep what was
- * recorded, so opening a set and saving it never rewrites a measurement.
+ * recorded, so opening a set and saving it never rewrites a measurement. A control counts as
+ * touched once it was tapped, even if the tap chose what it already showed.
  */
-function withUntouched(read: SetValues, recorded: SetValues): SetValues {
-  const shownSide = pickerSide(recorded.side) ?? 'left';
+function withUntouched(
+  read: SetValues,
+  recorded: SetValues,
+  touched: ReadonlySet<string>,
+): SetValues {
   return {
     ...read,
-    rir: read.rir === pickerRir(recorded.rir) ? recorded.rir : read.rir,
-    side:
-      read.side === undefined || read.side === shownSide ? (recorded.side ?? read.side) : read.side,
+    rir: touched.has('rir') ? read.rir : recorded.rir,
+    side: touched.has('side') ? read.side : (recorded.side ?? read.side),
     loadSemantics: read.loadSemantics ?? recorded.loadSemantics,
     notes: recorded.notes,
   };
@@ -92,9 +100,27 @@ export function EditSet({
   const form = useRef<HTMLFormElement>(null);
   const [busy, setBusy] = useState<'save' | 'delete'>();
   const [repsMissing, setRepsMissing] = useState(false);
+  const touched = useRef(new Set<string>());
 
   useEffect(() => {
     document.getElementById(EDIT_HEADING_ID)?.focus();
+  }, []);
+
+  // A tap on the radio the picker already shows fires click but not change, so both count.
+  useEffect(() => {
+    const element = form.current;
+    const markTouched = (event: Event) => {
+      const { target } = event;
+      if (target instanceof HTMLInputElement && target.type === 'radio') {
+        touched.current.add(target.name);
+      }
+    };
+    element?.addEventListener('click', markTouched);
+    element?.addEventListener('change', markTouched);
+    return () => {
+      element?.removeEventListener('click', markTouched);
+      element?.removeEventListener('change', markTouched);
+    };
   }, []);
 
   const run = async (kind: 'save' | 'delete', action: () => Promise<boolean>) => {
@@ -112,7 +138,7 @@ export function EditSet({
       const read = readSetValues(form.current, config, recorded);
       setRepsMissing(read === undefined);
       if (!read) return false;
-      const values = withUntouched(read, recorded);
+      const values = withUntouched(read, recorded, touched.current);
       // Nothing changed: close without writing, as Cancel does.
       if (same(values, recorded)) {
         onCancel();

@@ -14,6 +14,7 @@ interface SeedExercise {
   exerciseId: string;
   name?: string;
   restSeconds?: number;
+  unilateral?: boolean;
   loadKg: number;
   reps: number;
 }
@@ -92,7 +93,9 @@ async function seedPlan(page: Page, plan: SeedPlan): Promise<void> {
               ...(exercise.restSeconds !== undefined ? { restSeconds: exercise.restSeconds } : {}),
               prescription: {
                 schemaVersion: 1,
-                profile: 'strength',
+                ...(exercise.unilateral
+                  ? { profile: 'unilateral_strength', side: 'left', loadSemantics: 'per_side' }
+                  : { profile: 'strength' }),
                 repetitions: exercise.reps,
                 load: { unit: 'kg', value: exercise.loadKg },
               },
@@ -181,6 +184,29 @@ async function queuedMutations(page: Page): Promise<number> {
     });
     database.close();
     return count;
+  });
+}
+
+/** The measurement of every recorded set as the device store holds it. */
+async function storedMeasurements(page: Page): Promise<unknown[]> {
+  return page.evaluate(async () => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('workout');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const records = await new Promise<{ session: { sets: { measurement: unknown }[] } }[]>(
+      (resolve, reject) => {
+        const request = database
+          .transaction('sessions', 'readonly')
+          .objectStore('sessions')
+          .getAll();
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      },
+    );
+    database.close();
+    return records.flatMap((record) => record.session.sets).map((set) => set.measurement);
   });
 }
 
@@ -540,6 +566,56 @@ test.describe('opening a recorded set never rewrites it', () => {
     await page.getByRole('button', { name: 'Save changes' }).click();
     await expect(page.getByRole('button', { name: 'Edit set 1, Back squat' })).toBeFocused();
     expect(await queuedMutations(page)).toBe(before + 1);
+  });
+
+  test('tapping the 4+ the picker already shows replaces a recorded RIR of 5', async ({ page }) => {
+    await startWorkout(page, ONE_SESSION);
+    await logSet(page);
+    await rewriteFirstSet(page, exertionOf(5));
+    await page.reload();
+    const before = await queuedMutations(page);
+
+    await page.getByRole('button', { name: 'Edit set 1, Back squat' }).click();
+    await page.getByRole('radio', { name: '4+', exact: true }).click();
+    await page.getByRole('button', { name: 'Save changes' }).click();
+    await expect(page.getByRole('button', { name: 'Edit set 1, Back squat' })).toBeFocused();
+    expect(await queuedMutations(page)).toBe(before + 1);
+    expect(await storedMeasurements(page)).toMatchObject([{ exertion: { rir: { value: 4 } } }]);
+  });
+
+  test('tapping the Left the picker already shows replaces a recorded side of both', async ({
+    page,
+  }) => {
+    await startWorkout(page, {
+      sessions: [{ ...PUSH_DAY, exercises: [{ ...SQUAT, unilateral: true }] }],
+    });
+    await logSet(page);
+    await rewriteFirstSet(page, { side: 'both' });
+    await page.reload();
+    const before = await queuedMutations(page);
+
+    await page.getByRole('button', { name: 'Edit set 1, Back squat' }).click();
+    await page.getByRole('radio', { name: 'Left', exact: true }).click();
+    await page.getByRole('button', { name: 'Save changes' }).click();
+    await expect(page.getByRole('button', { name: 'Edit set 1, Back squat' })).toBeFocused();
+    expect(await queuedMutations(page)).toBe(before + 1);
+    expect(await storedMeasurements(page)).toMatchObject([{ side: 'left' }]);
+  });
+
+  test('saving a recorded side of both untouched writes nothing', async ({ page }) => {
+    await startWorkout(page, {
+      sessions: [{ ...PUSH_DAY, exercises: [{ ...SQUAT, unilateral: true }] }],
+    });
+    await logSet(page);
+    await rewriteFirstSet(page, { side: 'both' });
+    await page.reload();
+    const before = await queuedMutations(page);
+
+    await page.getByRole('button', { name: 'Edit set 1, Back squat' }).click();
+    await page.getByRole('button', { name: 'Save changes' }).click();
+    await expect(page.getByRole('button', { name: 'Edit set 1, Back squat' })).toBeFocused();
+    expect(await queuedMutations(page)).toBe(before);
+    expect(await storedMeasurements(page)).toMatchObject([{ side: 'both' }]);
   });
 });
 
