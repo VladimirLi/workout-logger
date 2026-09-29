@@ -101,8 +101,9 @@ test.describe('recoverable deletion (tasks 8.3, 8.4, 8.5)', () => {
     await page.getByRole('button', { name: 'Restore history' }).click();
     await expect(page.getByText('Your history is back on this device.')).toBeVisible();
 
+    // The restored history holds the finished session, so Today says the day is done.
     await page.goto('/today');
-    await expect(page.getByRole('button', { name: 'Start workout' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: "Today's workout is done" })).toBeVisible();
   });
 
   test('is reachable from diagnostics', async ({ page }) => {

@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import {
   BottomTabs,
   deviceTimeZone,
-  displayName,
   formatDate,
   Heading,
   ListRow,
@@ -16,7 +15,7 @@ import {
   Text,
   TopBar,
 } from '../../ui';
-import { readHistory } from '../device';
+import { liveSets, readHistory, sessionName } from '../device';
 
 type History = Awaited<ReturnType<typeof readHistory>>;
 
@@ -67,8 +66,8 @@ export default function HistoryPage() {
             <ListRow
               key={session.id}
               href={`/summary?session=${encodeURIComponent(session.id)}` as never}
-              title={displayName(session.scheduledSessionId, 'Workout')}
-              detail={`${messages.count.exercises(session.exerciseIds.length)} · ${messages.count.sets(session.sets.length)}`}
+              title={sessionName(session)}
+              detail={`${messages.count.exercises(session.exerciseIds.length)} · ${messages.count.sets(liveSets(session).length)}`}
               meta={formatDate(session.startedAt.getTime(), deviceTimeZone())}
             />
           ))}

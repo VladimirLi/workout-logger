@@ -87,6 +87,8 @@
   padding-inline: var(--gutter);
   border-block-start: var(--border-width) solid var(--color-border);
   background: var(--color-bg);
+  display: grid;
+  gap: var(--space-3);
 }
 
 @media (forced-colors: active) {

@@ -23,6 +23,12 @@ export const messages = {
     undo: 'Undo',
     retry: 'Retry',
     startWorkout: 'Start workout',
+    startNamed: (name: string) => `Start ${name}`,
+    edit: 'Edit',
+    saveChanges: 'Save changes',
+    cancel: 'Cancel',
+    deleteSet: 'Delete set',
+    exportEverything: 'Export everything',
     skipRest: 'Skip rest',
     addTime: 'Add 30 seconds',
     done: 'Done',
@@ -54,7 +60,22 @@ export const messages = {
     saved: (index: number, restSeconds: number) =>
       `Set ${index} saved. Rest ${formatClock(restSeconds)}.`,
     deleted: (index: number) => `Set ${index} deleted`,
+    editing: (index: number) => `Editing set ${index}`,
+    updated: (index: number) => `Set ${index} updated`,
+    restored: (index: number) => `Set ${index} restored`,
+    editLabel: (index: number, exercise: string) => `Edit set ${index}, ${exercise}`,
+    changeNotSaved: 'That change was not saved. The set is unchanged.',
+    notDeleted: 'That set was not deleted.',
+    notRestored: 'That set could not be restored.',
+    changeDeviceFull:
+      'There is no room left on this device, so that change was not saved. Nothing already recorded has been lost, and nothing waiting to sync has been touched. Export your data, then free some space.',
     notRecorded: 'not recorded',
+  },
+
+  today: {
+    doneHeading: "Today's workout is done",
+    doneBody: 'Your summary is saved on this device.',
+    doneAction: 'See your history',
   },
 
   rest: {

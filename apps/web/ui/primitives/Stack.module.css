@@ -7,6 +7,10 @@
   min-inline-size: 0;
 }
 
+.stack[hidden] {
+  display: none;
+}
+
 .stack[data-direction="inline"] {
   flex-direction: row;
 }

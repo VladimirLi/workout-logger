@@ -22,6 +22,10 @@ type ButtonProps = {
   expand?: boolean;
   'aria-haspopup'?: 'dialog';
   'aria-describedby'?: string;
+  /** Only where the visible label is not enough alone, and it must begin with that label. */
+  'aria-label'?: string;
+  /** Lets a screen return focus to this button after a change it caused elsewhere. */
+  id?: string;
   /** For buttons that toggle a selection on the same screen, so the state is not colour-only. */
   'aria-pressed'?: boolean;
 };

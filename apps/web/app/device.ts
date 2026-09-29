@@ -19,9 +19,11 @@ import {
   clearLocalDataAfterExport,
   completeWorkout,
   type DeletionPorts,
+  deleteRecordedSet,
   deriveSyncState,
   discardWorkout,
   drainOutbox,
+  editRecordedSet,
   exportArchive,
   exportHistoryCsv,
   logSet,
@@ -30,6 +32,7 @@ import {
   type ReviewDecision,
   recoverDeletion,
   requestEmailSignInCode,
+  restoreRecordedSet,
   reviewAndApplyProposal,
   type SyncState,
   scheduleRecoverableDeletion,
@@ -41,6 +44,8 @@ import {
   err,
   kilograms,
   type LoadSemantics,
+  liveSets,
+  type Measurement,
   type Proposal,
   type Result,
   type Side,
@@ -62,9 +67,21 @@ import { displayName } from '../ui';
  * the build rather than the page.
  */
 
-/** A name for an exercise: its id read as words, or its position where the id is not words. */
-export const exerciseName = (exerciseId: string, index: number): string =>
-  displayName(exerciseId, `Exercise ${index + 1}`);
+/**
+ * The name to show for an exercise: the one the plan gave it and the session kept, or - only
+ * for data that has no name - its id read as words, or its position where the id is not words.
+ */
+export const exerciseName = (exerciseId: string, index: number, name?: string): string =>
+  name ?? displayName(exerciseId, `Exercise ${index + 1}`);
+
+/** The name to show for a session: the one it kept from the plan, else its id read as words. */
+export const sessionName = (session: {
+  readonly name?: string | undefined;
+  readonly scheduledSessionId: string;
+}): string => session.name ?? displayName(session.scheduledSessionId, 'Workout');
+
+/** The rest length used only where the plan carries none, or the revision has moved on. */
+export const FALLBACK_REST_SECONDS = 90;
 
 /**
  * The design system names the three sync states differently from the application port
@@ -172,7 +189,15 @@ export async function readToday() {
     ports.plans.activePlan(user),
     ports.store.activeSession(user),
   ]);
-  return { user, plan, active };
+  // A scheduled session with a finished workout is done: Today stops offering it (spec D-26).
+  const completed = plan
+    ? new Set(
+        (await deviceOf().archive.sessions(user))
+          .filter((session) => session.status === 'completed' && session.planId === plan.id)
+          .map((session) => session.scheduledSessionId),
+      )
+    : new Set<string>();
+  return { user, plan, active, completed };
 }
 
 export async function readSession(sessionId: string) {
@@ -221,13 +246,16 @@ export async function readActivePrescriptions() {
     return [
       {
         exerciseId: exercise.exerciseId,
-        name: exerciseName(exercise.exerciseId, index),
+        name: exerciseName(
+          exercise.exerciseId,
+          index,
+          session.exerciseNames?.[exercise.exerciseId] ?? exercise.name,
+        ),
         target: {
           loadKg: exercise.prescription.load?.value ?? 0,
           reps: exercise.prescription.repetitions,
         },
-        // The plan has no rest length; use the design-system default.
-        restSeconds: 90,
+        restSeconds: exercise.restSeconds ?? FALLBACK_REST_SECONDS,
         unilateral: exercise.prescription.profile === 'unilateral_strength',
         combinedLoadPermitted: session.combinedLoadExercises.includes(exercise.exerciseId),
       },
@@ -251,9 +279,9 @@ export async function readSessionExercises() {
   const scheduled = plan?.sessions.find((item) => item.id === session.scheduledSessionId);
   return session.exerciseIds.map((exerciseId, index) => ({
     exerciseId,
-    name: exerciseName(exerciseId, index),
+    name: exerciseName(exerciseId, index, session.exerciseNames?.[exerciseId]),
     target: undefined,
-    restSeconds: 90,
+    restSeconds: FALLBACK_REST_SECONDS,
     unilateral:
       scheduled?.exercises.find((exercise) => exercise.exerciseId === exerciseId)?.prescription
         .profile === 'unilateral_strength',
@@ -281,16 +309,7 @@ export async function startToday(scheduledSessionId: string) {
   return startWorkout(ports, { userId: await userId(), scheduledSessionId });
 }
 
-/**
- * Records one strength set from what the controls said (task 5.4).
- *
- * The screen hands over numbers; the domain decides whether they are a measurement. RIR is
- * what the user entered and RPE is derived from it here, by the domain, so a screen cannot
- * store an RPE that does not follow from the RIR (ADR-0004, task 5.8).
- */
-export async function logStrengthSet(command: {
-  readonly sessionId: string;
-  readonly exerciseId: string;
+type StrengthValues = {
   /** Undefined for a bodyweight set, or a set logged without a prescription and no load. */
   readonly loadKg: number | undefined;
   readonly reps: number;
@@ -299,7 +318,9 @@ export async function logStrengthSet(command: {
   readonly side?: Side | undefined;
   /** Only ever 'total' where the plan permitted it; the domain refuses it otherwise. */
   readonly loadSemantics?: LoadSemantics | undefined;
-}): Promise<Result<unknown, unknown>> {
+};
+
+function strengthFrom(command: StrengthValues): Result<Measurement, unknown> {
   const load = command.loadKg === undefined ? undefined : kilograms(command.loadKg);
   if (load && !load.ok) return load;
   const exertion = command.rir === undefined ? undefined : strengthExertion(command.rir);
@@ -310,13 +331,29 @@ export async function logStrengthSet(command: {
     ...(load?.ok ? { load: load.value } : {}),
     ...(exertion?.ok ? { exertion: exertion.value } : {}),
   };
-  const measurement = command.side
+  return command.side
     ? unilateralStrengthMeasurement({
         ...shared,
         side: command.side,
         ...(command.loadSemantics ? { loadSemantics: command.loadSemantics } : {}),
       })
     : strengthMeasurement(shared);
+}
+
+/**
+ * Records one strength set from what the controls said (task 5.4).
+ *
+ * The screen hands over numbers; the domain decides whether they are a measurement. RIR is
+ * what the user entered and RPE is derived from it here, by the domain, so a screen cannot
+ * store an RPE that does not follow from the RIR (ADR-0004, task 5.8).
+ */
+export async function logStrengthSet(
+  command: StrengthValues & {
+    readonly sessionId: string;
+    readonly exerciseId: string;
+  },
+): Promise<Result<unknown, unknown>> {
+  const measurement = strengthFrom(command);
   if (!measurement.ok) return measurement;
 
   const { ports, userId } = deviceOf();
@@ -326,6 +363,32 @@ export async function logStrengthSet(command: {
     exerciseId: command.exerciseId,
     measurement: measurement.value,
   });
+}
+
+/** Changes a recorded set's result in place (spec D-23). Where it was, and when, is kept. */
+export async function editStrengthSet(
+  command: StrengthValues & { readonly sessionId: string; readonly setId: string },
+): Promise<Result<unknown, unknown>> {
+  const measurement = strengthFrom(command);
+  if (!measurement.ok) return measurement;
+  const { ports, userId } = deviceOf();
+  return editRecordedSet(ports, {
+    userId: await userId(),
+    sessionId: command.sessionId,
+    setId: command.setId,
+    measurement: measurement.value,
+  });
+}
+
+/** Deletes a set at once; it stays recoverable, so this is undo-first (spec D-24). */
+export async function deleteSet(sessionId: string, setId: string) {
+  const { ports, userId } = deviceOf();
+  return deleteRecordedSet(ports, { userId: await userId(), sessionId, setId });
+}
+
+export async function restoreSet(sessionId: string, setId: string) {
+  const { ports, userId } = deviceOf();
+  return restoreRecordedSet(ports, { userId: await userId(), sessionId, setId });
 }
 
 /** Discards the session in progress. Destructive, so the confirmation is explicit (task 5.3). */
@@ -421,7 +484,7 @@ export async function decideOnProposal(proposalId: string, decision: ReviewDecis
   );
 }
 
-export { drainOutbox, FlushTriggers };
+export { drainOutbox, FlushTriggers, liveSets };
 
 const ACCOUNT_SESSION_KEY = 'workout.account.session';
 

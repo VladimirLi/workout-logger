@@ -48,8 +48,15 @@ function setsLost(sets: number): string {
 }
 
 interface PlanView {
-  readonly id: string;
-  readonly sessions: readonly { readonly id: string; readonly scheduledFor: string }[];
+  readonly name: string;
+  /** Sessions still to do: one already completed on this device is not offered again. */
+  readonly sessions: readonly {
+    readonly id: string;
+    readonly name: string;
+    readonly scheduledFor: string;
+  }[];
+  /** The plan has sessions, and every one of them has been completed (spec T-6). */
+  readonly allDone: boolean;
 }
 
 export default function TodayPage() {
@@ -59,16 +66,22 @@ export default function TodayPage() {
 
   const load = useCallback(async () => {
     try {
-      const { plan, active } = await readToday();
+      const { plan, active, completed } = await readToday();
       setState({
         kind: 'ready',
         plan: plan
           ? {
-              id: plan.id,
-              sessions: plan.sessions.map((session) => ({
-                id: session.id,
-                scheduledFor: session.scheduledFor,
-              })),
+              name: plan.name ?? displayName(plan.id, 'Your plan'),
+              sessions: plan.sessions
+                .map((session, index) => ({
+                  id: session.id,
+                  name: session.name ?? displayName(session.id, `Session ${index + 1}`),
+                  scheduledFor: session.scheduledFor,
+                }))
+                .filter((session) => !completed.has(session.id)),
+              allDone:
+                plan.sessions.length > 0 &&
+                plan.sessions.every((session) => completed.has(session.id)),
             }
           : undefined,
         ...(active ? { activeId: active.id, activeSets: active.sets.length } : {}),
@@ -153,36 +166,67 @@ export default function TodayPage() {
         </Surface>
       )}
 
-      {state.kind === 'ready' && state.plan && state.activeId === undefined && (
-        <Surface tone="card" aria-labelledby="plan-name">
-          <Stack gap={3}>
-            <Heading level={2} id="plan-name">
-              {displayName(state.plan.id, 'Your plan')}
-            </Heading>
-            <Stack as="ol" gap={2}>
-              {state.plan.sessions.map((session, index) => (
-                <li key={session.id}>
-                  <Stack gap={2}>
-                    <Text weight="label">
-                      {displayName(session.id, `Session ${index + 1}`)},{' '}
-                      {formatDate(Date.parse(session.scheduledFor), 'UTC')}
-                    </Text>
-                    <Button
-                      variant="primary"
-                      size="lg"
-                      expand
-                      {...(starting ? { busyLabel: 'Starting…' } : {})}
-                      onClick={() => void start(session.id)}
-                    >
-                      {messages.actions.startWorkout}
-                    </Button>
-                  </Stack>
-                </li>
-              ))}
+      {state.kind === 'ready' &&
+        state.plan?.allDone &&
+        state.plan.sessions.length === 0 &&
+        state.activeId === undefined && (
+          <Surface tone="plain" as="section" aria-labelledby="all-done">
+            <Stack gap={3}>
+              <Heading level={2} id="all-done">
+                {messages.today.doneHeading}
+              </Heading>
+              <Text>{messages.today.doneBody}</Text>
+              <Button variant="secondary" onClick={() => router.push('/history')}>
+                {messages.today.doneAction}
+              </Button>
             </Stack>
-          </Stack>
-        </Surface>
-      )}
+          </Surface>
+        )}
+
+      {state.kind === 'ready' &&
+        state.plan &&
+        state.plan.sessions.length > 0 &&
+        state.activeId === undefined && (
+          <Surface tone="card" aria-labelledby="plan-name">
+            <Stack gap={3}>
+              <Heading level={2} id="plan-name">
+                {state.plan.name}
+              </Heading>
+              <Stack as="ol" gap={2}>
+                {state.plan.sessions.map((session, index) => (
+                  <li key={session.id}>
+                    <Stack gap={2}>
+                      <Text weight="label">
+                        {session.name}, {formatDate(Date.parse(session.scheduledFor), 'UTC')}
+                      </Text>
+                      {state.plan && state.plan.sessions.length > 1 ? (
+                        <Button
+                          variant={index === 0 ? 'primary' : 'secondary'}
+                          expand
+                          {...(index === 0 ? { size: 'lg' as const } : {})}
+                          {...(starting ? { busyLabel: 'Starting…' } : {})}
+                          onClick={() => void start(session.id)}
+                        >
+                          {messages.actions.startNamed(session.name)}
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="primary"
+                          size="lg"
+                          expand
+                          {...(starting ? { busyLabel: 'Starting…' } : {})}
+                          onClick={() => void start(session.id)}
+                        >
+                          {messages.actions.startWorkout}
+                        </Button>
+                      )}
+                    </Stack>
+                  </li>
+                ))}
+              </Stack>
+            </Stack>
+          </Surface>
+        )}
     </Screen>
   );
 }

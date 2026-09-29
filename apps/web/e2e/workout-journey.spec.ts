@@ -166,16 +166,16 @@ test.describe('the workout journey', () => {
     await page.getByRole('button', { name: 'Log set' }).click();
     await expect(page.getByRole('cell', { name: '80 kilograms' })).toBeVisible();
     // Which exercise is current must reach assistive tech, not only the button's colour.
-    await expect(page.getByRole('button', { name: 'Back squat' })).toHaveAttribute(
+    await expect(page.getByRole('button', { name: 'Back squat', exact: true })).toHaveAttribute(
       'aria-pressed',
       'true',
     );
-    await expect(page.getByRole('button', { name: 'Bench press' })).toHaveAttribute(
+    await expect(page.getByRole('button', { name: 'Bench press', exact: true })).toHaveAttribute(
       'aria-pressed',
       'false',
     );
     await page.getByRole('button', { name: 'Bench press' }).click();
-    await expect(page.getByRole('button', { name: 'Bench press' })).toHaveAttribute(
+    await expect(page.getByRole('button', { name: 'Bench press', exact: true })).toHaveAttribute(
       'aria-pressed',
       'true',
     );
@@ -1108,12 +1108,12 @@ test.describe('plan-to-workout design conformance (VLA-14, P1 deltas)', () => {
       ),
     ).toBeVisible();
     await expect(page.getByText('100 kg × 3')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Back squat' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Bench press' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Back squat', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Bench press', exact: true })).toBeVisible();
     await expect(page.getByText('Exercise 1 of 2')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Finish workout' })).toBeVisible();
 
-    await page.getByRole('button', { name: 'Bench press' }).click();
+    await page.getByRole('button', { name: 'Bench press', exact: true }).click();
     await page.getByRole('button', { name: 'Log a set anyway' }).click();
     await expect(page.getByLabel('Target')).toHaveCount(0);
     await expect(page.getByRole('spinbutton', { name: 'Reps' })).toHaveValue('');
@@ -1127,5 +1127,22 @@ test.describe('plan-to-workout design conformance (VLA-14, P1 deltas)', () => {
     await expect(page.getByRole('heading', { name: 'Rest' })).toBeVisible();
     await expect(page.getByRole('cell', { name: '5', exact: true })).toBeVisible();
     await expect(page.getByRole('cell', { name: '100 kilograms' })).toHaveCount(0);
+  });
+
+  test('D-16: the empty control still asks for a side when the exercise is one-sided in the current plan', async ({
+    page,
+  }) => {
+    await openTodayWithPlan(page, { unilateral: true });
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForURL('**/workout');
+    await expect(page.getByRole('heading', { name: 'Split squat' })).toBeVisible();
+    await moveThePlanOn(page);
+    await page.reload();
+
+    await page.getByRole('button', { name: 'Log a set anyway' }).click();
+    await expect(page.getByLabel('Target')).toHaveCount(0);
+    const side = page.getByRole('group', { name: 'Side' });
+    await expect(side.getByRole('radio', { name: 'Left' })).toBeChecked();
+    await expect(page.getByRole('spinbutton', { name: 'Load' })).toHaveValue('');
   });
 });

@@ -25,6 +25,8 @@ type LogToRestProps = {
    * shows the interaction without performing it.
    */
   onLog?: () => Promise<boolean> | undefined;
+  /** A toast the page owns. It sits above the action bar, or alone at the bottom during rest. */
+  notice?: ReactNode;
 };
 
 type Mode = 'set' | 'leaving' | 'rest';
@@ -38,7 +40,14 @@ const HALF_CROSSFADE_MS = 100;
  * reduced motion), a haptic tick plays (haptics.def.log-tick), focus moves to the rest
  * heading, and a live region that was already on the page announces the save.
  */
-export function LogToRest({ set, rest, restHeadingId, savedAnnouncement, onLog }: LogToRestProps) {
+export function LogToRest({
+  set,
+  rest,
+  restHeadingId,
+  savedAnnouncement,
+  onLog,
+  notice,
+}: LogToRestProps) {
   const [mode, setMode] = useState<Mode>('set');
   const [saving, setSaving] = useState(false);
   const [announcement, setAnnouncement] = useState('');
@@ -81,15 +90,18 @@ export function LogToRest({ set, rest, restHeadingId, savedAnnouncement, onLog }
   return (
     <div className={styles.layout}>
       {mode === 'rest' ? (
-        <div className={styles.view} data-entering>
-          {rest}
-        </div>
+        <>
+          <div className={styles.view} data-entering>
+            {rest}
+          </div>
+          {notice ? <StickyActionBar notice={notice} /> : null}
+        </>
       ) : (
         <>
           <div className={styles.view} data-leaving={mode === 'leaving' || undefined}>
             {typeof set === 'function' ? set(log) : set}
           </div>
-          <StickyActionBar>
+          <StickyActionBar notice={notice}>
             <Button
               variant="primary"
               size="lg"
@@ -105,6 +117,30 @@ export function LogToRest({ set, rest, restHeadingId, savedAnnouncement, onLog }
       <p className="visually-hidden" role="status">
         {announcement}
       </p>
+    </div>
+  );
+}
+
+/**
+ * The Set Focus layout without the log-to-rest transition, for a set being edited in place:
+ * values and controls above, the one primary action in the sticky bar, and in a phone held
+ * sideways the same two panes as logging a set.
+ */
+export function SetFocusLayout({
+  children,
+  action,
+  notice,
+}: {
+  children: ReactNode;
+  action: ReactNode;
+  notice?: ReactNode;
+}) {
+  return (
+    <div className={styles.layout}>
+      <div className={styles.view} data-entering>
+        {children}
+      </div>
+      <StickyActionBar notice={notice}>{action}</StickyActionBar>
     </div>
   );
 }

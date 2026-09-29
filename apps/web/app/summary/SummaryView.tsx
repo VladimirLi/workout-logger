@@ -4,7 +4,6 @@ import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import {
   deviceTimeZone,
-  displayName,
   formatDate,
   Heading,
   ListRow,
@@ -19,7 +18,7 @@ import {
   Text,
   TopBar,
 } from '../../ui';
-import { type DisplaySyncState, readSession } from '../device';
+import { type DisplaySyncState, exerciseName, liveSets, readSession } from '../device';
 
 /**
  * A finished session (workout-logging spec, tasks 5.1 and 9.1).
@@ -37,7 +36,8 @@ interface SummaryView {
   readonly startedAt: number;
   readonly completedAt: number | undefined;
   readonly rows: readonly (SetRow & { exerciseId: string })[];
-  readonly exerciseIds: readonly string[];
+  /** Each exercise in session order, with the name the session kept for it. */
+  readonly exercises: readonly { readonly id: string; readonly name: string }[];
   readonly sync: DisplaySyncState | undefined;
 }
 
@@ -70,7 +70,7 @@ export function SummaryView() {
           status: session.status,
           startedAt: session.startedAt.getTime(),
           completedAt: session.status === 'completed' ? session.completedAt.getTime() : undefined,
-          rows: session.sets.map((set) => ({
+          rows: liveSets(session).map((set) => ({
             set: set.sequence,
             exerciseId: set.exerciseId,
             ...(set.measurement.profile === 'cardio' ? {} : { reps: set.measurement.repetitions }),
@@ -82,7 +82,10 @@ export function SummaryView() {
               ? { rir: set.measurement.exertion.rir.value }
               : {}),
           })),
-          exerciseIds: session.exerciseIds,
+          exercises: session.exerciseIds.map((id, index) => ({
+            id,
+            name: exerciseName(id, index, session.exerciseNames?.[id]),
+          })),
           sync,
         },
       });
@@ -147,13 +150,13 @@ export function SummaryView() {
             </Stack>
           </Surface>
 
-          {state.summary.exerciseIds.map((exerciseId, index) => (
-            <Stack key={exerciseId} gap={2}>
-              <Heading level={2}>{displayName(exerciseId, `Exercise ${index + 1}`)}</Heading>
+          {state.summary.exercises.map(({ id, name }) => (
+            <Stack key={id} gap={2}>
+              <Heading level={2}>{name}</Heading>
               <SetTable
-                caption={`Sets recorded for ${displayName(exerciseId, `Exercise ${index + 1}`)}`}
+                caption={`Sets recorded for ${name}`}
                 rows={state.summary.rows
-                  .filter((row) => row.exerciseId === exerciseId)
+                  .filter((row) => row.exerciseId === id)
                   .map((row, index) => ({ ...row, set: index + 1 }))}
               />
             </Stack>
