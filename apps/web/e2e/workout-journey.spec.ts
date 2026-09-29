@@ -441,6 +441,42 @@ test.describe('a phone held sideways (layout.landscape.two-pane)', () => {
     }
   });
 
+  for (const size of [
+    { width: 568, height: 320 },
+    { width: 667, height: 375 },
+    { width: 812, height: 375 },
+  ]) {
+    test(`keeps the Load and Reps labels readable beside their controls at ${size.width}x${size.height}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(size);
+      await openTodayWithPlan(page);
+      await page.getByRole('button', { name: 'Start workout' }).click();
+      await page.waitForURL('**/workout');
+      await expect(page.getByRole('button', { name: 'Log set' })).toBeVisible();
+
+      for (const name of ['Load', 'Reps']) {
+        const label = page.locator('label').filter({ hasText: new RegExp(`^${name}$`) });
+        await scrollWithinPane(label);
+        const text = await label.evaluate((element) => {
+          const range = document.createRange();
+          range.selectNodeContents(element);
+          const rect = range.getBoundingClientRect();
+          return { width: rect.width, x: rect.x, y: rect.y, height: rect.height };
+        });
+        // The words themselves, not the label box, must be whole and clear of every button.
+        expect(text.width, `${name} label is squeezed`).toBeGreaterThan(20);
+        for (const action of ['Decrease', 'Increase']) {
+          const button = await boxOf(
+            page.getByRole('button', { name: `${action} ${name.toLowerCase()}` }),
+          );
+          expect(overlaps(text, button), `${name} label sits under ${action}`).toBe(false);
+        }
+        expect(await isPainted(label), `${name} label is covered`).toBe(true);
+      }
+    });
+  }
+
   test('still shows rest after logging', async ({ page }) => {
     await openSetView(page, {});
     await page.getByRole('button', { name: 'Log set' }).click();
@@ -450,6 +486,28 @@ test.describe('a phone held sideways (layout.landscape.two-pane)', () => {
 });
 
 test.describe('the workout bar', () => {
+  test('makes no persistence claim and keeps a heading when the device store cannot be read', async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(window, 'indexedDB', { value: undefined, configurable: true });
+    });
+    await page.goto('/workout');
+    await expect(page.getByRole('status').or(page.getByRole('alert')).first()).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
+    await expect(page.getByText('On device')).toHaveCount(0);
+  });
+
+  test('makes no persistence claim when there is no workout to be on the device', async ({
+    page,
+  }) => {
+    await page.goto('/workout');
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'No workout in progress' }),
+    ).toBeVisible();
+    await expect(page.getByText('On device')).toHaveCount(0);
+  });
+
   test('carries sync in a portrait phone and closes to today', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
     await openTodayWithPlan(page);

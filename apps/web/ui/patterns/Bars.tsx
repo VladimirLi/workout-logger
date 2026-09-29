@@ -44,7 +44,8 @@ type WorkoutBarProps = {
   /** Where you are is shown only when both numbers are known; it is never guessed. */
   exercise?: number;
   exercises?: number;
-  sync: SyncState;
+  /** Omitted until something on the device has actually been read: no claim is made before that. */
+  sync?: SyncState;
   onClose?: () => void;
 };
 
@@ -62,7 +63,7 @@ export function WorkoutBar({ exercise, exercises, sync, onClose }: WorkoutBarPro
           ? messages.progress.exercise(exercise, exercises)
           : null}
       </p>
-      <SyncIndicator state={sync} />
+      {sync ? <SyncIndicator state={sync} /> : null}
     </header>
   );
 }

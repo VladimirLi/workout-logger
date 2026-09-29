@@ -113,18 +113,27 @@ export default function WorkoutPage() {
     <Screen
       bar={
         <WorkoutBar
-          // Nothing read yet means nothing waiting: whatever is logged is saved on the device.
-          sync={(state.kind === 'ready' && state.session.sync) || 'on-device'}
+          // A session read back means nothing waiting when no sync state is reported: it is on
+          // the device. Loading, no session and a failed read make no persistence claim.
+          {...(state.kind === 'ready' ? { sync: state.session.sync ?? 'on-device' } : {})}
           onClose={() => router.push('/today')}
         />
       }
     >
-      {state.kind === 'loading' && <Skeleton label="Loading the workout" />}
+      {state.kind === 'loading' && (
+        <Stack gap={3}>
+          <Heading level={1}>Workout</Heading>
+          <Skeleton label="Loading the workout" />
+        </Stack>
+      )}
 
       {state.kind === 'failed' && (
-        <StatusMessage kind="error" live="assertive">
-          {state.message}
-        </StatusMessage>
+        <Stack gap={3}>
+          <Heading level={1}>Workout</Heading>
+          <StatusMessage kind="error" live="assertive">
+            {state.message}
+          </StatusMessage>
+        </Stack>
       )}
 
       {state.kind === 'none' && (
@@ -179,10 +188,13 @@ export default function WorkoutPage() {
               }}
             />
           ) : (
-            <StatusMessage kind="warning">
-              This session has no prescription on this device, so there is nothing to log against.
-              The plan it was started from is not here.
-            </StatusMessage>
+            <>
+              <Heading level={1}>Workout</Heading>
+              <StatusMessage kind="warning">
+                This session has no prescription on this device, so there is nothing to log against.
+                The plan it was started from is not here.
+              </StatusMessage>
+            </>
           )}
 
           {deviceFull && (

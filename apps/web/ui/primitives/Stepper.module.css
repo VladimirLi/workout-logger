@@ -76,10 +76,21 @@
 }
 
 @media (orientation: landscape) and (max-height: 500px) {
+  /* The label sits beside the row when the pane has room for both, and above it when it does
+     not, so the row never paints over the label. */
   .stepper {
-    grid-template-columns: minmax(0, 1fr) auto;
+    display: flex;
+    flex-wrap: wrap;
     align-items: center;
     column-gap: var(--space-2);
+  }
+
+  .label {
+    flex: 1 1 auto;
+  }
+
+  .row {
+    flex: 0 0 auto;
   }
 
   .row {
