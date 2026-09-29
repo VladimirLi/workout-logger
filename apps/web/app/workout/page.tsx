@@ -196,7 +196,7 @@ function useWorkoutSession() {
    */
   const [refreshFailed, setRefreshFailed] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (): Promise<boolean> => {
     try {
       const [{ session, sync }, prescriptions] = await Promise.all([
         readActiveSession(),
@@ -204,7 +204,7 @@ function useWorkoutSession() {
       ]);
       if (!session) {
         setState({ kind: 'none' });
-        return;
+        return true;
       }
       const prescribed = prescriptions !== undefined && prescriptions.length > 0;
       const exercises = prescribed ? prescriptions : await readSessionExercises();
@@ -220,6 +220,7 @@ function useWorkoutSession() {
         },
       });
       setRefreshFailed(false);
+      return true;
     } catch (error) {
       console.error('workout not read', error);
       setRefreshFailed(true);
@@ -228,6 +229,7 @@ function useWorkoutSession() {
           ? current
           : { kind: 'failed', message: error instanceof Error ? error.message : String(error) },
       );
+      return false;
     }
   }, []);
 
@@ -506,6 +508,16 @@ function useFocusOnce(
   }, [focusAt, setFocusAt]);
 }
 
+function finishBody(stale: boolean, recorded: number): string {
+  const summary = 'Finishing takes you to the summary.';
+  return stale ? summary : `You have recorded ${messages.count.sets(recorded)}. ${summary}`;
+}
+
+/** A stale table would number the next set as the one just saved, so read again first. */
+async function startNextSet(stale: boolean, refresh: () => Promise<boolean>, advance: () => void) {
+  if (!stale || (await refresh())) advance();
+}
+
 function ReadyWorkout({
   session,
   selected,
@@ -515,6 +527,8 @@ function ReadyWorkout({
   changeFailure,
   pendingUndo,
   announcement,
+  stale,
+  onRefresh,
   onSelect,
   onLog,
   onFinish,
@@ -532,6 +546,9 @@ function ReadyWorkout({
   changeFailure: ChangeFailure | undefined;
   pendingUndo: PendingUndo | undefined;
   announcement: string;
+  /** The last read failed after a write, so the rows may be missing sets that are saved. */
+  stale: boolean;
+  onRefresh: () => Promise<boolean>;
   onSelect: (exerciseId: string) => void;
   onLog: (logged: LoggedSet) => Promise<boolean>;
   onFinish: () => void;
@@ -625,7 +642,9 @@ function ReadyWorkout({
             setNumber={rows.length + 1}
             notSaved={logFailed}
             {...(editing ? {} : { notice })}
-            onNextSet={() => setSetInProgress((n) => n + 1)}
+            onNextSet={() =>
+              void startNextSet(stale, onRefresh, () => setSetInProgress((n) => n + 1))
+            }
             onLog={onLog}
           />
         ) : (
@@ -678,7 +697,7 @@ function ReadyWorkout({
           trigger="Finish workout"
           triggerVariant="secondary"
           title="Finish this workout?"
-          body={`You have recorded ${messages.count.sets(session.rows.length)}. Finishing takes you to the summary.`}
+          body={finishBody(stale, session.rows.length)}
           confirm="Finish workout"
           cancel="Keep going"
           onConfirm={onFinish}
@@ -796,6 +815,8 @@ export default function WorkoutPage() {
           changeFailure={changeFailure}
           pendingUndo={pendingUndo}
           announcement={announcement}
+          stale={refreshFailed}
+          onRefresh={reload}
           onSelect={setExerciseId}
           onLog={(logged) => logSet(session.id, logged)}
           onFinish={() => void finish(session.id)}

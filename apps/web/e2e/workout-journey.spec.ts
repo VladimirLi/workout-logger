@@ -1637,9 +1637,27 @@ test.describe('plan-to-workout design conformance (VLA-14, P1 deltas)', () => {
     await expect.poll(() => failedReads).toBe(2);
     await expect(page.getByText('This screen could not be refreshed')).toBeVisible();
 
+    // The table is stale: it must not number the next set as the one already saved, nor
+    // tell Finish that nothing was recorded.
+    await page.getByRole('button', { name: 'Next set' }).click();
+    await expect.poll(() => failedReads).toBe(3);
+    await expect(page.getByRole('heading', { name: 'Rest' })).toBeVisible();
+    await expect(page.getByText('Set 1', { exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Finish workout' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Finish this workout?' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog).not.toContainText(/recorded \d+ sets?/);
+    await expect(dialog).not.toContainText('0 sets');
+    await dialog.getByRole('button', { name: 'Keep going' }).click();
+
     await page.evaluate(() => (window as unknown as { __restoreReads(): void }).__restoreReads());
-    await page.getByRole('button', { name: 'Retry' }).click();
+    await page.getByRole('button', { name: 'Next set' }).click();
     await expect(page.getByText('This screen could not be refreshed')).toHaveCount(0);
+    await expect(page.getByText('Set 2', { exact: true })).toBeVisible();
     await expect(page.getByRole('cell', { name: '80 kilograms' })).toHaveCount(1);
+    await page.getByRole('button', { name: 'Finish workout' }).click();
+    await expect(page.getByRole('dialog', { name: 'Finish this workout?' })).toContainText(
+      'You have recorded 1 set.',
+    );
   });
 });
