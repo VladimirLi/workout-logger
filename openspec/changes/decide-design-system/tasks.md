@@ -32,7 +32,9 @@
 - [x] 3.5 Verify the CSS budget, that no font ships, the icon budget, and layout shift below
       0.05 with `pnpm test:e2e` and `pnpm test`
 - [x] 3.6 Verify the centred column and the landscape two-pane with no scrolling at 667 x 375
-      with `pnpm test:e2e`
+      with `pnpm test:e2e`. Amended 2026-09-29 by `amend-landscape-two-pane`: the no-scroll rule
+      holds for an ordinary set only; a unilateral or combined-load set scrolls its controls
+      inside the right pane. The check as run covered an ordinary set.
 - [x] 3.7 Provide the Storybook lab selected by governance.lab.storybook, and verify it builds
       in `pnpm verify` (`pnpm storybook:build`), every story renders (`pnpm test:e2e`), and every
       story passes axe in both themes (`pnpm test:a11y`)

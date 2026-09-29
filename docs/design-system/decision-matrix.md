@@ -12,6 +12,11 @@ Validation status.
 
 ¹ Not the workbook's recommended option. Selected deliberately by the owner.
 
+² Amended after acceptance. The "Accepted meaning" text is the workbook's original quote and is
+kept as submitted. The owner accepted a narrower rule on 2026-09-29 (`amend-landscape-two-pane`,
+VLA-144): no scrolling applies to an ordinary set only. "Implemented in" and "Verified by"
+describe the amended rule.
+
 | Decision | Selected | Accepted meaning | Implemented in | Verified by |
 |---|---|---|---|---|
 | principles.density | `principles.density.split` | Calm workout, balanced history. Active workout keeps one focal object. History and settings use plain lists with more rows. | Set focus keeps one card; history and settings are plain rows (`apps/web/ui/reference/screens/`) | test:visual set-focus, history, settings baselines |
@@ -28,7 +33,7 @@ Validation status.
 | layout.base-unit | `layout.base-unit.four` | 4 px base. Scale 4, 8, 12, 16, 24, 32, 48, 64. Fine steps inside controls, 8 px rhythm between blocks. | Spacing scale 0–64 on a 4 px base (`apps/web/tokens/semantic.tokens.json` space) | tokens.test.ts spacing scale |
 | layout.wide-screen | `layout.wide-screen.centered-column` | Centered single column. Content max width 520 px, centered. Same structure as phone. Extra space stays empty. | One 520 px centred column (`apps/web/ui/patterns/Screen.module.css`) | design-system.spec.ts wide-screen column; test:visual wide projects |
 | layout.primary-action | `layout.primary-action.sticky-bottom` | Sticky bottom bar. Action bar fixed above the safe area. Content scrolls behind it with a separator. | Sticky action bar above the safe area with a separator (`apps/web/ui/patterns/Bars.tsx` StickyActionBar) | accessibility.spec.ts focus not hidden by the bar; test:visual |
-| layout.landscape | `layout.landscape.two-pane` | Two panes. Values left, adjust controls and action right. No scrolling at 667×375. | Two panes, action on the right, no scrolling at 667×375 (`apps/web/ui/patterns/LogToRest.module.css`, `apps/web/ui/patterns/Screen.module.css`) | design-system.spec.ts side-by-side and no-vertical-scroll tests |
+| layout.landscape | `layout.landscape.two-pane` ² | Two panes. Values left, adjust controls and action right. No scrolling at 667×375. | Two panes, action stays in view at the bottom of the right pane. An ordinary set needs no scrolling at 667×375; a unilateral or combined-load set scrolls its controls inside the right pane, above the action (`apps/web/ui/patterns/LogToRest.module.css`, `apps/web/ui/patterns/Screen.module.css`) | design-system.spec.ts side-by-side test and ordinary-set no-vertical-scroll test. **OPEN:** unilateral and combined-load coverage (`amend-landscape-two-pane` tasks 2.x, PR #34) |
 | shape.radius | `shape.radius.soft` | Soft. Controls 10 px, cards 14 px, sheets 20 px, chips fully round. Matches accepted mockups. | Radius tokens 10/14/20/full (`apps/web/tokens/semantic.tokens.json` radius) | tokens.test.ts accepted values |
 | shape.elevation | `shape.elevation.tonal` | Tonal layers. Lighter surface on darker background. Shadow only on overlays (sheets, dialogs, toasts). | Tonal surfaces; shadow token used only by Sheet, ConfirmDialog, UndoToast | css-modules.test.ts forbids raw shadows; test:visual |
 | shape.card-policy | `shape.card-policy.focal-groups` | Focal object and input groups. One card for Set Focus or rest timer. Grouped inputs share a sunken panel. Lists are plain rows. | Surface tones card, panel, plain; lists are ListRow (`apps/web/ui/primitives/Surface.tsx`, `apps/web/ui/primitives/ListRow.tsx`) | test:visual set-focus, rest, history |
