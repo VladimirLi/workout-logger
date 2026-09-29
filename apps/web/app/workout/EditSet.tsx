@@ -1,13 +1,6 @@
 'use client';
 
-import {
-  type FormEvent,
-  type ReactNode,
-  type SyntheticEvent,
-  useEffect,
-  useRef,
-  useState,
-} from 'react';
+import { type FormEvent, type ReactNode, useEffect, useRef, useState } from 'react';
 import {
   Button,
   formatLoadReps,
