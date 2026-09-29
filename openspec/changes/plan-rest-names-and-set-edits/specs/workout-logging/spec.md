@@ -39,7 +39,9 @@ readable form of its identifier. A name SHALL wrap and MUST NOT be truncated.
 While a session is active, the user SHALL be able to change the result of a recorded set in place.
 The exercise, the position and the recorded time MUST NOT change. The edit SHALL be seeded from
 the recorded values, labelled with the set's number, and saved with one action. Saving with no
-change MUST write nothing. Finishing the workout MUST NOT be offered while a set is being edited,
+change MUST write nothing. What the controls cannot show, such as an RIR of 5 or 3.5, a side other
+than left or right, and the set's notes, SHALL be kept as recorded unless the user changes that control.
+Finishing the workout MUST NOT be offered while a set is being edited,
 and the rest timer SHALL keep running.
 
 #### Scenario: Correcting a load
@@ -49,6 +51,10 @@ and the rest timer SHALL keep running.
 #### Scenario: Saving without a change
 - **WHEN** the user opens a set and saves without changing anything
 - **THEN** nothing is written and no confirmation of an update is shown
+
+#### Scenario: A recorded value the controls cannot show
+- **WHEN** the user opens a set recorded with an RIR of 3.5 and a note, changes only the reps and saves
+- **THEN** the set keeps the RIR of 3.5 and the note
 
 #### Scenario: The edit cannot be saved
 - **WHEN** saving the edit fails
@@ -102,6 +108,22 @@ Today SHALL list a `Start {session name}` action for each scheduled session of t
 finished, the first as the primary action and the others as secondary. A session that is completed
 SHALL no longer be listed. When no unfinished session remains for the day, Today SHALL say the
 day's workout is done, that the summary is saved on the device, and offer to see history.
+
+A session dated after today SHALL NOT be listed. A session dated today or earlier that has not been
+completed SHALL be listed. A completed workout counts for a scheduled session only when it started on
+or after the day the session is scheduled for, so a session moved to a later date is offered again.
+
+#### Scenario: A later date
+- **WHEN** the plan schedules a session for tomorrow
+- **THEN** Today does not list it
+
+#### Scenario: A moved session
+- **WHEN** a session completed on the 18th is rescheduled to the 29th and today is the 29th
+- **THEN** Today lists it
+
+#### Scenario: Nothing is scheduled yet
+- **WHEN** every session is dated after today
+- **THEN** Today says "Nothing scheduled for today" and gives the date of the next workout
 
 #### Scenario: Two sessions in a day
 - **WHEN** the plan schedules two sessions today and neither is finished

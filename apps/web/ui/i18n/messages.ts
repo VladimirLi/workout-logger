@@ -76,6 +76,8 @@ export const messages = {
     doneHeading: "Today's workout is done",
     doneBody: 'Your summary is saved on this device.',
     doneAction: 'See your history',
+    nothingDueHeading: 'Nothing scheduled for today',
+    nothingDueBody: (date: string) => `Your next workout is on ${date}.`,
   },
 
   rest: {

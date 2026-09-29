@@ -119,13 +119,9 @@ function toRow(set: ReturnType<typeof liveSets>[number]): Row {
     reps: strength.repetitions,
     // RIR as entered. The table's RPE is the domain's derivation, never a stored one.
     rir: strength.exertion?.rir.value,
-    side:
-      strength.profile === 'unilateral_strength'
-        ? strength.side === 'right'
-          ? 'right'
-          : 'left'
-        : undefined,
+    side: strength.profile === 'unilateral_strength' ? strength.side : undefined,
     loadSemantics: strength.profile === 'unilateral_strength' ? strength.loadSemantics : undefined,
+    notes: strength.notes,
   };
   return {
     set: set.sequence,
@@ -176,6 +172,14 @@ function useWorkoutSession() {
   const [state, setState] = useState<State>({ kind: 'loading' });
   /** Each write reads a whole session snapshot and puts it back, so writes must not overlap. */
   const busyRef = useRef(false);
+  /** Woken when a write ends, so a set, an edit or an undo tapped meanwhile waits its turn. */
+  const idleWaiters = useRef<(() => void)[]>([]);
+  const releaseBusy = () => {
+    busyRef.current = false;
+    for (const wake of idleWaiters.current.splice(0)) wake();
+  };
+  /** Not async: the caller must claim the turn in the same tick it finds it free. */
+  const nextRelease = () => new Promise<void>((resolve) => idleWaiters.current.push(resolve));
   /** A Done that did not land must say so, or the workout looks finished when it is not. */
   const [finishFailure, setFinishFailure] = useState<{ full: boolean }>();
   /** A write that did not land must say so: a silent failure looks exactly like a saved set. */
@@ -239,7 +243,7 @@ function useWorkoutSession() {
       console.error('finish failed', error);
       setFinishFailure({ full: false });
     } finally {
-      busyRef.current = false;
+      releaseBusy();
     }
   };
 
@@ -255,7 +259,7 @@ function useWorkoutSession() {
     run: () => Promise<{ readonly ok: boolean; readonly error?: unknown }>,
     retryWith?: { setId: string; number: number },
   ): Promise<boolean> => {
-    if (busyRef.current) return false;
+    while (busyRef.current) await nextRelease();
     busyRef.current = true;
     try {
       const result = await run();
@@ -274,7 +278,7 @@ function useWorkoutSession() {
       setChangeFailure({ op, full: false, ...(retryWith ?? {}) });
       return false;
     } finally {
-      busyRef.current = false;
+      releaseBusy();
     }
   };
 
@@ -299,8 +303,9 @@ function useWorkoutSession() {
   };
 
   const undoDelete = async (sessionId: string, target: { setId: string; number: number }) => {
-    setPendingUndo(undefined);
+    // The offer stays until this undo has its turn, so a write already running cannot eat it.
     const restored = await change('undo', () => restoreSet(sessionId, target.setId), target);
+    setPendingUndo((current) => (current?.setId === target.setId ? undefined : current));
     if (restored) announce(messages.set.restored(target.number));
     return restored;
   };
@@ -315,7 +320,7 @@ function useWorkoutSession() {
     sessionId: string,
     logged: Parameters<React.ComponentProps<typeof LogSet>['onLog']>[0],
   ): Promise<boolean> => {
-    if (busyRef.current) return false;
+    while (busyRef.current) await nextRelease();
     busyRef.current = true;
     try {
       const result = await logStrengthSet({
@@ -348,7 +353,7 @@ function useWorkoutSession() {
       setLogFailed(true);
       return false;
     } finally {
-      busyRef.current = false;
+      releaseBusy();
     }
   };
 
@@ -376,12 +381,7 @@ function recordedForEdit(
   selected: Prescription | undefined,
 ) {
   if (!row?.values || !selected) return undefined;
-  return {
-    ...row.values,
-    number: row.set,
-    // Where load cannot mean the total, what is stored is per side and is not a choice.
-    loadSemantics: selected.combinedLoadPermitted ? row.values.loadSemantics : undefined,
-  };
+  return { ...row.values, number: row.set };
 }
 
 function PlanChangedNotice({ onLogAnyway }: { onLogAnyway?: () => void }) {

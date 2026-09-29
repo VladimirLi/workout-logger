@@ -127,6 +127,63 @@ async function logSet(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Next set' }).click();
 }
 
+/** Rewrites the active session's first set in the device store, as an import or an agent could have left it. */
+async function rewriteFirstSet(page: Page, patch: Record<string, unknown>): Promise<void> {
+  await page.evaluate(async (fields) => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('workout');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    await new Promise<void>((resolve, reject) => {
+      const transaction = database.transaction('sessions', 'readwrite');
+      const cursor = transaction.objectStore('sessions').openCursor();
+      cursor.onsuccess = () => {
+        const at = cursor.result;
+        if (!at) return;
+        const { session } = at.value as {
+          session: { status: string; sets: { measurement: object }[] };
+        };
+        if (session.status === 'active' && session.sets[0]) {
+          Object.assign(session.sets[0].measurement, fields);
+          at.update(at.value);
+        }
+        at.continue();
+      };
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+    database.close();
+  }, patch);
+}
+
+/** A strength exertion as the domain stores it, for a set an import left with this RIR. */
+const exertionOf = (rir: number) => ({
+  exertion: {
+    profile: 'strength',
+    rir: { kind: 'rir', value: rir },
+    rpe: { kind: 'rpe_derived', value: Math.max(1, 10 - rir) },
+  },
+});
+
+/** How many mutations are queued to sync: an edit that wrote something adds one. */
+async function queuedMutations(page: Page): Promise<number> {
+  return page.evaluate(async () => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('workout');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const count = await new Promise<number>((resolve, reject) => {
+      const request = database.transaction('outbox', 'readonly').objectStore('outbox').count();
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    database.close();
+    return count;
+  });
+}
+
 const primaries = (page: Page) => page.locator('button[data-variant="primary"]:visible');
 
 test.describe('plan-carried rest (D-21)', () => {
@@ -278,6 +335,60 @@ test.describe('several sessions on Today (D-22, D-26)', () => {
     await page.getByRole('button', { name: 'See your history' }).click();
     await page.waitForURL('**/history');
   });
+  test('offers only what is scheduled for today or earlier, and an old completion does not count for a moved session', async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(new Date('2026-09-29T10:00:00Z'));
+    const plan: SeedPlan = {
+      name: 'Autumn strength block',
+      sessions: [
+        { ...PUSH_DAY, scheduledFor: '2026-09-29' },
+        {
+          id: 'c5f3e4d6-7d80-49ba-9c2d-3e4f5a6b7c8d',
+          name: 'Later this week',
+          scheduledFor: '2026-09-30',
+          exercises: [BENCH],
+        },
+      ],
+    };
+    await openToday(page, plan);
+    await expect(page.getByRole('button', { name: 'Start workout' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Later this week/ })).toHaveCount(0);
+
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForURL('**/workout');
+    await page.getByRole('button', { name: 'Log set' }).click();
+    await finishWorkout(page);
+    await page.waitForURL('**/summary?session=**');
+
+    await page.goto('/today');
+    await expect(page.getByRole('heading', { name: "Today's workout is done" })).toBeVisible();
+
+    // The same session, moved to tomorrow: the workout done today is not tomorrow's.
+    await page.evaluate(
+      (moved) =>
+        (window as unknown as { __seedPlan(plan: unknown): Promise<void> }).__seedPlan(moved),
+      {
+        revision: 2,
+        name: 'Autumn strength block',
+        sessions: [{ ...PUSH_DAY, scheduledFor: '2026-09-30' }],
+      },
+    );
+    await page.clock.setFixedTime(new Date('2026-09-30T10:00:00Z'));
+    await page.reload();
+    await expect(page.getByRole('button', { name: 'Start workout' })).toBeVisible();
+  });
+
+  test('says when nothing is scheduled yet', async ({ page }) => {
+    await page.clock.setFixedTime(new Date('2026-09-29T10:00:00Z'));
+    await openToday(page, {
+      name: 'Autumn strength block',
+      sessions: [{ ...PUSH_DAY, scheduledFor: '2026-10-02' }],
+    });
+    await expect(page.getByRole('heading', { name: 'Nothing scheduled for today' })).toBeVisible();
+    await expect(page.getByText(/Your next workout is on/)).toBeVisible();
+    await expect(page.getByRole('button', { name: /Start/ })).toHaveCount(0);
+  });
 });
 
 test.describe('editing a recorded set (D-23, D-25)', () => {
@@ -358,6 +469,74 @@ test.describe('editing a recorded set (D-23, D-25)', () => {
   }
 });
 
+test.describe('opening a recorded set never rewrites it', () => {
+  for (const rir of [5, 3.5]) {
+    test(`saving an RIR of ${rir} untouched writes nothing`, async ({ page }) => {
+      await startWorkout(page, ONE_SESSION);
+      await logSet(page);
+      await rewriteFirstSet(page, { ...exertionOf(rir), notes: 'Belt on, felt heavy' });
+      await page.reload();
+      const before = await queuedMutations(page);
+
+      await page.getByRole('button', { name: 'Edit set 1, Back squat' }).click();
+      await page.getByRole('button', { name: 'Save changes' }).click();
+      await expect(page.getByRole('button', { name: 'Edit set 1, Back squat' })).toBeFocused();
+      expect(await queuedMutations(page)).toBe(before);
+    });
+  }
+
+  test('changing the reps keeps the recorded RIR and the note', async ({ page }) => {
+    await startWorkout(page, ONE_SESSION);
+    await logSet(page);
+    await rewriteFirstSet(page, { ...exertionOf(3.5), notes: 'Belt on, felt heavy' });
+    await page.reload();
+
+    await page.getByRole('button', { name: 'Edit set 1, Back squat' }).click();
+    await page.getByRole('spinbutton', { name: 'Reps' }).fill('6');
+    await page.getByRole('button', { name: 'Save changes' }).click();
+    await expect(page.getByRole('cell', { name: '6', exact: true })).toBeVisible();
+
+    const stored = await page.evaluate(async () => {
+      const database = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open('workout');
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      const records = await new Promise<
+        { session: { sets: { measurement: unknown; deletedAt?: Date }[] } }[]
+      >((resolve, reject) => {
+        const request = database
+          .transaction('sessions', 'readonly')
+          .objectStore('sessions')
+          .getAll();
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      database.close();
+      return records.flatMap((record) => record.session.sets).map((set) => set.measurement);
+    });
+    expect(stored[0]).toMatchObject({
+      repetitions: 6,
+      notes: 'Belt on, felt heavy',
+      exertion: { rir: { value: 3.5 } },
+    });
+  });
+
+  test('a picked RIR replaces the recorded one', async ({ page }) => {
+    await startWorkout(page, ONE_SESSION);
+    await logSet(page);
+    await rewriteFirstSet(page, exertionOf(5));
+    await page.reload();
+    const before = await queuedMutations(page);
+
+    await page.getByRole('button', { name: 'Edit set 1, Back squat' }).click();
+    await page.getByRole('radio', { name: '2', exact: true }).check();
+    await page.getByRole('button', { name: 'Save changes' }).click();
+    await expect(page.getByRole('button', { name: 'Edit set 1, Back squat' })).toBeFocused();
+    expect(await queuedMutations(page)).toBe(before + 1);
+  });
+});
+
 test.describe('deleting a recorded set (D-24)', () => {
   test('deletes at once, closes the numbers up, and undo puts the set back where it was', async ({
     page,
@@ -408,6 +587,30 @@ test.describe('deleting a recorded set (D-24)', () => {
     await page.getByRole('button', { name: 'Delete set' }).click();
     await expect(page.getByRole('status').filter({ hasText: 'Set 1 deleted' })).toHaveCount(1);
     await expect(page.getByRole('button', { name: 'Undo' })).toHaveCount(1);
+  });
+
+  test('an undo tapped while a set is being logged waits its turn and still restores the set', async ({
+    page,
+  }) => {
+    await startWorkout(page, ONE_SESSION);
+    await logSet(page);
+    await logSet(page);
+    await page.getByRole('button', { name: 'Edit set 1, Back squat' }).click();
+    await page.getByRole('button', { name: 'Delete set' }).click();
+    await expect(page.getByRole('button', { name: 'Undo' })).toBeVisible();
+
+    // Both taps land in one task, so the log is still being written when Undo is pressed.
+    await page.evaluate(() => {
+      const press = (label: string) =>
+        [...document.querySelectorAll('button')]
+          .find((button) => button.textContent?.trim().endsWith(label))
+          ?.click();
+      press('Log set');
+      press('Undo');
+    });
+
+    await expect(page.getByRole('button', { name: 'Edit set 3, Back squat' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Undo' })).toHaveCount(0);
   });
 
   test('a delete is final once the toast expires', async ({ page }) => {

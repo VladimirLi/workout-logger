@@ -11,6 +11,9 @@ import { RirPicker, Segmented, Stack, Stepper, Surface } from '../../ui';
  * read from the surrounding form at the moment they are needed - one source of truth.
  */
 
+/** The picker offers left and right; a recorded set can carry more (imported data). */
+export type StoredSide = 'left' | 'right' | 'both' | 'alternating';
+
 export interface SetValues {
   /** Undefined only for a set with no load: left empty when logging without a prescription. */
   readonly loadKg: number | undefined;
@@ -18,9 +21,11 @@ export interface SetValues {
   /** Undefined when the lifter left RIR alone: exertion is optional, not assumed. */
   readonly rir: number | undefined;
   /** Present for a unilateral exercise, absent otherwise. Never inferred. */
-  readonly side: 'left' | 'right' | undefined;
+  readonly side: StoredSide | undefined;
   /** Present only where combined load was on offer; per side is the default. */
   readonly loadSemantics: 'per_side' | 'total' | undefined;
+  /** Carried through an edit untouched: the controls do not offer notes. */
+  readonly notes?: string | undefined;
 }
 
 export interface SetControlsConfig {
@@ -34,8 +39,22 @@ export interface SetControlDefaults {
   readonly loadKg?: number | undefined;
   readonly reps?: number | undefined;
   readonly rir?: number | undefined;
-  readonly side?: 'left' | 'right' | undefined;
+  readonly side?: StoredSide | undefined;
   readonly loadSemantics?: 'per_side' | 'total' | undefined;
+}
+
+/**
+ * The RIR the picker can show for a recorded one: whole numbers 0 to 3, and 4+ for anything
+ * from 4 up. Half steps have no button, so none is selected rather than a wrong one.
+ */
+export function pickerRir(rir: number | undefined): number | undefined {
+  if (rir === undefined || !Number.isInteger(rir)) return undefined;
+  return Math.min(4, rir);
+}
+
+/** The side the picker can show for a recorded one; both and alternating have no button. */
+export function pickerSide(side: StoredSide | undefined): 'left' | 'right' | undefined {
+  return side === 'left' || side === 'right' ? side : undefined;
 }
 
 export function SetControls({
@@ -52,7 +71,7 @@ export function SetControls({
           <Segmented
             legend="Side"
             name="side"
-            defaultValue={defaults.side ?? 'left'}
+            defaultValue={pickerSide(defaults.side) ?? 'left'}
             options={[
               { value: 'left', label: 'Left' },
               { value: 'right', label: 'Right' },
@@ -84,8 +103,8 @@ export function SetControls({
           />
         )}
         <RirPicker
-          {...(defaults.rir !== undefined
-            ? { defaultValue: String(Math.min(4, defaults.rir)) }
+          {...(pickerRir(defaults.rir) !== undefined
+            ? { defaultValue: String(pickerRir(defaults.rir)) }
             : {})}
         />
       </Stack>

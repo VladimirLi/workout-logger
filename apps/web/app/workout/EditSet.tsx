@@ -16,6 +16,8 @@ import {
 } from '../../ui';
 import { downloadEverything } from '../device';
 import {
+  pickerRir,
+  pickerSide,
   readSetValues,
   type SetControlDefaults,
   SetControls,
@@ -41,6 +43,23 @@ export interface RecordedValues extends SetValues {
 
 /** What went wrong with the last attempt to save or delete, for the message shown here. */
 export type EditFailure = { readonly op: 'save' | 'delete'; readonly full: boolean };
+
+/**
+ * What to save: what the controls say, except where the lifter did not touch a control that
+ * cannot show the recorded value (an RIR of 5 or 3.5, a side of both). Those keep what was
+ * recorded, so opening a set and saving it never rewrites a measurement.
+ */
+function withUntouched(read: SetValues, recorded: SetValues): SetValues {
+  const shownSide = pickerSide(recorded.side) ?? 'left';
+  return {
+    ...read,
+    rir: read.rir === pickerRir(recorded.rir) ? recorded.rir : read.rir,
+    side:
+      read.side === undefined || read.side === shownSide ? (recorded.side ?? read.side) : read.side,
+    loadSemantics: read.loadSemantics ?? recorded.loadSemantics,
+    notes: recorded.notes,
+  };
+}
 
 const same = (a: SetValues, b: SetValues) =>
   a.loadKg === b.loadKg &&
@@ -90,9 +109,10 @@ export function EditSet({
 
   const save = () =>
     run('save', async () => {
-      const values = readSetValues(form.current, config, {});
-      setRepsMissing(values === undefined);
-      if (!values) return false;
+      const read = readSetValues(form.current, config, recorded);
+      setRepsMissing(read === undefined);
+      if (!read) return false;
+      const values = withUntouched(read, recorded);
       // Nothing changed: close without writing, as Cancel does.
       if (same(values, recorded)) {
         onCancel();

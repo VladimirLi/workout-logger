@@ -49,6 +49,7 @@ import {
   type Proposal,
   type Result,
   type Side,
+  sessionsDue,
   strengthExertion,
   strengthMeasurement,
   unilateralStrengthMeasurement,
@@ -181,6 +182,17 @@ export async function restoreDeletedHistory() {
   return recoverDeletion(ports, await ports.userId());
 }
 
+/** The calendar day an instant falls on where the lifter is, as YYYY-MM-DD. */
+function localDate(instant: Date): string {
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  return new Intl.DateTimeFormat('en-CA', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    timeZone: zone,
+  }).format(instant);
+}
+
 /** What the plan screen needs: the plan as last downloaded, and any session in progress. */
 export async function readToday() {
   const { ports, userId } = deviceOf();
@@ -189,15 +201,20 @@ export async function readToday() {
     ports.plans.activePlan(user),
     ports.store.activeSession(user),
   ]);
-  // A scheduled session with a finished workout is done: Today stops offering it (spec D-26).
+  const today = localDate(ports.clock.now());
+  // Finished workouts of this plan tell Today what is already done (spec D-26).
   const completed = plan
-    ? new Set(
-        (await deviceOf().archive.sessions(user))
-          .filter((session) => session.status === 'completed' && session.planId === plan.id)
-          .map((session) => session.scheduledSessionId),
-      )
-    : new Set<string>();
-  return { user, plan, active, completed };
+    ? (await deviceOf().archive.sessions(user))
+        .filter((session) => session.status === 'completed' && session.planId === plan.id)
+        .map((session) => ({
+          scheduledSessionId: session.scheduledSessionId,
+          startedOn: localDate(session.startedAt),
+        }))
+    : [];
+  const { due, allDone, nextOn } = plan
+    ? sessionsDue(plan.sessions, completed, today)
+    : { due: [], allDone: false, nextOn: undefined };
+  return { user, plan, active, due, allDone, nextOn };
 }
 
 export async function readSession(sessionId: string) {
@@ -318,6 +335,8 @@ type StrengthValues = {
   readonly side?: Side | undefined;
   /** Only ever 'total' where the plan permitted it; the domain refuses it otherwise. */
   readonly loadSemantics?: LoadSemantics | undefined;
+  /** Carried through an edit; the controls never set it. */
+  readonly notes?: string | undefined;
 };
 
 function strengthFrom(command: StrengthValues): Result<Measurement, unknown> {
@@ -330,6 +349,7 @@ function strengthFrom(command: StrengthValues): Result<Measurement, unknown> {
     repetitions: command.reps,
     ...(load?.ok ? { load: load.value } : {}),
     ...(exertion?.ok ? { exertion: exertion.value } : {}),
+    ...(command.notes !== undefined ? { notes: command.notes } : {}),
   };
   return command.side
     ? unilateralStrengthMeasurement({

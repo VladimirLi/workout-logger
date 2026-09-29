@@ -34,7 +34,7 @@
 
 - [x] 4.1 Start the rest timer from the plan's rest, with the 90 second fallback (`playwright test`: plan-names-and-set-edits.spec.ts, plan-carried rest)
 - [x] 4.2 Show names from the session snapshot with the identifier fallback, wrapped (same spec, names)
-- [x] 4.3 Today with several sessions and the finished-day state (same spec, several sessions on Today)
+- [x] 4.3 Today with several sessions, the finished-day state and the date rules (same spec, several sessions on Today; `packages/domain/src/plan-schedule.test.ts`)
 - [x] 4.4 Edit a set in the Set Focus layout, and the Edit column on the set table (same spec, editing a recorded set)
 - [x] 4.5 Delete a set with the 10 second Undo above the sticky action bar (same spec, deleting a recorded set)
 - [x] 4.6 End-to-end tests for the journeys above at 375 by 667 (same spec, at 375 by 667 and 667 by 375)

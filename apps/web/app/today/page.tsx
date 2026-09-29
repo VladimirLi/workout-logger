@@ -55,8 +55,10 @@ interface PlanView {
     readonly name: string;
     readonly scheduledFor: string;
   }[];
-  /** The plan has sessions, and every one of them has been completed (spec T-6). */
+  /** Something is scheduled for today or earlier, and all of it is done (spec T-6). */
   readonly allDone: boolean;
+  /** When nothing is due or done yet: the day the next session is scheduled for. */
+  readonly nextOn?: string;
 }
 
 export default function TodayPage() {
@@ -66,22 +68,21 @@ export default function TodayPage() {
 
   const load = useCallback(async () => {
     try {
-      const { plan, active, completed } = await readToday();
+      const { plan, active, due, allDone, nextOn } = await readToday();
       setState({
         kind: 'ready',
         plan: plan
           ? {
               name: plan.name ?? displayName(plan.id, 'Your plan'),
-              sessions: plan.sessions
-                .map((session, index) => ({
-                  id: session.id,
-                  name: session.name ?? displayName(session.id, `Session ${index + 1}`),
-                  scheduledFor: session.scheduledFor,
-                }))
-                .filter((session) => !completed.has(session.id)),
-              allDone:
-                plan.sessions.length > 0 &&
-                plan.sessions.every((session) => completed.has(session.id)),
+              sessions: due.map((session) => ({
+                id: session.id,
+                name:
+                  session.name ??
+                  displayName(session.id, `Session ${plan.sessions.indexOf(session) + 1}`),
+                scheduledFor: session.scheduledFor,
+              })),
+              allDone,
+              ...(nextOn !== undefined ? { nextOn } : {}),
             }
           : undefined,
         ...(active ? { activeId: active.id, activeSets: active.sets.length } : {}),
@@ -176,6 +177,28 @@ export default function TodayPage() {
                 {messages.today.doneHeading}
               </Heading>
               <Text>{messages.today.doneBody}</Text>
+              <Button variant="secondary" onClick={() => router.push('/history')}>
+                {messages.today.doneAction}
+              </Button>
+            </Stack>
+          </Surface>
+        )}
+
+      {state.kind === 'ready' &&
+        state.plan &&
+        !state.plan.allDone &&
+        state.plan.sessions.length === 0 &&
+        state.activeId === undefined && (
+          <Surface tone="plain" as="section" aria-labelledby="nothing-due">
+            <Stack gap={3}>
+              <Heading level={2} id="nothing-due">
+                {messages.today.nothingDueHeading}
+              </Heading>
+              {state.plan.nextOn !== undefined && (
+                <Text>
+                  {messages.today.nothingDueBody(formatDate(Date.parse(state.plan.nextOn), 'UTC'))}
+                </Text>
+              )}
               <Button variant="secondary" onClick={() => router.push('/history')}>
                 {messages.today.doneAction}
               </Button>
