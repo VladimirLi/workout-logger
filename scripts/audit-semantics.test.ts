@@ -250,13 +250,13 @@ describe('end to end: the real gate against a local advisory registry', () => {
     }
   }
 
-  const advisory = (id: number, severity: string) => ({
+  const advisory = (id: number, severity: string, vulnerableVersions = '*') => ({
     id,
     url: `https://example.invalid/${id}`,
     title: `Synthetic ${severity} advisory`,
     severity,
-    // Any version: a pinned range stops matching after a routine dependency bump.
-    vulnerable_versions: '*',
+    // Default to any version: a hard-coded range stops matching after a routine dependency bump.
+    vulnerable_versions: vulnerableVersions,
     cwe: [],
     cvss: { score: 0 },
     github_advisory_id: `GHSA-synt-hetc-${String(id).padStart(4, '0')}`,
@@ -267,6 +267,18 @@ describe('end to end: the real gate against a local advisory registry', () => {
     expect(gate.status).toBe(1);
     expect(gate.output).toContain('1 high/critical advisories');
     expect(gate.output).toContain('Synthetic high advisory');
+  }, 120_000);
+
+  it('honors vulnerable_versions ranges: matches the installed version, skips a range that excludes it', async () => {
+    const lockfile = readFileSync('pnpm-lock.yaml', 'utf8');
+    const installed = /^ {2}zod@(\d+\.\d+\.\d+):$/m.exec(lockfile)?.[1];
+    expect(installed).toBeDefined();
+    const hit = await gateAgainst({ zod: [advisory(9105, 'high', `<=${installed}`)] });
+    expect(hit.status).toBe(1);
+    expect(hit.output).toContain('1 high/critical advisories');
+    const miss = await gateAgainst({ zod: [advisory(9106, 'high', '<0.0.1')] });
+    expect(miss.status).toBe(0);
+    expect(miss.output).not.toContain('Synthetic high advisory');
   }, 120_000);
 
   it('blocks a real critical advisory on an installed package', async () => {
