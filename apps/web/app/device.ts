@@ -48,6 +48,7 @@ import {
   strengthMeasurement,
   unilateralStrengthMeasurement,
 } from '@workout/domain';
+import { displayName } from '../ui';
 
 /**
  * The browser composition root (ADR-0001): the only place that knows which adapter implements
@@ -60,6 +61,10 @@ import {
  * Next.js renders on the server, and a module that reached for it at import time would break
  * the build rather than the page.
  */
+
+/** A name for an exercise: its id read as words, or its position where the id is not words. */
+export const exerciseName = (exerciseId: string, index: number): string =>
+  displayName(exerciseId, `Exercise ${index + 1}`);
 
 /**
  * The design system names the three sync states differently from the application port
@@ -181,34 +186,79 @@ export async function readSession(sessionId: string) {
   return { user, session, sync: displaySyncState(deriveSyncState(pending)) };
 }
 
+export async function readHistory() {
+  const { archive, userId } = deviceOf();
+  return (await archive.sessions(await userId()))
+    .filter((session) => session.status === 'completed')
+    .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime());
+}
+
 /**
- * The prescription the active session is working through, from the plan it was started from.
+ * Prescriptions for the active session's exercises, in their scheduled order.
  *
- * The first exercise of the scheduled session: moving between exercises is product behaviour
- * the workout-logging spec does not describe yet, so nothing here invents an order.
+ * Read only from the plan revision the session was started on. The device keeps one record
+ * per plan, so a downloaded new revision overwrites the old one; taking targets from whatever
+ * is active now would silently retarget a workout already in progress. A started workout is a
+ * snapshot (session.ts) and the screen must not contradict it, so a revision that no longer
+ * matches counts as "the plan this was started from is not on this device" and yields no
+ * prescription at all rather than numbers nobody prescribed.
  */
-export async function readActivePrescription() {
+export async function readActivePrescriptions() {
   const { ports, userId } = deviceOf();
   const user = await userId();
   const session = await ports.store.activeSession(user);
   if (!session) return undefined;
   const plan = await ports.plans.activePlan(user);
+  if (plan?.id !== session.planId || plan.revision !== session.planRevision) return undefined;
+  const scheduled = plan.sessions.find((item) => item.id === session.scheduledSessionId);
+  return scheduled?.exercises.flatMap((exercise, index) => {
+    if (
+      !session.exerciseIds.includes(exercise.exerciseId) ||
+      exercise.prescription.profile === 'cardio'
+    ) {
+      return [];
+    }
+    return [
+      {
+        exerciseId: exercise.exerciseId,
+        name: exerciseName(exercise.exerciseId, index),
+        target: {
+          loadKg: exercise.prescription.load?.value ?? 0,
+          reps: exercise.prescription.repetitions,
+        },
+        // The plan has no rest length; use the design-system default.
+        restSeconds: 90,
+        unilateral: exercise.prescription.profile === 'unilateral_strength',
+        combinedLoadPermitted: session.combinedLoadExercises.includes(exercise.exerciseId),
+      },
+    ];
+  });
+}
+
+/**
+ * The active session's exercises with no prescription attached, for logging when the plan
+ * revision the session started on is gone. Names and combined-load permission come from the
+ * session's own snapshot. Whether an exercise is one-sided is not in the snapshot, so it is
+ * read from the current plan when the exercise is still there; that is a kind of exercise,
+ * never a target, so no number from a later revision reaches the screen.
+ */
+export async function readSessionExercises() {
+  const { ports, userId } = deviceOf();
+  const user = await userId();
+  const session = await ports.store.activeSession(user);
+  if (!session) return [];
+  const plan = await ports.plans.activePlan(user);
   const scheduled = plan?.sessions.find((item) => item.id === session.scheduledSessionId);
-  const exercise = scheduled?.exercises[0];
-  if (!exercise || exercise.prescription.profile === 'cardio') return undefined;
-  return {
-    exerciseId: exercise.exerciseId,
-    name: exercise.exerciseId,
-    loadKg: exercise.prescription.load?.value ?? 0,
-    reps: exercise.prescription.repetitions,
-    // The rest length is a design-system default (feedback defaults); the plan does not carry
-    // one, and inventing a per-exercise rest would be inventing product behaviour.
+  return session.exerciseIds.map((exerciseId, index) => ({
+    exerciseId,
+    name: exerciseName(exerciseId, index),
+    target: undefined,
     restSeconds: 90,
-    unilateral: exercise.prescription.profile === 'unilateral_strength',
-    // Offered only where the plan says so, and the session's own snapshot is what the domain
-    // will check against (owner decision 2026-09-18).
-    combinedLoadPermitted: session.combinedLoadExercises.includes(exercise.exerciseId),
-  };
+    unilateral:
+      scheduled?.exercises.find((exercise) => exercise.exerciseId === exerciseId)?.prescription
+        .profile === 'unilateral_strength',
+    combinedLoadPermitted: session.combinedLoadExercises.includes(exerciseId),
+  }));
 }
 
 export async function readActiveSession() {
@@ -241,7 +291,8 @@ export async function startToday(scheduledSessionId: string) {
 export async function logStrengthSet(command: {
   readonly sessionId: string;
   readonly exerciseId: string;
-  readonly loadKg: number;
+  /** Undefined for a bodyweight set, or a set logged without a prescription and no load. */
+  readonly loadKg: number | undefined;
   readonly reps: number;
   readonly rir: number | undefined;
   /** Present for a unilateral exercise; the domain refuses one without a side. */
@@ -249,14 +300,14 @@ export async function logStrengthSet(command: {
   /** Only ever 'total' where the plan permitted it; the domain refuses it otherwise. */
   readonly loadSemantics?: LoadSemantics | undefined;
 }): Promise<Result<unknown, unknown>> {
-  const load = kilograms(command.loadKg);
-  if (!load.ok) return load;
+  const load = command.loadKg === undefined ? undefined : kilograms(command.loadKg);
+  if (load && !load.ok) return load;
   const exertion = command.rir === undefined ? undefined : strengthExertion(command.rir);
   if (exertion && !exertion.ok) return exertion;
 
   const shared = {
     repetitions: command.reps,
-    load: load.value,
+    ...(load?.ok ? { load: load.value } : {}),
     ...(exertion?.ok ? { exertion: exertion.value } : {}),
   };
   const measurement = command.side

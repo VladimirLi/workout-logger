@@ -79,6 +79,11 @@ export function formatDate(epochMs: number, timeZone: string): string {
   }).format(epochMs);
 }
 
+/** The zone an instant is shown in when the record has none of its own: the device's. */
+export function deviceTimeZone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+}
+
 /** Accepts a decimal comma or a decimal point (i18n.def.decimal). */
 export function parseDecimal(input: string): number | undefined {
   const normalised = input.trim().replace(',', '.');
@@ -95,6 +100,19 @@ export function formatDateTime(epochMs: number, timeZone: string): string {
     timeZone,
   }).format(epochMs);
   return `${formatDate(epochMs, timeZone)}, ${time}`;
+}
+
+const READABLE_ID = /^[A-Za-z]+(?:[-_][A-Za-z]+)*$/;
+
+/**
+ * content.def.terms: an identifier is never shown to the user. A slug that reads as words is
+ * de-slugged ("barbell-back-squat" becomes "Barbell back squat"); anything else - a UUID, a
+ * prefixed key, a slug carrying digits - is not words, so the caller's fallback is used.
+ */
+export function displayName(id: string, fallback: string): string {
+  if (!READABLE_ID.test(id)) return fallback;
+  const words = id.replaceAll(/[-_]/g, ' ').toLowerCase();
+  return `${words.charAt(0).toUpperCase()}${words.slice(1)}`;
 }
 
 function formatReps(repetitions: number): string {

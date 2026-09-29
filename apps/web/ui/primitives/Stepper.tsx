@@ -34,7 +34,8 @@ const QUANTITIES = {
 
 type StepperProps = {
   quantity: keyof typeof QUANTITIES;
-  defaultValue: number;
+  /** Absent for a stepper that starts empty: nothing is implied until the lifter enters it. */
+  defaultValue?: number;
   /** Submits the committed value with a surrounding form under this name. */
   name?: string;
 };
@@ -50,11 +51,11 @@ export function Stepper({ quantity, defaultValue, name }: StepperProps) {
   const id = useId();
   const { label, unit, step, max, normalise, speak } = QUANTITIES[quantity];
   const noun = label.toLowerCase();
-  const [value, setValue] = useState(defaultValue);
+  const [value, setValue] = useState<number | undefined>(defaultValue);
   const [draft, setDraft] = useState<string | undefined>(undefined);
 
   const clamp = (next: number) => Math.min(max, Math.max(0, normalise(next)));
-  const change = (delta: number) => setValue((current) => clamp(current + delta));
+  const change = (delta: number) => setValue((current) => clamp((current ?? 0) + delta));
 
   const commit = () => {
     const parsed = draft === undefined ? undefined : parseDecimal(draft);
@@ -75,7 +76,7 @@ export function Stepper({ quantity, defaultValue, name }: StepperProps) {
 
   return (
     <div className={styles.stepper}>
-      {name ? <input type="hidden" name={name} value={value} /> : null}
+      {name ? <input type="hidden" name={name} value={value ?? ''} /> : null}
       <label className={styles.label} htmlFor={id}>
         {label}
       </label>
@@ -99,8 +100,8 @@ export function Stepper({ quantity, defaultValue, name }: StepperProps) {
             aria-valuenow={value}
             aria-valuemin={0}
             aria-valuemax={max}
-            aria-valuetext={speak(value)}
-            value={draft ?? formatNumber(value)}
+            aria-valuetext={value === undefined ? undefined : speak(value)}
+            value={draft ?? (value === undefined ? '' : formatNumber(value))}
             onChange={(event) => setDraft(event.target.value)}
             onBlur={commit}
             onKeyDown={onKeyDown}

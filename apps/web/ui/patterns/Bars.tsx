@@ -40,13 +40,23 @@ export function TopBar({ title, back = false, trailing }: TopBarProps) {
   );
 }
 
-type WorkoutBarProps = { exercise: number; exercises: number; sync: SyncState };
+type WorkoutBarProps = {
+  exercise: number;
+  exercises: number;
+  sync: SyncState;
+  /** Leaves the workout without ending it (navigation.def.exit-workout). */
+  onClose?: () => void;
+};
 
 /** navigation.workout-chrome.minimal-bar: close, where you are, and sync. Nothing else. */
-export function WorkoutBar({ exercise, exercises, sync }: WorkoutBarProps) {
+export function WorkoutBar({ exercise, exercises, sync, onClose }: WorkoutBarProps) {
   return (
     <header className={styles.workoutBar}>
-      <IconButton action="close" label={messages.actions.close} />
+      <IconButton
+        action="close"
+        label={messages.actions.close}
+        {...(onClose ? { onClick: onClose } : {})}
+      />
       <p className={styles.position}>{messages.progress.exercise(exercise, exercises)}</p>
       <SyncIndicator state={sync} />
     </header>

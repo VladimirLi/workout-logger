@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { expect, type Page, test } from '@playwright/test';
+import { finishWorkout } from './finish';
 
 const ADAPTER = 'packages/adapters-browser/dist/local-workout-store.js';
 
@@ -73,7 +74,7 @@ test.describe('recoverable deletion (tasks 8.3, 8.4, 8.5)', () => {
     await page.getByRole('button', { name: 'Start workout' }).click();
     await page.waitForURL('**/workout');
     await page.getByRole('button', { name: 'Log set' }).click();
-    await page.getByRole('button', { name: 'Done' }).click();
+    await finishWorkout(page);
     await page.waitForURL('**/summary?session=**');
 
     await page.goto('/settings');

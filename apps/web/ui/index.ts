@@ -2,7 +2,15 @@
  * The design system's public surface (ADR-0008). Screens import from here and nowhere
  * else; ui/architecture.test.ts enforces it.
  */
-export { formatDate, formatLoad, formatLoadReps, speakLoad } from './i18n/format';
+export {
+  deviceTimeZone,
+  displayName,
+  formatDate,
+  formatDateTime,
+  formatLoad,
+  formatLoadReps,
+  speakLoad,
+} from './i18n/format';
 export { messages } from './i18n/messages';
 export { Icon, type IconName } from './icons/Icon';
 export { AgentTag, Delta } from './patterns/Annotations';

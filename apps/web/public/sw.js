@@ -22,7 +22,7 @@
  * https://nextjs.org/docs/app/guides/progressive-web-apps
  */
 
-const SHELL_CACHE = 'shell-v2';
+const SHELL_CACHE = 'shell-v3';
 const OFFLINE_URL = '/offline';
 
 /**
@@ -33,7 +33,7 @@ const OFFLINE_URL = '/offline';
  * cached document serve any summary offline. A cached document ignores the query string, and
  * the page reads the id from the address itself.
  */
-const SHELL_URLS = [OFFLINE_URL, '/', '/today', '/workout', '/summary', '/diagnostics'];
+const SHELL_URLS = [OFFLINE_URL, '/', '/today', '/workout', '/summary', '/history', '/diagnostics'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(SHELL_CACHE).then((cache) => cache.addAll(SHELL_URLS)));

@@ -22,6 +22,8 @@ type ButtonProps = {
   expand?: boolean;
   'aria-haspopup'?: 'dialog';
   'aria-describedby'?: string;
+  /** For buttons that toggle a selection on the same screen, so the state is not colour-only. */
+  'aria-pressed'?: boolean;
 };
 
 /** Closed variants: no className, no style. Layout belongs to the parent (Stack). */

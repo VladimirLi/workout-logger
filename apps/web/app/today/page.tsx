@@ -3,8 +3,11 @@
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import {
+  BottomTabs,
   Button,
   ConfirmDialog,
+  displayName,
+  formatDate,
   Heading,
   ListRow,
   messages,
@@ -93,7 +96,15 @@ export default function TodayPage() {
   };
 
   return (
-    <Screen bar={<TopBar title={messages.nav.today} />}>
+    <Screen
+      bar={<TopBar title={messages.nav.today} />}
+      bottom={
+        <BottomTabs
+          current="today"
+          hrefs={{ today: '/today', history: '/history', settings: '/settings' }}
+        />
+      }
+    >
       {state.kind === 'loading' && <Skeleton label="Loading today’s plan" />}
 
       {state.kind === 'failed' && (
@@ -134,13 +145,10 @@ export default function TodayPage() {
             <Heading level={2} id="no-plan">
               No plan on this device yet
             </Heading>
-            <Text>
-              A plan arrives when this device syncs with the server. There is no server to sync with
-              yet, so there is nothing to follow today.
-            </Text>
-            <Text size="label" tone="muted">
-              Anything recorded here is saved on the device first and queued to deliver later.
-            </Text>
+            <Text>A plan arrives when this device syncs. There is no server to sync with yet.</Text>
+            <Button variant="secondary" onClick={() => router.push('/history')}>
+              See your history
+            </Button>
           </Stack>
         </Surface>
       )}
@@ -149,13 +157,16 @@ export default function TodayPage() {
         <Surface tone="card" aria-labelledby="plan-name">
           <Stack gap={3}>
             <Heading level={2} id="plan-name">
-              {state.plan.id}
+              {displayName(state.plan.id, 'Your plan')}
             </Heading>
             <Stack as="ol" gap={2}>
-              {state.plan.sessions.map((session) => (
+              {state.plan.sessions.map((session, index) => (
                 <li key={session.id}>
                   <Stack gap={2}>
-                    <Text weight="label">{session.scheduledFor}</Text>
+                    <Text weight="label">
+                      {displayName(session.id, `Session ${index + 1}`)},{' '}
+                      {formatDate(Date.parse(session.scheduledFor), 'UTC')}
+                    </Text>
                     <Button
                       variant="primary"
                       size="lg"

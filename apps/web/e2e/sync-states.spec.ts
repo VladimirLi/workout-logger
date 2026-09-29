@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { expect, type Page, test } from '@playwright/test';
+import { finishWorkout } from './finish';
 
 /**
  * The three user-visible sync states on the product routes (offline-sync spec, task 5.7).
@@ -198,7 +199,7 @@ test.describe('product sync states (task 5.7)', () => {
     page,
   }) => {
     await openWorkoutWithQueuedOutbox(page);
-    await page.getByRole('button', { name: 'Done' }).click();
+    await finishWorkout(page);
     await page.waitForURL('**/summary?session=**');
     await expect(page.getByRole('heading', { name: 'Finished' })).toBeVisible();
 
