@@ -70,7 +70,7 @@ export function LogToRest({
   }, [mode, restHeadingId, savedAnnouncement]);
 
   return (
-    <div className={styles.layout}>
+    <div className={styles.layout} data-view={mode === 'rest' ? 'rest' : 'set'}>
       {mode === 'rest' ? (
         <div className={styles.view} data-entering>
           {rest}

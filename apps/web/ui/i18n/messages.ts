@@ -51,6 +51,7 @@ export const messages = {
     rir: 'RIR',
     rirHelper: 'Reps you could still do',
     rirHelpButton: 'What is RIR?',
+    controls: 'Set controls',
     saved: (index: number, restSeconds: number) =>
       `Set ${index} saved. Rest ${formatClock(restSeconds)}.`,
     deleted: (index: number) => `Set ${index} deleted`,

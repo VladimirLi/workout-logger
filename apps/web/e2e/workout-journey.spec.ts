@@ -219,44 +219,252 @@ test.describe('the workout journey', () => {
   });
 });
 
+type Box = { x: number; y: number; width: number; height: number };
+
+const boxOf = async (locator: Locator): Promise<Box> => {
+  const box = await locator.boundingBox();
+  if (!box) throw new Error('an element has no box');
+  return box;
+};
+
+const overlaps = (a: Box, b: Box): boolean =>
+  a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+
+/** True when the element at the control's centre is the control itself, not something over it. */
+const isPainted = (control: Locator): Promise<boolean> =>
+  control.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
+    return hit !== null && (hit === element || element.contains(hit) || hit.contains(element));
+  });
+
+type LandscapePlan = { unilateral?: boolean; combinedLoad?: boolean; twoExercises?: boolean };
+
 test.describe('a phone held sideways (layout.landscape.two-pane)', () => {
-  for (const twoExercises of [false, true]) {
-    test(`keeps the set controls and Log set in view without scrolling at 667 x 375 with ${twoExercises ? 'two exercises' : 'one exercise'}`, async ({
-      page,
-    }) => {
-      await page.setViewportSize({ width: 667, height: 375 });
-      await openTodayWithPlan(page, { twoExercises });
-      await page.getByRole('button', { name: 'Start workout' }).click();
-      await page.waitForURL('**/workout');
-      const viewport = page.viewportSize();
-      if (!viewport) throw new Error('no viewport');
+  const PROFILES: readonly { name: string; plan: LandscapePlan; scrolls: boolean }[] = [
+    { name: 'one exercise', plan: {}, scrolls: false },
+    { name: 'two exercises', plan: { twoExercises: true }, scrolls: false },
+    { name: 'a unilateral exercise', plan: { unilateral: true }, scrolls: true },
+    {
+      name: 'a unilateral exercise with combined load',
+      plan: { unilateral: true, combinedLoad: true },
+      scrolls: true,
+    },
+  ];
 
-      const inView = async (locator: Locator): Promise<void> => {
-        await expect(locator).toBeVisible();
-        const box = await locator.boundingBox();
-        expect(box).not.toBeNull();
-        if (!box) return;
-        expect(box.y).toBeGreaterThanOrEqual(0);
-        expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
-        expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
-      };
+  const openSetView = async (page: Page, plan: LandscapePlan) => {
+    await page.setViewportSize({ width: 667, height: 375 });
+    await openTodayWithPlan(page, plan);
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForURL('**/workout');
+    await expect(page.getByRole('button', { name: 'Log set' })).toBeVisible();
+  };
 
-      await inView(page.getByRole('button', { name: 'Log set' }));
-      await inView(page.getByLabel('Actual', { exact: true }));
-      await inView(page.getByLabel('Load', { exact: true }));
-      await inView(page.getByLabel('Reps', { exact: true }));
+  /** The row blocks in reading order: a stepper stands for its row, a group for itself. */
+  const rowsOf = (page: Page, plan: LandscapePlan): Locator[] => [
+    ...(plan.unilateral ? [page.getByRole('group', { name: 'Side' })] : []),
+    page.getByRole('button', { name: 'Decrease load' }),
+    page.getByRole('button', { name: 'Decrease reps' }),
+    ...(plan.combinedLoad ? [page.getByRole('group', { name: 'Load counts' })] : []),
+    page.getByRole('group', { name: 'RIR' }),
+  ];
 
-      const actual = await page.getByLabel('Actual', { exact: true }).boundingBox();
-      const logSet = await page.getByRole('button', { name: 'Log set' }).boundingBox();
-      if (!actual || !logSet) throw new Error('missing box');
-      expect(actual.y + actual.height).toBeLessThanOrEqual(logSet.y);
+  const controlsOf = (page: Page, plan: LandscapePlan): Locator[] => [
+    ...rowsOf(page, plan).slice(0, plan.unilateral ? 1 : 0),
+    page.getByRole('button', { name: 'Decrease load' }),
+    page.getByRole('spinbutton', { name: 'Load' }),
+    page.getByRole('button', { name: 'Increase load' }),
+    page.getByRole('button', { name: 'Decrease reps' }),
+    page.getByRole('spinbutton', { name: 'Reps' }),
+    page.getByRole('button', { name: 'Increase reps' }),
+    ...(plan.combinedLoad ? [page.getByRole('group', { name: 'Load counts' })] : []),
+    page.getByRole('group', { name: 'RIR' }),
+    page.getByRole('button', { name: 'What is RIR?' }),
+  ];
 
-      // The session summary, the recorded sets and Done sit below the set view, so the page
-      // scrolls; the action has to stay in view while it does.
-      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
-      await inView(page.getByRole('button', { name: 'Log set' }));
+  /** Scrolls only the controls pane, never the page. */
+  const scrollWithinPane = (control: Locator) =>
+    control.evaluate((element) => element.scrollIntoView({ block: 'nearest' }));
+
+  for (const profile of PROFILES) {
+    test.describe(profile.name, () => {
+      test('shows the bar, the set, the target and Log set without scrolling', async ({ page }) => {
+        await openSetView(page, profile.plan);
+        const viewport = page.viewportSize();
+        if (!viewport) throw new Error('no viewport');
+
+        const fixed = [
+          page.getByRole('banner'),
+          page.getByRole('heading', { level: 1 }),
+          page.getByText(/^Set 1$/),
+          page.getByLabel('Target', { exact: true }),
+          page.getByRole('button', { name: 'Log set' }),
+          page.getByText('On device'),
+        ];
+        for (const locator of fixed) {
+          await expect(locator).toBeVisible();
+          const box = await boxOf(locator);
+          expect(box.y).toBeGreaterThanOrEqual(0);
+          expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
+          expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
+        }
+        // One indicator, in the bar; the session card no longer repeats it.
+        await expect(page.getByText('On device')).toHaveCount(1);
+        expect(await page.evaluate(() => window.scrollY)).toBe(0);
+      });
+
+      test('fits an ordinary set outright and scrolls a taller one inside the pane', async ({
+        page,
+      }) => {
+        await openSetView(page, profile.plan);
+        const region = page.getByRole('region', { name: 'Set controls' });
+        const measure = await region.evaluate((element) => ({
+          overflow: element.scrollHeight - element.clientHeight,
+          overflowX: element.scrollWidth - element.clientWidth,
+        }));
+        expect(measure.overflowX).toBeLessThanOrEqual(0);
+        if (profile.scrolls) expect(measure.overflow).toBeGreaterThan(0);
+        else expect(measure.overflow).toBeLessThanOrEqual(0);
+
+        // The pane ends above the action row, so nothing can scroll under it.
+        const pane = await boxOf(region);
+        const logSet = await boxOf(page.getByRole('button', { name: 'Log set' }));
+        expect(pane.y + pane.height).toBeLessThanOrEqual(logSet.y);
+      });
+
+      test('never covers a control with Log set at any scroll position of the pane', async ({
+        page,
+      }) => {
+        await openSetView(page, profile.plan);
+        const region = page.getByRole('region', { name: 'Set controls' });
+        const logSet = page.getByRole('button', { name: 'Log set' });
+        const logSetAtRest = await boxOf(logSet);
+
+        for (const control of controlsOf(page, profile.plan)) {
+          await scrollWithinPane(control);
+          const box = await boxOf(control);
+          const pane = await boxOf(region);
+          expect(box.y, 'above the pane').toBeGreaterThanOrEqual(pane.y);
+          expect(box.y + box.height, 'below the pane').toBeLessThanOrEqual(pane.y + pane.height);
+          expect(overlaps(box, await boxOf(logSet))).toBe(false);
+          expect(await isPainted(control), 'covered by something else').toBe(true);
+        }
+
+        // Log set stays put and the page never had to move.
+        expect(await boxOf(logSet)).toEqual(logSetAtRest);
+        expect(await page.evaluate(() => window.scrollY)).toBe(0);
+      });
+
+      test('keeps 48 px targets and 8 px gaps', async ({ page }) => {
+        await openSetView(page, profile.plan);
+        for (const name of ['Decrease load', 'Increase load', 'Decrease reps', 'Increase reps']) {
+          const box = await boxOf(page.getByRole('button', { name }));
+          expect(box.width, name).toBeGreaterThanOrEqual(48);
+          expect(box.height, name).toBeGreaterThanOrEqual(48);
+        }
+        expect(
+          (await boxOf(page.getByRole('button', { name: 'Log set' }))).height,
+        ).toBeGreaterThanOrEqual(48);
+
+        for (const [field, quantity] of [
+          ['Load', 'load'],
+          ['Reps', 'reps'],
+        ] as const) {
+          const cell = await boxOf(page.getByRole('spinbutton', { name: field }).locator('..'));
+          const decrease = await boxOf(page.getByRole('button', { name: `Decrease ${quantity}` }));
+          const increase = await boxOf(page.getByRole('button', { name: `Increase ${quantity}` }));
+          expect(cell.x - (decrease.x + decrease.width), `${field} gap`).toBeGreaterThanOrEqual(
+            7.5,
+          );
+          expect(increase.x - (cell.x + cell.width), `${field} gap`).toBeGreaterThanOrEqual(7.5);
+        }
+
+        const rows = rowsOf(page, profile.plan);
+        for (let index = 1; index < rows.length; index += 1) {
+          const above = await boxOf(rows[index - 1] as Locator);
+          const below = await boxOf(rows[index] as Locator);
+          expect(
+            below.y - (above.y + above.height),
+            `gap before row ${index}`,
+          ).toBeGreaterThanOrEqual(7.5);
+        }
+      });
+
+      test('has no sideways scrolling', async ({ page }) => {
+        await openSetView(page, profile.plan);
+        const overflow = await page.evaluate(() => ({
+          scrollWidth: document.documentElement.scrollWidth,
+          clientWidth: document.documentElement.clientWidth,
+        }));
+        expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth);
+      });
+
+      test('brings a focused control fully into view, clear of the action row', async ({
+        page,
+      }) => {
+        await openSetView(page, profile.plan);
+        const region = page.getByRole('region', { name: 'Set controls' });
+        await (profile.plan.unilateral
+          ? page.getByRole('radio', { name: 'Left' })
+          : page.getByRole('button', { name: 'Decrease load' })
+        ).focus();
+
+        // Tab until Log set takes focus; every stop on the way is visible and not covered.
+        for (let stop = 0; stop < 20; stop += 1) {
+          const active = page.locator(':focus');
+          if (
+            (await active.getAttribute('aria-label')) === null &&
+            (await active.innerText()) === 'Log set'
+          )
+            break;
+          const pane = await boxOf(region);
+          const box = await boxOf(active);
+          expect(await isPainted(active), `stop ${stop} is covered`).toBe(true);
+          expect(box.y, `stop ${stop} clear of the top`).toBeGreaterThanOrEqual(pane.y);
+          expect(box.y + box.height, `stop ${stop} clear of the action row`).toBeLessThanOrEqual(
+            pane.y + pane.height,
+          );
+          await page.keyboard.press('Tab');
+        }
+        await expect(page.getByRole('button', { name: 'Log set' })).toBeFocused();
+      });
     });
   }
+
+  test('shows every Load value whole', async ({ page }) => {
+    await openSetView(page, {});
+    const load = page.getByRole('spinbutton', { name: 'Load' });
+    for (const value of ['22.5', '102.5', '142.5', '497.5']) {
+      await load.fill(value);
+      const clipped = await load.evaluate((input) => input.scrollWidth - input.clientWidth);
+      expect(clipped, `${value} is clipped`).toBeLessThanOrEqual(0);
+    }
+  });
+
+  test('still shows rest after logging', async ({ page }) => {
+    await openSetView(page, {});
+    await page.getByRole('button', { name: 'Log set' }).click();
+    await expect(page.getByRole('heading', { name: 'Rest' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Next set' })).toBeVisible();
+  });
+});
+
+test.describe('the workout bar', () => {
+  test('carries sync in a portrait phone and closes to today', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await openTodayWithPlan(page);
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForURL('**/workout');
+
+    const sync = page.getByText('On device');
+    await expect(sync).toHaveCount(1);
+    const box = await boxOf(sync);
+    expect(box.y + box.height).toBeLessThanOrEqual(667);
+    expect(box.x + box.width).toBeLessThanOrEqual(375);
+
+    await page.getByRole('button', { name: 'Close' }).click();
+    await page.waitForURL('**/today');
+  });
 });
 
 test.describe('logging a set', () => {

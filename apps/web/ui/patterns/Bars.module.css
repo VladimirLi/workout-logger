@@ -102,14 +102,14 @@
   }
 
   /*
-   * Stays sticky so the action is in view however tall the page is. A sticky grid item is
-   * confined to its grid area, so it spans both rows and sits at the end of them.
+   * The action row: the bottom of the right pane, always in the same place, with the controls
+   * scrolling above it. Part of the first screen, so it scrolls away with the page.
    */
   .actionBar {
+    position: static;
     grid-column: 2;
-    grid-row: 1 / span 2;
-    align-self: end;
+    grid-row: 2;
     margin-inline: 0;
-    padding: 0;
+    padding: var(--space-2) 0 env(safe-area-inset-bottom);
   }
 }

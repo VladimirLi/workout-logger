@@ -83,7 +83,11 @@
   }
 
   .row {
-    grid-template-columns: var(--target-workout) minmax(0, 8ch) var(--target-workout);
+    /* The value cell never drops below 112 px, so 142.5 kg shows whole: five digits at heading
+       size, the unit, a gap, and padding either side. */
+    grid-template-columns:
+      var(--target-workout) minmax(calc(2 * var(--target-workout) + var(--space-4)), max-content)
+      var(--target-workout);
   }
 }
 

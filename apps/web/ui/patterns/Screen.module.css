@@ -56,6 +56,14 @@
   }
 
   .content {
+    /* What is left of the viewport under the bar and this padding: the set view fills it exactly. */
+    --set-view-block-size: calc(
+      100dvh -
+      var(--target-min) -
+      env(safe-area-inset-top) -
+      var(--space-1)
+    );
+
     padding-block: 0 var(--space-1);
     gap: var(--space-2);
   }
@@ -74,8 +82,13 @@
     grid-row: 1 / span 2;
   }
 
+  /* The controls scroll here, above the action row, so nothing is ever covered by it. */
   .pane:last-child {
     grid-column: 2;
     grid-row: 1;
+    min-block-size: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scroll-padding-block: var(--space-2);
   }
 }

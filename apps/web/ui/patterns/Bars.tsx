@@ -40,14 +40,28 @@ export function TopBar({ title, back = false, trailing }: TopBarProps) {
   );
 }
 
-type WorkoutBarProps = { exercise: number; exercises: number; sync: SyncState };
+type WorkoutBarProps = {
+  /** Where you are is shown only when both numbers are known; it is never guessed. */
+  exercise?: number;
+  exercises?: number;
+  sync: SyncState;
+  onClose?: () => void;
+};
 
 /** navigation.workout-chrome.minimal-bar: close, where you are, and sync. Nothing else. */
-export function WorkoutBar({ exercise, exercises, sync }: WorkoutBarProps) {
+export function WorkoutBar({ exercise, exercises, sync, onClose }: WorkoutBarProps) {
   return (
     <header className={styles.workoutBar}>
-      <IconButton action="close" label={messages.actions.close} />
-      <p className={styles.position}>{messages.progress.exercise(exercise, exercises)}</p>
+      <IconButton
+        action="close"
+        label={messages.actions.close}
+        {...(onClose ? { onClick: onClose } : {})}
+      />
+      <p className={styles.position}>
+        {exercise !== undefined && exercises !== undefined
+          ? messages.progress.exercise(exercise, exercises)
+          : null}
+      </p>
       <SyncIndicator state={sync} />
     </header>
   );

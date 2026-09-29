@@ -14,9 +14,8 @@ import {
   Stack,
   StatusMessage,
   Surface,
-  SyncIndicator,
   Text,
-  TopBar,
+  WorkoutBar,
 } from '../../ui';
 import {
   type DisplaySyncState,
@@ -111,7 +110,15 @@ export default function WorkoutPage() {
   };
 
   return (
-    <Screen bar={<TopBar title="Workout" back />}>
+    <Screen
+      bar={
+        <WorkoutBar
+          // Nothing read yet means nothing waiting: whatever is logged is saved on the device.
+          sync={(state.kind === 'ready' && state.session.sync) || 'on-device'}
+          onClose={() => router.push('/today')}
+        />
+      }
+    >
       {state.kind === 'loading' && <Skeleton label="Loading the workout" />}
 
       {state.kind === 'failed' && (
@@ -123,7 +130,7 @@ export default function WorkoutPage() {
       {state.kind === 'none' && (
         <Surface tone="plain" as="section" aria-labelledby="nothing-active">
           <Stack gap={3}>
-            <Heading level={2} id="nothing-active">
+            <Heading level={1} id="nothing-active">
               No workout in progress
             </Heading>
             <Text>Start one from today’s plan.</Text>
@@ -208,13 +215,6 @@ export default function WorkoutPage() {
               <Text size="label" tone="muted">
                 Started {state.session.startedAt}
               </Text>
-              {state.session.sync ? (
-                <SyncIndicator state={state.session.sync} />
-              ) : (
-                <Text size="label" tone="muted">
-                  Nothing waiting to sync
-                </Text>
-              )}
             </Stack>
           </Surface>
 

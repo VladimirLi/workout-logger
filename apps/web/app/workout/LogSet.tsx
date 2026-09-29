@@ -132,6 +132,7 @@ export function LogSet({
       }
       set={
         <TwoPane
+          detailLabel={messages.set.controls}
           focus={
             <Stack gap={3}>
               <Heading level={1}>{prescription.name}</Heading>

@@ -22,6 +22,17 @@ html {
   scroll-padding-block-end: calc(var(--target-workout) + var(--space-8));
 }
 
+/* Sideways the action row is part of the set view, not sticky; only the tabs can cover focus. */
+@media (orientation: landscape) and (max-height: 500px) {
+  html {
+    scroll-padding-block-end: calc(
+      var(--target-workout) +
+      var(--space-3) +
+      env(safe-area-inset-bottom)
+    );
+  }
+}
+
 /* iOS: follow the Dynamic Type body size (typography.family.system). */
 @supports (font: -apple-system-body) and (-webkit-touch-callout: none) {
   html {

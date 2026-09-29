@@ -29,17 +29,27 @@ export function Screen({ children, bar, bottom }: ScreenProps) {
   );
 }
 
-type TwoPaneProps = { focus: ReactNode; detail: ReactNode };
+type TwoPaneProps = {
+  focus: ReactNode;
+  detail: ReactNode;
+  /** Names the detail pane, which scrolls on its own in landscape when its controls are tall. */
+  detailLabel?: string;
+};
 
 /**
  * layout.landscape.two-pane: on a phone held sideways the focal value and its controls sit
- * side by side, so nothing needs vertical scrolling at 667 x 375.
+ * side by side. A tall detail pane scrolls inside itself, above the action, never under it.
  */
-export function TwoPane({ focus, detail }: TwoPaneProps) {
+export function TwoPane({ focus, detail, detailLabel }: TwoPaneProps) {
   return (
     <div className={styles.twoPane}>
       <div className={styles.pane}>{focus}</div>
-      <div className={styles.pane}>{detail}</div>
+      <div
+        className={styles.pane}
+        {...(detailLabel ? { role: 'region', 'aria-label': detailLabel } : {})}
+      >
+        {detail}
+      </div>
     </div>
   );
 }
