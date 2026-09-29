@@ -513,7 +513,7 @@ function finishBody(stale: boolean, recorded: number): string {
   return stale ? summary : `You have recorded ${messages.count.sets(recorded)}. ${summary}`;
 }
 
-/** A stale table would number the next set as the one just saved, so read again first. */
+/** A stale table would number the next set as the one just saved, so read again first: a next set or another exercise waits for a read that works. */
 async function startNextSet(stale: boolean, refresh: () => Promise<boolean>, advance: () => void) {
   if (!stale || (await refresh())) advance();
 }
@@ -602,11 +602,13 @@ function ReadyWorkout({
         <ExerciseChips
           exercises={exercises}
           selected={selected}
-          onSelect={(id) => {
-            stopEditing();
-            onSelect(id);
-            setSetInProgress((n) => n + 1);
-          }}
+          onSelect={(id) =>
+            void startNextSet(stale, onRefresh, () => {
+              stopEditing();
+              onSelect(id);
+              setSetInProgress((n) => n + 1);
+            })
+          }
         />
       )}
 

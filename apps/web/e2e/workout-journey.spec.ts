@@ -1660,4 +1660,37 @@ test.describe('plan-to-workout design conformance (VLA-14, P1 deltas)', () => {
       'You have recorded 1 set.',
     );
   });
+
+  test('switching exercises waits for a read that works, so a saved set is never renumbered', async ({
+    page,
+  }) => {
+    await failReadsAfterNextWrite(page);
+    await startWorkout(page, true);
+    await page.evaluate(() =>
+      (window as unknown as { __failReadsAfterNextWrite(): void }).__failReadsAfterNextWrite(),
+    );
+    await page.getByRole('button', { name: 'Log set' }).click();
+    await expect(page.getByRole('heading', { name: 'Rest' })).toBeVisible();
+    await expect(page.getByText('This screen could not be refreshed')).toBeVisible();
+
+    // The table is stale, so the exercise chips must not remount the set view on it.
+    await page.getByRole('button', { name: 'Bench press' }).click();
+    await expect(page.getByRole('button', { name: 'Back squat', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await expect(page.getByRole('heading', { name: 'Rest' })).toBeVisible();
+    await expect(page.getByText('Set 1', { exact: true })).toHaveCount(0);
+
+    await page.evaluate(() => (window as unknown as { __restoreReads(): void }).__restoreReads());
+    await page.getByRole('button', { name: 'Bench press' }).click();
+    await expect(page.getByRole('button', { name: 'Bench press', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await expect(page.getByText('This screen could not be refreshed')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Back squat' }).click();
+    await expect(page.getByText('Set 2', { exact: true })).toBeVisible();
+    await expect(page.getByRole('cell', { name: '80 kilograms' })).toHaveCount(1);
+  });
 });
