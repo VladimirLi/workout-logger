@@ -22,9 +22,16 @@ html {
   scroll-padding-block-end: calc(var(--target-workout) + var(--space-8));
 }
 
-/* Sideways the action row is part of the set view, not sticky; only the tabs can cover focus. */
+/*
+ * Sideways the action row is part of the set view, not sticky; only the tabs can cover focus.
+ * A screen without tabs reserves nothing, so focusing Log set does not scroll the page.
+ */
 @media (orientation: landscape) and (max-height: 500px) {
   html {
+    scroll-padding-block-end: 0;
+  }
+
+  html:has([data-bottom-tabs]) {
     scroll-padding-block-end: calc(
       var(--target-workout) +
       var(--space-3) +

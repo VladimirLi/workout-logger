@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { planDiffSchema } from './plan-diff.js';
+import { storedPlanDiffSchema } from './plan-diff.js';
 import { isoTimestamp, revisionSchema } from './primitives.js';
 
 /**
@@ -34,7 +34,7 @@ export const proposalSchema = z
      * Closed discriminated union over the supported operations. Previously
      * `z.unknown()`, which left the substance of a proposal entirely unvalidated.
      */
-    diff: planDiffSchema,
+    diff: storedPlanDiffSchema,
     rationale: z.string().min(1).max(8_000),
     inputHash: z.string().regex(/^sha256:[0-9a-f]{64}$/),
     createdAt: isoTimestamp,

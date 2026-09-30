@@ -1,6 +1,13 @@
 import type { ArchiveSource, Clock, PlanReader, ProposalStore } from '@workout/application';
 import { paginationSchema } from '@workout/contracts';
-import { err, ok, PLAN_DIFF_OPERATIONS, type Result, sameRevision } from '@workout/domain';
+import {
+  err,
+  liveSets,
+  ok,
+  PLAN_DIFF_OPERATIONS,
+  type Result,
+  sameRevision,
+} from '@workout/domain';
 import {
   type AuthorizationContext,
   type AuthorizationFailure,
@@ -195,7 +202,7 @@ export async function invokeReadTool(
             planId: session.planId,
             planRevision: session.planRevision,
             completedAt: session.completedAt.toISOString(),
-            sets: session.sets.map((set) => ({
+            sets: liveSets(session).map((set) => ({
               setId: set.setId,
               exerciseId: set.exerciseId,
               sequence: set.sequence,

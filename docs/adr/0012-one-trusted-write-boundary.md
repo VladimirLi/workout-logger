@@ -69,9 +69,9 @@ payload.
 | I-9 | An expired proposal is not decidable | db | stored `expires_at` vs. `now()` | `authenticated-rpc.provider.ts` |
 | I-10 | A decision's time is when the server took it | db | `now()` | `authenticated-rpc.provider.ts` |
 | I-11 | Statuses and revisions are exactly the domain's vocabulary | domain, schema, db | `CHECK` constraints and a closed enum in the function; runtime validation of what comes back | `packages/domain`, `repositories.test.ts` |
-| I-12 | A mutation is one of a closed set of kinds, fully formed | db | JSON type checks per field, not `->>` string coercion | `authenticated-rpc.provider.ts` |
+| I-12 | A mutation is one of a closed set of kinds (start, record, edit, delete or restore a set, complete), fully formed | db | JSON type checks per field, not `->>` string coercion | `authenticated-rpc.provider.ts` |
 | I-13 | A measurement satisfies the whole measurement contract | contracts (`measurementSchema`), domain (`isMeasurement`), db (`is_valid_measurement`) | the payload's own types: profile, closed key set, per-unit maximum, notes length, incline range, and an exertion whose derived RPE follows from its RIR | `packages/domain/src/session.test.ts`, `authenticated-rpc.provider.ts` |
-| I-14 | A session's plan-derived facts are the plan's, not the caller's | db | the locked plan row's scheduled session: revision, exercise ids, combined-load permission | `authenticated-rpc.provider.ts` |
+| I-14 | A session's plan-derived facts are the plan's, not the caller's | db | the locked plan row's scheduled session: revision, exercise ids, combined-load permission (names are I-28) | `authenticated-rpc.provider.ts` |
 | I-15 | A set belongs to an exercise the session prescribes | db | the session's stored `exercise_ids` | `authenticated-rpc.provider.ts` |
 | I-16 | Combined load is recorded only where the plan permitted it | domain, db | the session's stored `combined_load_exercises` | `authenticated-rpc.provider.ts` |
 | I-17 | Nothing is recorded before its session started | domain, db | the session's stored `started_at` | `authenticated-rpc.provider.ts` |
@@ -81,8 +81,12 @@ payload.
 | I-21 | A key and its mutation commit together, or neither | db | one transaction; the key is claimed before the mutation runs | `workout-transport.provider.ts` |
 | I-22 | A replay returns the original result; a key reused for a different payload is refused | db | the stored payload compared with the delivered one | `workout-transport.provider.ts` |
 | I-23 | A delay the server asked for is honoured | application | `Retry-After`, carried through the adapter | `workout-transport.test.ts`, `delivery.integration.test.ts` |
-| I-24 | A row read back is validated before it reaches the domain | adapters | the domain's own rules per field, the wire contract's closed union for a diff, and `isoTimestamp` for every instant | `repositories.test.ts` |
+| I-24 | A row read back is validated before it reaches the domain | adapters | the domain's own rules per field, the wire contract's closed union for a diff (names and rest optional, because a proposal stored before they existed stays readable), and `isoTimestamp` for every instant | `repositories.test.ts` |
 | I-25 | An instant is an ISO-8601 time with an explicit offset | contracts (`isoTimestamp`) | the string itself, before any `Date` is constructed from it | `repositories.test.ts`, `packages/contracts/src/archive.test.ts` |
+| I-26 | Editing a set changes its result and nothing else | domain, db | `edit_set` rewrites `measurement` and stamps `edited_at`; exercise, sequence and `recorded_at` are never in the update; the new measurement passes I-13 and I-16 and keeps the recorded profile | `packages/domain/src/set-edit.test.ts`, `authenticated-rpc.provider.ts` |
+| I-27 | A delete is a tombstone, and a restore is its compensation | domain, db | `deleted_at` set on a live set and cleared on a deleted one; the row and its sequence are kept, so the next sequence (I-18) still counts it; editing or deleting a deleted set, or restoring a live one, is refused | `packages/domain/src/set-edit.test.ts`, `authenticated-rpc.provider.ts` |
+| I-28 | Names in a session are the plan's, not the caller's | db | the locked plan's session and exercise names are snapshotted into `name` and `exercise_names`; a payload that states a different name is refused | `authenticated-rpc.provider.ts` |
+| I-29 | A change to a set cannot predate the set | domain, schema, db | `edited_at` and `deleted_at` compared with the set's stored `recorded_at`, in the function and as a `CHECK` | `packages/domain/src/set-edit.test.ts`, `authenticated-rpc.provider.ts` |
 
 Two rows are deliberately **not** the database's: I-23, because backoff is a client policy, and
 the domain half of I-13, because a device must refuse a malformed measurement before it is queued

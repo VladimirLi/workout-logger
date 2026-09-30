@@ -61,7 +61,7 @@ export const COMBINED_LOAD_EXERCISES = [EXERCISE.combined];
 /** An active plan row carrying that scheduled session. */
 export function aPlanRow(
   userId: string,
-  options: { id: string; revision: number },
+  options: { id: string; revision: number; name?: string; sessions?: readonly unknown[] },
 ): Record<string, unknown> {
   return {
     user_id: userId,
@@ -69,7 +69,8 @@ export function aPlanRow(
     revision: options.revision,
     status: 'active',
     activated_at: at(-24 * 60),
-    sessions: [SCHEDULED_SESSION],
+    sessions: options.sessions ?? [SCHEDULED_SESSION],
+    ...(options.name === undefined ? {} : { name: options.name }),
   };
 }
 

@@ -109,6 +109,9 @@ export default function SettingsPage() {
                 {messages.deletion.heading}
               </Heading>
               <Text>{messages.deletion.backupNote}</Text>
+              <Text size="label" tone="muted">
+                Anything recorded here is saved on the device first and queued to deliver later.
+              </Text>
 
               {state.notice && (
                 <StatusMessage kind="success" live="polite">

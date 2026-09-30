@@ -1,4 +1,11 @@
-import type { ActiveSession, Plan, RecordedSet, Result, WorkoutSession } from '@workout/domain';
+import type {
+  ActiveSession,
+  Measurement,
+  Plan,
+  RecordedSet,
+  Result,
+  WorkoutSession,
+} from '@workout/domain';
 import { err, ok } from '@workout/domain';
 
 /**
@@ -42,7 +49,27 @@ export interface Ids {
 export type WorkoutMutation =
   | { readonly kind: 'start_session'; readonly session: ActiveSession }
   | { readonly kind: 'record_set'; readonly sessionId: string; readonly set: RecordedSet }
-  | { readonly kind: 'complete_session'; readonly sessionId: string; readonly completedAt: Date };
+  | { readonly kind: 'complete_session'; readonly sessionId: string; readonly completedAt: Date }
+  /** Changes a recorded set's result in place. The set keeps its exercise, position and time. */
+  | {
+      readonly kind: 'edit_set';
+      readonly sessionId: string;
+      readonly setId: string;
+      readonly measurement: Measurement;
+      readonly editedAt: Date;
+    }
+  /**
+   * A tombstone, not a removal: a delete that is queued and replayed is the same fact, and the
+   * server keeps the row so a restore can bring it back (ADR-0003).
+   */
+  | {
+      readonly kind: 'delete_set';
+      readonly sessionId: string;
+      readonly setId: string;
+      readonly deletedAt: Date;
+    }
+  /** Undo of a delete: a compensating change, queued after it, never an erasure of it. */
+  | { readonly kind: 'restore_set'; readonly sessionId: string; readonly setId: string };
 
 export type DeliveryFailure = 'network' | `http_${number}`;
 

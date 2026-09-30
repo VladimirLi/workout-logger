@@ -1,6 +1,12 @@
 import { z } from 'zod';
 import { measurementSchema } from './measurement.js';
-import { calendarDateSchema, isoTimestamp, revisionSchema } from './primitives.js';
+import {
+  calendarDateSchema,
+  isoTimestamp,
+  nameSchema,
+  restSecondsSchema,
+  revisionSchema,
+} from './primitives.js';
 
 /**
  * The full-export document (data-portability spec, tasks 8.1 and 8.2).
@@ -35,7 +41,10 @@ const instantSchema = isoTimestamp;
 const exercisePrescriptionSchema = z
   .object({
     exerciseId: z.string().min(1),
+    // Optional, unlike a proposal: an export made before names existed has none.
+    name: nameSchema.optional(),
     prescription: measurementSchema,
+    restSeconds: restSecondsSchema.optional(),
     combinedLoadPermitted: z.boolean().optional(),
   })
   .strict();
@@ -43,6 +52,7 @@ const exercisePrescriptionSchema = z
 const scheduledSessionSchema = z
   .object({
     id: z.string().min(1),
+    name: nameSchema.optional(),
     scheduledFor: calendarDateSchema,
     exercises: z.array(exercisePrescriptionSchema),
   })
@@ -50,6 +60,7 @@ const scheduledSessionSchema = z
 
 const planBase = {
   id: z.string().min(1),
+  name: nameSchema.optional(),
   revision: revisionSchema,
   sessions: z.array(scheduledSessionSchema),
   activatedAt: instantSchema,
@@ -67,6 +78,9 @@ const recordedSetSchema = z
     sequence: z.number().int().positive(),
     measurement: measurementSchema,
     recordedAt: instantSchema,
+    editedAt: instantSchema.optional(),
+    /** A deleted set is exported as a tombstone, so restoring an export cannot resurrect it. */
+    deletedAt: instantSchema.optional(),
   })
   .strict();
 
@@ -86,9 +100,13 @@ const sessionBase = {
   planId: z.string().min(1),
   planRevision: revisionSchema,
   scheduledSessionId: z.string().min(1),
+  name: nameSchema.optional(),
   exerciseIds: z.array(z.string().min(1)),
+  exerciseNames: z.record(z.string().min(1), nameSchema).optional(),
   /** The exercises that permitted combined load when the session started. */
   combinedLoadExercises: z.array(z.string().min(1)),
+  /** The exercises recorded one side at a time when the session started. */
+  unilateralExercises: z.array(z.string().min(1)).optional(),
   startedAt: instantSchema,
   sets: z.array(recordedSetSchema),
 };

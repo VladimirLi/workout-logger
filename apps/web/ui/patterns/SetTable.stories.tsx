@@ -13,3 +13,9 @@ type Story = StoryObj<typeof meta>;
 
 export const Complete: Story = {};
 export const MissingValues: Story = { args: { caption: 'Romanian deadlift', rows: DEADLIFT_SETS } };
+export const WithEdit: Story = {
+  args: {
+    rows: SQUAT_SETS.map((row) => ({ ...row, id: `set-${row.set}`, exercise: 'Back squat' })),
+    onEdit: () => {},
+  },
+};

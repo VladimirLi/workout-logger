@@ -7,7 +7,7 @@ import type {
   ProposalStore,
   RejectOutcome,
 } from '@workout/application';
-import { isoTimestamp, planDiffSchema, proposalStatusSchema } from '@workout/contracts';
+import { isoTimestamp, proposalStatusSchema, storedPlanDiffSchema } from '@workout/contracts';
 import type { PlanDiff, Proposal, ProposalStatus, Revision } from '@workout/domain';
 import type { ServerSupabaseConfig } from './config.js';
 import { type RestConfig, rpc, select } from './rest.js';
@@ -94,7 +94,7 @@ function aStatus(value: unknown, field: string): ProposalStatus {
 function aDiff(value: unknown, field: string): PlanDiff {
   // The same closed union the wire contract enforces, so the substance of a proposal is
   // validated rather than trusted (packages/contracts/src/plan-diff.ts).
-  const parsed = planDiffSchema.safeParse(value);
+  const parsed = storedPlanDiffSchema.safeParse(value);
   if (!parsed.success) fail(field, 'is not a plan diff this version understands');
   return parsed.data as PlanDiff;
 }

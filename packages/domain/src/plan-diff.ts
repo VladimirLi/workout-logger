@@ -24,8 +24,23 @@ export type PlanDiffOperation = (typeof PLAN_DIFF_OPERATIONS)[number];
 /** An ISO calendar date, `YYYY-MM-DD`. Sessions are scheduled by day, not instant. */
 export type CalendarDate = string;
 
+/** The longest a plan, session, or exercise name may be. Layouts are drawn for this length. */
+export const MAX_NAME_LENGTH = 60;
+
+/**
+ * The seconds a lifter rests after a set of an exercise, whole and bounded so a typo cannot
+ * schedule a rest that outlasts the workout.
+ */
+export const MIN_REST_SECONDS = 1;
+export const MAX_REST_SECONDS = 3_600;
+
 export interface ExercisePrescription {
   readonly exerciseId: string;
+  /**
+   * What the lifter calls this exercise ("Back squat"). Optional in stored data because plans
+   * written before names existed have none; the interface then falls back to the identifier.
+   */
+  readonly name?: string;
   /** The target for this exercise, typed by measurement profile. */
   readonly prescription: Measurement;
   /**
@@ -37,10 +52,17 @@ export interface ExercisePrescription {
    * number, so the plan says it or it is not available.
    */
   readonly combinedLoadPermitted?: boolean;
+  /**
+   * Rest after a set of this exercise, in whole seconds. Absent means the plan says nothing,
+   * and the timer uses its own default.
+   */
+  readonly restSeconds?: number;
 }
 
 export interface ScheduledSession {
   readonly id: string;
+  /** What the lifter calls this session ("Upper A"). */
+  readonly name?: string;
   readonly scheduledFor: CalendarDate;
   readonly exercises: readonly ExercisePrescription[];
 }
@@ -52,12 +74,15 @@ export interface SetCorrection {
 
 export interface ReplacePlanDiff {
   readonly op: 'replace_plan';
+  /** The plan's name. Absent leaves the plan's current name as it is. */
+  readonly name?: string;
   readonly sessions: readonly ScheduledSession[];
 }
 
 export interface ChangeScheduledSessionDiff {
   readonly op: 'change_scheduled_session';
   readonly sessionId: string;
+  readonly name?: string;
   readonly scheduledFor?: CalendarDate;
   readonly exercises?: readonly ExercisePrescription[];
 }
@@ -67,6 +92,8 @@ export interface ChangeExercisePrescriptionDiff {
   readonly sessionId: string;
   readonly exerciseId: string;
   readonly prescription: Measurement;
+  /** Absent leaves the exercise's rest as it is. */
+  readonly restSeconds?: number;
 }
 
 export interface CorrectCompletedSessionDiff {

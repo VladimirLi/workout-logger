@@ -91,4 +91,49 @@
     overscroll-behavior: contain;
     scroll-padding-block: var(--space-2);
   }
+
+  /*
+   * A one-row strip of fixed height: a chip, plus room for its focus ring on every side so the
+   * scroller does not clip it, including on the first and last chip. Its cost is the same for
+   * two exercises or five, so the action never moves.
+   */
+  .lead {
+    --ring-room: calc(var(--focus-width) + var(--focus-offset));
+
+    block-size: calc(var(--target-min) + 2 * var(--ring-room));
+    padding: var(--ring-room);
+    scroll-padding-inline: var(--ring-room);
+    overflow: auto hidden;
+    overscroll-behavior-x: contain;
+    container-type: inline-size;
+  }
+
+  .lead > * {
+    inline-size: max-content;
+  }
+
+  /* The heading keeps naming the section for assistive technology. */
+  .lead h2 {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .lead [data-direction="inline"] {
+    flex-wrap: nowrap;
+  }
+
+  .lead button {
+    flex: none;
+    max-inline-size: 80cqi;
+  }
+
+  .lead button > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }

@@ -32,6 +32,15 @@ export interface RecordedSet {
   readonly sequence: number;
   readonly measurement: Measurement;
   readonly recordedAt: Date;
+  /** When the lifter last changed the result in place. Absent if it never was. */
+  readonly editedAt?: Date;
+  /**
+   * Present when the lifter deleted the set. A delete is a tombstone, never a removal: the set
+   * keeps its sequence, so numbers stay unique and a restore returns it to its position, and
+   * a queued delete replayed on the server is the same fact rather than a vanished row
+   * (ADR-0003). Read sets through `liveSets`, which leaves tombstones out.
+   */
+  readonly deletedAt?: Date;
 }
 
 interface SessionBase {
@@ -40,8 +49,15 @@ interface SessionBase {
   /** The plan revision the session was started from. */
   readonly planRevision: Revision;
   readonly scheduledSessionId: string;
+  /**
+   * The scheduled session's name when the session started. A session keeps showing what it was
+   * called after the plan moves on, so it is copied here rather than looked up.
+   */
+  readonly name?: string;
   /** The exercises the scheduled session prescribed when the session started. */
   readonly exerciseIds: readonly string[];
+  /** Names of those exercises by id, for those the plan named. Snapshotted like the names above. */
+  readonly exerciseNames?: Readonly<Record<string, string>>;
   /**
    * The exercises that were configured to permit combined load when the session started.
    *
@@ -49,6 +65,12 @@ interface SessionBase {
    * must not change what the set the user is about to record is allowed to mean.
    */
   readonly combinedLoadExercises: readonly string[];
+  /**
+   * The exercises that were recorded one side at a time when the session started, snapshotted
+   * for the same reason: a plan revised mid-workout must not change how a set is measured. Absent
+   * only on a session stored before this was kept, where the profile is not known.
+   */
+  readonly unilateralExercises?: readonly string[];
   readonly startedAt: Date;
   readonly sets: readonly RecordedSet[];
 }
@@ -78,7 +100,12 @@ export type SessionError =
   | { readonly kind: 'duplicate_set'; readonly setId: string }
   | { readonly kind: 'not_a_measurement'; readonly setId: string }
   | { readonly kind: 'recorded_before_start'; readonly setId: string }
-  | { readonly kind: 'completed_before_start'; readonly sessionId: string };
+  | { readonly kind: 'completed_before_start'; readonly sessionId: string }
+  | { readonly kind: 'set_not_found'; readonly setId: string }
+  | { readonly kind: 'set_deleted'; readonly setId: string }
+  | { readonly kind: 'set_not_deleted'; readonly setId: string }
+  | { readonly kind: 'measurement_profile_changed'; readonly setId: string }
+  | { readonly kind: 'changed_before_recorded'; readonly setId: string };
 
 export interface StartSessionInput {
   readonly id: string;
@@ -98,14 +125,24 @@ export function startSession(
       scheduledSessionId: input.scheduledSessionId,
     });
   }
+  const exerciseNames = Object.fromEntries(
+    scheduled.exercises.flatMap((exercise) =>
+      exercise.name === undefined ? [] : [[exercise.exerciseId, exercise.name] as const],
+    ),
+  );
   return ok({
     id: input.id,
     planId: plan.id,
     planRevision: plan.revision,
     scheduledSessionId: scheduled.id,
+    ...(scheduled.name !== undefined ? { name: scheduled.name } : {}),
     exerciseIds: scheduled.exercises.map((exercise) => exercise.exerciseId),
+    ...(Object.keys(exerciseNames).length > 0 ? { exerciseNames } : {}),
     combinedLoadExercises: scheduled.exercises
       .filter((exercise) => exercise.combinedLoadPermitted === true)
+      .map((exercise) => exercise.exerciseId),
+    unilateralExercises: scheduled.exercises
+      .filter((exercise) => exercise.prescription.profile === 'unilateral_strength')
       .map((exercise) => exercise.exerciseId),
     status: 'active',
     startedAt: input.startedAt,
@@ -273,6 +310,27 @@ export interface RecordSetInput {
   readonly recordedAt: Date;
 }
 
+/**
+ * Combined load is a claim about what the number means, so it is refused unless the plan said
+ * this exercise may make it (owner decision 2026-09-18). An edit is held to the same rule.
+ */
+function combinedLoadAllowed(
+  session: SessionBase,
+  exerciseId: string,
+  measurement: Measurement,
+): boolean {
+  return !(
+    measurement.profile === 'unilateral_strength' &&
+    measurement.loadSemantics === 'total' &&
+    !session.combinedLoadExercises.includes(exerciseId)
+  );
+}
+
+/** The sets the lifter still has: every recorded set except the deleted ones. */
+export function liveSets(session: WorkoutSession): readonly RecordedSet[] {
+  return session.sets.filter((set) => set.deletedAt === undefined);
+}
+
 export function recordSet(
   session: WorkoutSession,
   input: RecordSetInput,
@@ -290,13 +348,7 @@ export function recordSet(
   if (input.recordedAt.getTime() < session.startedAt.getTime()) {
     return err({ kind: 'recorded_before_start', setId: input.setId });
   }
-  // Combined load is a claim about what the number means, so it is refused unless the plan
-  // said this exercise may make it (owner decision 2026-09-18).
-  if (
-    input.measurement.profile === 'unilateral_strength' &&
-    input.measurement.loadSemantics === 'total' &&
-    !session.combinedLoadExercises.includes(input.exerciseId)
-  ) {
+  if (!combinedLoadAllowed(session, input.exerciseId, input.measurement)) {
     return err({ kind: 'combined_load_not_permitted', exerciseId: input.exerciseId });
   }
   const recorded: RecordedSet = {
@@ -307,6 +359,87 @@ export function recordSet(
     recordedAt: input.recordedAt,
   };
   return ok({ ...session, sets: [...session.sets, recorded] });
+}
+
+export interface EditSetInput {
+  readonly setId: string;
+  readonly measurement: Measurement;
+  readonly editedAt: Date;
+}
+
+function replaceSet(
+  session: ActiveSession,
+  setId: string,
+  change: (set: RecordedSet) => Result<RecordedSet, SessionError>,
+): Result<ActiveSession, SessionError> {
+  const set = session.sets.find((candidate) => candidate.setId === setId);
+  if (!set) return err({ kind: 'set_not_found', setId });
+  const changed = change(set);
+  if (!changed.ok) return changed;
+  return ok({
+    ...session,
+    sets: session.sets.map((candidate) => (candidate.setId === setId ? changed.value : candidate)),
+  });
+}
+
+/**
+ * Changes a recorded set's result in place. What the set is - its exercise, its position, when
+ * it was recorded - stays; only the measurement and `editedAt` move (spec D-23). An active
+ * session only: a finished one changes through an audited correction.
+ */
+export function editSet(
+  session: WorkoutSession,
+  input: EditSetInput,
+): Result<ActiveSession, SessionError> {
+  if (session.status !== 'active') {
+    return err({ kind: 'session_not_active', sessionId: session.id });
+  }
+  if (!isMeasurement(input.measurement)) {
+    return err({ kind: 'not_a_measurement', setId: input.setId });
+  }
+  return replaceSet(session, input.setId, (set) => {
+    if (set.deletedAt !== undefined) return err({ kind: 'set_deleted', setId: set.setId });
+    if (input.editedAt.getTime() < set.recordedAt.getTime()) {
+      return err({ kind: 'changed_before_recorded', setId: set.setId });
+    }
+    if (set.measurement.profile !== input.measurement.profile) {
+      return err({ kind: 'measurement_profile_changed', setId: set.setId });
+    }
+    if (!combinedLoadAllowed(session, set.exerciseId, input.measurement)) {
+      return err({ kind: 'combined_load_not_permitted', exerciseId: set.exerciseId });
+    }
+    return ok({ ...set, measurement: input.measurement, editedAt: input.editedAt });
+  });
+}
+
+export function deleteSet(
+  session: WorkoutSession,
+  setId: string,
+  deletedAt: Date,
+): Result<ActiveSession, SessionError> {
+  if (session.status !== 'active') {
+    return err({ kind: 'session_not_active', sessionId: session.id });
+  }
+  return replaceSet(session, setId, (set) => {
+    if (set.deletedAt !== undefined) return err({ kind: 'set_deleted', setId });
+    if (deletedAt.getTime() < set.recordedAt.getTime()) {
+      return err({ kind: 'changed_before_recorded', setId });
+    }
+    return ok({ ...set, deletedAt });
+  });
+}
+
+/** Undoes a delete: the set comes back with the value and the position it had. */
+export function restoreSet(
+  session: WorkoutSession,
+  setId: string,
+): Result<ActiveSession, SessionError> {
+  if (session.status !== 'active') {
+    return err({ kind: 'session_not_active', sessionId: session.id });
+  }
+  return replaceSet(session, setId, ({ deletedAt: _deleted, ...set }) =>
+    _deleted === undefined ? err({ kind: 'set_not_deleted', setId }) : ok(set),
+  );
 }
 
 export function completeSession(

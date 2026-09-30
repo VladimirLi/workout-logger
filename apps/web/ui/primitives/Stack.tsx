@@ -16,6 +16,8 @@ type StackProps = {
   wrap?: boolean;
   as?: 'div' | 'ul' | 'ol' | 'section' | 'header' | 'footer';
   'aria-labelledby'?: string;
+  /** Takes it off the screen and out of the accessibility tree while it stays mounted. */
+  hidden?: boolean;
 };
 
 /**
@@ -30,6 +32,7 @@ export function Stack({
   justify = 'start',
   wrap = false,
   as: Tag = 'div',
+  hidden = false,
   ...aria
 }: StackProps) {
   return (
@@ -40,6 +43,7 @@ export function Stack({
       data-align={align}
       data-justify={justify}
       data-wrap={wrap || undefined}
+      hidden={hidden || undefined}
       {...aria}
     >
       {children}

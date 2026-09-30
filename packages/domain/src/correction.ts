@@ -42,7 +42,8 @@ export function originalMeasurement(
   session: CompletedSession,
   setId: string,
 ): Measurement | undefined {
-  return session.sets.find((set) => set.setId === setId)?.measurement;
+  return session.sets.find((set) => set.setId === setId && set.deletedAt === undefined)
+    ?.measurement;
 }
 
 /** The original value followed by every corrected value, oldest first. */

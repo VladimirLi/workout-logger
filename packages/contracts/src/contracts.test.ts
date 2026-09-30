@@ -9,13 +9,16 @@ const VALID_PROPOSAL = {
   baseRevision: 7,
   diff: {
     op: 'replace_plan',
+    name: 'Spring strength',
     sessions: [
       {
         id: 'sess_01',
+        name: 'Upper A',
         scheduledFor: '2026-09-20',
         exercises: [
           {
             exerciseId: 'ex_bench',
+            name: 'Bench press',
             prescription: { profile: 'strength', schemaVersion: 1, repetitions: 5 },
           },
         ],

@@ -3,6 +3,8 @@
 import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import {
+  deviceTimeZone,
+  formatDate,
   Heading,
   ListRow,
   Screen,
@@ -16,7 +18,7 @@ import {
   Text,
   TopBar,
 } from '../../ui';
-import { type DisplaySyncState, readSession } from '../device';
+import { type DisplaySyncState, exerciseName, liveSets, readSession } from '../device';
 
 /**
  * A finished session (workout-logging spec, tasks 5.1 and 9.1).
@@ -31,9 +33,11 @@ import { type DisplaySyncState, readSession } from '../device';
 interface SummaryView {
   readonly id: string;
   readonly status: 'active' | 'completed';
-  readonly startedAt: string;
-  readonly completedAt: string | undefined;
-  readonly rows: readonly SetRow[];
+  readonly startedAt: number;
+  readonly completedAt: number | undefined;
+  readonly rows: readonly (SetRow & { exerciseId: string })[];
+  /** Each exercise in session order, with the name the session kept for it. */
+  readonly exercises: readonly { readonly id: string; readonly name: string }[];
   readonly sync: DisplaySyncState | undefined;
 }
 
@@ -64,11 +68,11 @@ export function SummaryView() {
         summary: {
           id: session.id,
           status: session.status,
-          startedAt: session.startedAt.toISOString(),
-          completedAt:
-            session.status === 'completed' ? session.completedAt.toISOString() : undefined,
-          rows: session.sets.map((set) => ({
+          startedAt: session.startedAt.getTime(),
+          completedAt: session.status === 'completed' ? session.completedAt.getTime() : undefined,
+          rows: liveSets(session).map((set) => ({
             set: set.sequence,
+            exerciseId: set.exerciseId,
             ...(set.measurement.profile === 'cardio' ? {} : { reps: set.measurement.repetitions }),
             ...(set.measurement.profile !== 'cardio' && set.measurement.load
               ? { loadKg: set.measurement.load.value }
@@ -77,6 +81,10 @@ export function SummaryView() {
             ...(set.measurement.profile !== 'cardio' && set.measurement.exertion
               ? { rir: set.measurement.exertion.rir.value }
               : {}),
+          })),
+          exercises: session.exerciseIds.map((id, index) => ({
+            id,
+            name: exerciseName(id, index, session.exerciseNames?.[id]),
           })),
           sync,
         },
@@ -125,11 +133,11 @@ export function SummaryView() {
                 {state.summary.status === 'completed' ? 'Finished' : 'Still in progress'}
               </Heading>
               <Text size="label" tone="muted">
-                Started {state.summary.startedAt}
+                Started {formatDate(state.summary.startedAt, deviceTimeZone())}
               </Text>
               {state.summary.completedAt && (
                 <Text size="label" tone="muted">
-                  Finished {state.summary.completedAt}
+                  Finished {formatDate(state.summary.completedAt, deviceTimeZone())}
                 </Text>
               )}
               {state.summary.sync ? (
@@ -142,7 +150,20 @@ export function SummaryView() {
             </Stack>
           </Surface>
 
-          <SetTable caption="Sets recorded" rows={state.summary.rows} />
+          {state.summary.exercises.map(({ id, name }) => (
+            <Stack key={id} gap={2}>
+              <Heading level={2}>{name}</Heading>
+              <SetTable
+                caption={`Sets recorded for ${name}`}
+                rows={state.summary.rows
+                  .filter((row) => row.exerciseId === id)
+                  .map((row, index) => ({ ...row, set: index + 1 }))}
+              />
+            </Stack>
+          ))}
+          <Stack as="ul" gap={1}>
+            <ListRow href="/history" title="Workout history" />
+          </Stack>
         </Stack>
       )}
     </Screen>

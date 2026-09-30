@@ -1,4 +1,4 @@
-import type { Measurement, RecordedSet, WorkoutSession } from '@workout/domain';
+import { liveSets, type Measurement, type RecordedSet, type WorkoutSession } from '@workout/domain';
 import type { ArchiveSource } from './archive-ports.js';
 
 /**
@@ -113,7 +113,7 @@ export async function exportHistoryCsv(
     (left, right) => left.startedAt.getTime() - right.startedAt.getTime(),
   );
   const rows = sessions.flatMap((session) =>
-    [...session.sets]
+    [...liveSets(session)]
       .sort((left, right) => left.sequence - right.sequence)
       .map((set) => row(session, set)),
   );

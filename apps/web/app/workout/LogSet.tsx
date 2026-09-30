@@ -1,22 +1,21 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { type ReactNode, useRef, useState } from 'react';
 import {
   Button,
+  formatLoadReps,
   Heading,
   LogToRest,
   messages,
   RestTimer,
-  RirPicker,
-  Segmented,
   Stack,
   StatusMessage,
-  Stepper,
   Surface,
   Text,
   TwoPane,
   Value,
 } from '../../ui';
+import { readSetValues, SetControls, type SetValues } from './SetControls';
 
 /**
  * Logging one set, and the rest that follows (workout-logging spec, tasks 5.4, 5.6, 5.8).
@@ -34,13 +33,18 @@ import {
  * system's, and the mapping it shows is the domain's.
  */
 
-const REST_HEADING_ID = 'rest-heading';
+export const REST_HEADING_ID = 'rest-heading';
+/** The set view's heading, for returning focus to the workout once a set has been removed. */
+export const SET_HEADING_ID = 'set-heading';
 
 export interface Prescription {
   readonly exerciseId: string;
   readonly name: string;
-  readonly loadKg: number;
-  readonly reps: number;
+  /**
+   * What the plan asked for. Absent when logging without a prescription: the controls then
+   * start empty and no Target is shown, so no number nobody prescribed appears.
+   */
+  readonly target: { readonly loadKg?: number; readonly reps: number } | undefined;
   readonly restSeconds: number;
   /** A unilateral exercise is recorded one side at a time (owner decision 2026-09-18). */
   readonly unilateral: boolean;
@@ -48,16 +52,8 @@ export interface Prescription {
   readonly combinedLoadPermitted: boolean;
 }
 
-export interface LoggedSet {
+export interface LoggedSet extends SetValues {
   readonly exerciseId: string;
-  readonly loadKg: number;
-  readonly reps: number;
-  /** Undefined when the user left RIR alone: exertion is optional, not assumed. */
-  readonly rir: number | undefined;
-  /** Present for a unilateral exercise, absent otherwise. Never inferred. */
-  readonly side: 'left' | 'right' | undefined;
-  /** Present only where combined load was on offer; per side is the default. */
-  readonly loadSemantics: 'per_side' | 'total' | undefined;
 }
 
 export function LogSet({
@@ -65,132 +61,143 @@ export function LogSet({
   setNumber,
   onLog,
   onNextSet,
+  notSaved,
+  notice,
+  chooser,
 }: {
   prescription: Prescription;
   setNumber: number;
-  onLog: (set: LoggedSet) => void;
+  onLog: (set: LoggedSet) => Promise<boolean>;
+  /** The last attempt to record a set did not land. */
+  notSaved: boolean;
   /** Returns to the set view for the next set. A workout is more than one set. */
   onNextSet: () => void;
+  /** The page's undo toast, shown above the action bar and kept through set and rest. */
+  notice?: ReactNode;
+  /** The exercise chips, which sit above the exercise name in the set view and in rest. */
+  chooser?: ReactNode;
 }) {
   const form = useRef<HTMLFormElement>(null);
   const [restStartedAt, setRestStartedAt] = useState<number | undefined>(undefined);
+  const [repsMissing, setRepsMissing] = useState(false);
+  // The number the set just logged has, kept while resting: `setNumber` moves on to the next
+  // set as soon as the row exists, and rest must not say the next set was the one saved.
+  const [loggedNumber, setLoggedNumber] = useState<number>();
+  const { target } = prescription;
 
-  const read = (): LoggedSet => {
-    const data = new FormData(form.current ?? undefined);
-    const number = (name: string): number | undefined => {
-      const raw = data.get(name);
-      if (typeof raw !== 'string' || raw.trim() === '') return undefined;
-      const value = Number(raw);
-      return Number.isFinite(value) ? value : undefined;
-    };
-    const text = (name: string): string | undefined => {
-      const raw = data.get(name);
-      return typeof raw === 'string' && raw !== '' ? raw : undefined;
-    };
-    return {
-      exerciseId: prescription.exerciseId,
-      loadKg: number('load') ?? prescription.loadKg,
-      reps: number('reps') ?? prescription.reps,
-      rir: number('rir'),
-      side: prescription.unilateral ? ((text('side') ?? 'left') as 'left' | 'right') : undefined,
-      loadSemantics: prescription.combinedLoadPermitted
-        ? ((text('loadSemantics') ?? 'per_side') as 'per_side' | 'total')
-        : undefined,
-    };
+  const read = (): LoggedSet | undefined => {
+    const values = readSetValues(form.current, prescription, {
+      loadKg: target?.loadKg,
+      reps: target?.reps,
+    });
+    return values && { exerciseId: prescription.exerciseId, ...values };
   };
 
   return (
     <LogToRest
       restHeadingId={REST_HEADING_ID}
-      savedAnnouncement={messages.set.saved(setNumber, prescription.restSeconds)}
+      savedAnnouncement={messages.set.saved(loggedNumber ?? setNumber, prescription.restSeconds)}
       formRef={form}
-      onLog={() => {
-        setRestStartedAt(Date.now());
-        onLog(read());
+      notice={notice}
+      onLog={async () => {
+        const logged = read();
+        // Only reachable without a prescription: with one, the controls always hold reps.
+        setRepsMissing(logged === undefined);
+        if (!logged) return false;
+        const number = setNumber;
+        const saved = await onLog(logged);
+        if (saved) {
+          setLoggedNumber(number);
+          setRestStartedAt(Date.now());
+        }
+        return saved;
       }}
       rest={
-        <>
-          <Heading level={1} id={REST_HEADING_ID} focusTarget>
-            {messages.rest.heading}
-          </Heading>
-          <Text weight="label">Set {setNumber} recorded</Text>
-          <StatusMessage kind="success">
-            {messages.set.saved(setNumber, prescription.restSeconds)}
-          </StatusMessage>
-          <Button variant="secondary" size="lg" expand onClick={onNextSet}>
-            Next set
-          </Button>
-          <Surface tone="card" aria-label="Rest timer">
-            {/* Elapsed time comes from the timestamp, so a suspended tab does not drift (5.6). */}
-            <RestTimer
-              durationSeconds={prescription.restSeconds}
-              startedAt={restStartedAt ?? Date.now()}
-              initialNow={Date.now()}
-            />
-          </Surface>
-        </>
+        <TwoPane
+          lead={chooser}
+          focus={
+            <>
+              <Heading level={1} id={REST_HEADING_ID} focusTarget>
+                {messages.rest.heading}
+              </Heading>
+              <Text weight="label">Set {loggedNumber ?? setNumber} recorded</Text>
+              <StatusMessage kind="success">
+                {messages.set.saved(loggedNumber ?? setNumber, prescription.restSeconds)}
+              </StatusMessage>
+            </>
+          }
+          detail={
+            <>
+              <Button variant="secondary" size="lg" expand onClick={onNextSet}>
+                Next set
+              </Button>
+              <Surface tone="card" aria-label="Rest timer">
+                {/* Elapsed time comes from the timestamp, so a suspended tab does not drift (5.6). */}
+                <RestTimer
+                  durationSeconds={prescription.restSeconds}
+                  startedAt={restStartedAt ?? Date.now()}
+                  initialNow={Date.now()}
+                />
+              </Surface>
+            </>
+          }
+        />
       }
-      set={
+      set={(log) => (
         <TwoPane
           detailLabel={messages.set.controls}
+          lead={chooser}
           focus={
             <Stack gap={3}>
-              <Heading level={1}>{prescription.name}</Heading>
+              <Heading level={1} id={SET_HEADING_ID} focusTarget>
+                {prescription.name}
+              </Heading>
               {/* The plan model carries no per-exercise set count, so this says which set
                     this is and does not claim a total it cannot know. */}
               <Text size="label" tone="muted">
                 Set {setNumber}
               </Text>
-              <Surface tone="card" aria-label="Target">
-                <Stack gap={1}>
-                  <Text size="label" tone="muted" weight="label">
-                    Target
-                  </Text>
-                  <Value size="display">
-                    {prescription.loadKg} kg × {prescription.reps}
-                  </Value>
-                </Stack>
-              </Surface>
+              {target && (
+                <Surface tone="card" aria-label="Target">
+                  <Stack gap={1}>
+                    <Text size="label" tone="muted" weight="label">
+                      Target
+                    </Text>
+                    <Value size="display">{formatLoadReps(target.loadKg, target.reps)}</Value>
+                  </Stack>
+                </Surface>
+              )}
             </Stack>
           }
           detail={
-            <Surface tone="panel" aria-label="Actual">
-              <Stack gap={4}>
-                {/* Each side is its own result, so the side is chosen before logging and
-                      never inferred from the last one. */}
-                {prescription.unilateral && (
-                  <Segmented
-                    legend="Side"
-                    name="side"
-                    defaultValue="left"
-                    options={[
-                      { value: 'left', label: 'Left' },
-                      { value: 'right', label: 'Right' },
-                    ]}
-                  />
-                )}
-                <Stepper quantity="load" name="load" defaultValue={prescription.loadKg} />
-                <Stepper quantity="reps" name="reps" defaultValue={prescription.reps} />
-                {/* Offered only where the plan configured it. Where it is not offered, the
-                      load means per side, which is what gets stored. */}
-                {prescription.unilateral && prescription.combinedLoadPermitted && (
-                  <Segmented
-                    legend="Load counts"
-                    name="loadSemantics"
-                    defaultValue="per_side"
-                    helper="Whether the load is what each side moved, or both together."
-                    options={[
-                      { value: 'per_side', label: 'Per side' },
-                      { value: 'total', label: 'In total' },
-                    ]}
-                  />
-                )}
-                <RirPicker />
-              </Stack>
-            </Surface>
+            <>
+              <SetControls
+                unilateral={prescription.unilateral}
+                combinedLoadPermitted={prescription.combinedLoadPermitted}
+                defaults={{ loadKg: target?.loadKg, reps: target?.reps }}
+              />
+              {repsMissing && (
+                <StatusMessage kind="error" live="assertive">
+                  Enter how many reps you did, then log the set.
+                </StatusMessage>
+              )}
+              {notSaved && (
+                <StatusMessage
+                  kind="error"
+                  live="assertive"
+                  action={
+                    <Button variant="secondary" onClick={log}>
+                      {messages.actions.retry}
+                    </Button>
+                  }
+                >
+                  That set was not saved. Nothing already recorded has been lost.
+                </StatusMessage>
+              )}
+            </>
           }
         />
-      }
+      )}
     />
   );
 }

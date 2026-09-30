@@ -274,6 +274,49 @@ describe('the Supabase proposal store', () => {
     expect(proposal?.createdAt.toISOString()).toBe('2026-09-18T00:00:00.000Z');
   });
 
+  it('reads a stored diff that carries names and rest, and one written before either existed', async () => {
+    const named = {
+      op: 'replace_plan',
+      name: 'Upper / lower',
+      sessions: [
+        {
+          id: 'session-mon',
+          name: 'Lower A',
+          scheduledFor: '2026-09-21',
+          exercises: [
+            {
+              exerciseId: 'split-squat',
+              name: 'Split squat',
+              restSeconds: 120,
+              prescription: { schemaVersion: 1, profile: 'strength', repetitions: 8 },
+            },
+          ],
+        },
+      ],
+    };
+    stubFetch({ status: 200, body: JSON.stringify([aRow({ diff: named })]) });
+    expect(
+      (await new SupabaseProposalStore(server, USER).findById('user-1', 'prop-1'))?.diff,
+    ).toEqual(named);
+    // A_DIFF has no names at all: a proposal stored before names existed must stay readable.
+    stubFetch({ status: 200, body: JSON.stringify([aRow()]) });
+    expect(
+      (await new SupabaseProposalStore(server, USER).findById('user-1', 'prop-1'))?.diff,
+    ).toEqual(A_DIFF);
+  });
+
+  it('refuses a stored diff whose name is blank or too long', async () => {
+    for (const name of ['   ', 'x'.repeat(61)]) {
+      stubFetch({
+        status: 200,
+        body: JSON.stringify([aRow({ diff: { ...A_DIFF, name } })]),
+      });
+      await expect(
+        new SupabaseProposalStore(server, USER).findById('user-1', 'prop-1'),
+      ).rejects.toThrow(/diff/);
+    }
+  });
+
   it.each([
     ['a status the domain does not define', { status: 'half_accepted' }],
     ['a revision that is not a positive whole number', { base_revision: 0 }],

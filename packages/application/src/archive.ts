@@ -43,13 +43,17 @@ const instant = (at: Date): string => at.toISOString();
 function planPayload(plan: Plan): ArchivePayload['plans'][number] {
   const base = {
     id: plan.id,
+    ...(plan.name === undefined ? {} : { name: plan.name }),
     revision: plan.revision,
     sessions: plan.sessions.map((session) => ({
       id: session.id,
+      ...(session.name === undefined ? {} : { name: session.name }),
       scheduledFor: session.scheduledFor,
       exercises: session.exercises.map((exercise) => ({
         exerciseId: exercise.exerciseId,
+        ...(exercise.name === undefined ? {} : { name: exercise.name }),
         prescription: exercise.prescription,
+        ...(exercise.restSeconds === undefined ? {} : { restSeconds: exercise.restSeconds }),
         ...(exercise.combinedLoadPermitted === undefined
           ? {}
           : { combinedLoadPermitted: exercise.combinedLoadPermitted }),
@@ -68,8 +72,13 @@ function sessionPayload(session: WorkoutSession): ArchivePayload['sessions'][num
     planId: session.planId,
     planRevision: session.planRevision,
     scheduledSessionId: session.scheduledSessionId,
+    ...(session.name === undefined ? {} : { name: session.name }),
     exerciseIds: [...session.exerciseIds],
+    ...(session.exerciseNames === undefined ? {} : { exerciseNames: { ...session.exerciseNames } }),
     combinedLoadExercises: [...session.combinedLoadExercises],
+    ...(session.unilateralExercises === undefined
+      ? {}
+      : { unilateralExercises: [...session.unilateralExercises] }),
     startedAt: instant(session.startedAt),
     sets: session.sets.map((set) => ({
       setId: set.setId,
@@ -77,6 +86,8 @@ function sessionPayload(session: WorkoutSession): ArchivePayload['sessions'][num
       sequence: set.sequence,
       measurement: set.measurement,
       recordedAt: instant(set.recordedAt),
+      ...(set.editedAt === undefined ? {} : { editedAt: instant(set.editedAt) }),
+      ...(set.deletedAt === undefined ? {} : { deletedAt: instant(set.deletedAt) }),
     })),
   };
   if (session.status === 'active') return { status: 'active', ...base };
@@ -210,16 +221,24 @@ function planFrom(payload: ArchivePayload['plans'][number]): Result<Plan, Archiv
       if (!prescription.ok) return prescription;
       exercises.push({
         exerciseId: exercise.exerciseId,
+        ...(exercise.name === undefined ? {} : { name: exercise.name }),
         prescription: prescription.value,
+        ...(exercise.restSeconds === undefined ? {} : { restSeconds: exercise.restSeconds }),
         ...(exercise.combinedLoadPermitted === undefined
           ? {}
           : { combinedLoadPermitted: exercise.combinedLoadPermitted }),
       });
     }
-    sessions.push({ id: scheduled.id, scheduledFor: scheduled.scheduledFor, exercises });
+    sessions.push({
+      id: scheduled.id,
+      ...(scheduled.name === undefined ? {} : { name: scheduled.name }),
+      scheduledFor: scheduled.scheduledFor,
+      exercises,
+    });
   }
   const base = {
     id: payload.id,
+    ...(payload.name === undefined ? {} : { name: payload.name }),
     revision: payload.revision as Revision,
     sessions,
     activatedAt: new Date(payload.activatedAt),
@@ -244,6 +263,8 @@ function sessionFrom(
       sequence: set.sequence,
       measurement: measurement.value,
       recordedAt: new Date(set.recordedAt),
+      ...(set.editedAt === undefined ? {} : { editedAt: new Date(set.editedAt) }),
+      ...(set.deletedAt === undefined ? {} : { deletedAt: new Date(set.deletedAt) }),
     });
   }
 
@@ -252,8 +273,13 @@ function sessionFrom(
     planId: payload.planId,
     planRevision: payload.planRevision as Revision,
     scheduledSessionId: payload.scheduledSessionId,
+    ...(payload.name === undefined ? {} : { name: payload.name }),
     exerciseIds: payload.exerciseIds,
+    ...(payload.exerciseNames === undefined ? {} : { exerciseNames: payload.exerciseNames }),
     combinedLoadExercises: payload.combinedLoadExercises,
+    ...(payload.unilateralExercises === undefined
+      ? {}
+      : { unilateralExercises: payload.unilateralExercises }),
     startedAt: new Date(payload.startedAt),
     sets,
   };

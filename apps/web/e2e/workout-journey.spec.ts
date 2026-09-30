@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { expect, type Locator, type Page, test } from '@playwright/test';
+import { finishWorkout } from './finish';
 
 /**
  * The plan, workout, and summary routes (workout-logging spec, tasks 5.1 and 5.2).
@@ -12,11 +13,18 @@ import { expect, type Locator, type Page, test } from '@playwright/test';
 
 const ADAPTER = 'packages/adapters-browser/dist/local-workout-store.js';
 
+type SeedOptions = {
+  unilateral?: boolean;
+  combinedLoad?: boolean;
+  multiple?: boolean;
+  /** Five exercises, three of them with long names. */
+  many?: boolean;
+  /** The first exercise prescribes reps and no load. */
+  bodyweight?: boolean;
+};
+
 /** Seeds a downloaded plan before the app boots, so the first render already has one. */
-async function seedPlan(
-  page: Page,
-  options: { unilateral?: boolean; combinedLoad?: boolean; twoExercises?: boolean } = {},
-): Promise<void> {
+async function seedPlan(page: Page, options: SeedOptions = {}): Promise<void> {
   // `export` is illegal inside a function body, so the keyword is stripped and the classes
   // are returned explicitly. The adapter has no runtime imports, which is what makes this
   // possible; browser-store.spec.ts asserts that and would fail first if it changed.
@@ -26,7 +34,9 @@ async function seedPlan(
       source: string;
       unilateral: boolean;
       combinedLoad: boolean;
-      twoExercises: boolean;
+      multiple: boolean;
+      many: boolean;
+      bodyweight: boolean;
     }) => {
       const { source } = input;
       // The store's own code, running in the page before any route script does.
@@ -54,75 +64,137 @@ async function seedPlan(
         return identity();
       };
 
-      (window as unknown as { __seedPlan: () => Promise<void> }).__seedPlan = async () => {
-        const userId = await identity();
-        await new IndexedDbPlanStore().save(userId, {
-          status: 'active',
-          id: 'plan-1',
-          revision: 1,
-          activatedAt: new Date('2026-09-18T08:00:00Z'),
-          sessions: [
+      type Exercise = { exerciseId: string; prescription: Record<string, unknown> };
+      type Override = {
+        revision?: number;
+        loadKg?: number;
+        reps?: number;
+        /** The first exercise is re-profiled in the new revision. */
+        profile?: 'strength' | 'unilateral_strength';
+        /** The new revision no longer has the exercises the workout started with. */
+        swap?: boolean;
+      };
+      const loadOf = (value: number) => (input.bodyweight ? {} : { load: { unit: 'kg', value } });
+      const reshape = <T extends { sessions: { exercises: Exercise[] }[] }>(
+        plan: T,
+        override: Override | undefined,
+      ): T => {
+        const [session] = plan.sessions;
+        const [first] = session?.exercises ?? [];
+        if (!session || !first || !override) return plan;
+        if (override.swap) {
+          session.exercises = [
             {
-              id: 'session-mon',
-              scheduledFor: '2026-09-18',
-              exercises: input.unilateral
-                ? [
-                    {
-                      exerciseId: 'split-squat',
-                      prescription: {
-                        schemaVersion: 1,
-                        profile: 'unilateral_strength',
-                        side: 'left',
-                        loadSemantics: 'per_side',
-                        repetitions: 10,
-                        load: { unit: 'kg', value: 22.5 },
-                      },
-                      ...(input.combinedLoad ? { combinedLoadPermitted: true } : {}),
-                    },
-                  ]
-                : [
-                    {
-                      exerciseId: 'back-squat',
-                      prescription: {
-                        schemaVersion: 1,
-                        profile: 'strength',
-                        repetitions: 8,
-                        load: { unit: 'kg', value: 80 },
-                      },
-                    },
-                    ...(input.twoExercises
-                      ? [
-                          {
-                            exerciseId: 'bench-press',
-                            prescription: {
-                              schemaVersion: 1,
-                              profile: 'strength',
-                              repetitions: 5,
-                              load: { unit: 'kg', value: 60 },
-                            },
-                          },
-                        ]
-                      : []),
-                  ],
+              exerciseId: 'overhead-press',
+              prescription: {
+                schemaVersion: 1,
+                profile: 'strength',
+                repetitions: 5,
+                load: { unit: 'kg', value: 40 },
+              },
             },
-          ],
-        });
+          ];
+        } else if (override.profile === 'unilateral_strength') {
+          first.prescription = {
+            ...first.prescription,
+            profile: 'unilateral_strength',
+            side: 'left',
+            loadSemantics: 'per_side',
+          };
+        } else if (override.profile === 'strength') {
+          const { side: _side, loadSemantics: _semantics, ...rest } = first.prescription;
+          first.prescription = { ...rest, profile: 'strength' };
+        }
+        return plan;
+      };
+
+      const moreNames = input.many
+        ? [
+            'bench-press',
+            'incline-dumbbell-bench-press-with-a-pause',
+            'romanian-deadlift',
+            'seated-cable-row-with-a-wide-neutral-grip',
+          ]
+        : input.multiple
+          ? ['bench-press']
+          : [];
+      const exercisesOf = (override: Override | undefined): Exercise[] => [
+        input.unilateral
+          ? {
+              exerciseId: 'split-squat',
+              prescription: {
+                schemaVersion: 1,
+                profile: 'unilateral_strength',
+                side: 'left',
+                loadSemantics: 'per_side',
+                repetitions: 10,
+                load: { unit: 'kg', value: 22.5 },
+              },
+              ...(input.combinedLoad ? { combinedLoadPermitted: true } : {}),
+            }
+          : {
+              exerciseId: 'back-squat',
+              prescription: {
+                schemaVersion: 1,
+                profile: 'strength',
+                repetitions: override?.reps ?? 8,
+                ...loadOf(override?.loadKg ?? 80),
+              },
+            },
+        ...moreNames.map((exerciseId) => ({
+          exerciseId,
+          prescription: {
+            schemaVersion: 1,
+            profile: 'strength',
+            repetitions: 6,
+            load: { unit: 'kg', value: 60 },
+          },
+        })),
+      ];
+
+      // The override is how a test moves the downloaded plan on to a later revision, which is
+      // what the device would hold after a sync. Saving the same plan id overwrites the
+      // record, exactly as the adapter does for a real download.
+      (
+        window as unknown as {
+          __seedPlan: (override?: Override) => Promise<void>;
+        }
+      ).__seedPlan = async (override) => {
+        const userId = await identity();
+        await new IndexedDbPlanStore().save(
+          userId,
+          reshape(
+            {
+              status: 'active',
+              id: 'plan-1',
+              revision: override?.revision ?? 1,
+              activatedAt: new Date('2026-09-18T08:00:00Z'),
+              sessions: [
+                {
+                  id: 'session-mon',
+                  scheduledFor: '2026-09-18',
+                  exercises: exercisesOf(override),
+                },
+              ],
+            },
+            override,
+          ),
+        );
       };
     },
     {
       source: adapter,
       unilateral: options.unilateral === true,
       combinedLoad: options.combinedLoad === true,
-      twoExercises: options.twoExercises === true,
+      multiple: options.multiple === true,
+      many: options.many === true,
+      bodyweight: options.bodyweight === true,
     },
   );
 }
 
 /** Opens today, makes sure the device identity exists, then seeds and reloads. */
-async function openTodayWithPlan(
-  page: Page,
-  options: { unilateral?: boolean; combinedLoad?: boolean; twoExercises?: boolean } = {},
-): Promise<void> {
+async function openTodayWithPlan(page: Page, options: SeedOptions = {}): Promise<void> {
   await seedPlan(page, options);
   await page.goto('/today');
   await expect(page.getByRole('heading', { name: 'No plan on this device yet' })).toBeVisible();
@@ -132,6 +204,151 @@ async function openTodayWithPlan(
 }
 
 test.describe('the workout journey', () => {
+  test('opens on today rather than the old foundation page', async ({ page }) => {
+    await page.goto('/');
+    await expect(page).toHaveURL(/\/today$/);
+  });
+
+  test('revisits a finished session from history', async ({ page }) => {
+    await openTodayWithPlan(page);
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForURL('**/workout');
+    await page.getByRole('button', { name: 'Log set' }).click();
+    await expect(page.getByRole('cell', { name: '80 kilograms' })).toBeVisible();
+    await finishWorkout(page);
+    await page.waitForURL('**/summary?session=**');
+    await page.getByRole('link', { name: 'Workout history' }).click();
+    await expect(page.getByRole('link', { name: /session mon/i })).toBeVisible();
+    await page.getByRole('link', { name: /session mon/i }).click();
+    await expect(page.getByRole('heading', { name: 'Finished' })).toBeVisible();
+    await expect(page.getByRole('cell', { name: '80 kilograms' })).toBeVisible();
+  });
+
+  test('logs sets for both exercises in the scheduled session', async ({ page }) => {
+    await openTodayWithPlan(page, { multiple: true });
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForURL('**/workout');
+    await page.getByRole('button', { name: 'Log set' }).click();
+    await expect(page.getByRole('cell', { name: '80 kilograms' })).toBeVisible();
+    // Which exercise is current must reach assistive tech, not only the button's colour.
+    await expect(page.getByRole('button', { name: 'Back squat', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await expect(page.getByRole('button', { name: 'Bench press', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    await page.getByRole('button', { name: 'Bench press' }).click();
+    await expect(page.getByRole('button', { name: 'Bench press', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await expect(page.getByText('60 kg × 6')).toBeVisible();
+    await page.getByRole('button', { name: 'Log set' }).click();
+    await expect(page.getByRole('cell', { name: '60 kilograms' })).toBeVisible();
+    await finishWorkout(page);
+    await page.waitForURL('**/summary?session=**');
+    await expect(page.getByRole('cell', { name: '80 kilograms' })).toBeVisible();
+    await expect(page.getByRole('cell', { name: '60 kilograms' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Back squat' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Bench press' })).toBeVisible();
+  });
+
+  test('never retargets a workout already in progress when the plan revision moves on', async ({
+    page,
+  }) => {
+    // A started workout is a snapshot of one plan revision (session.ts). If a sync downloads a
+    // later revision mid-workout the screen must not quietly show the new numbers as this
+    // workout's targets, because the device keeps only the newest revision of a plan.
+    await openTodayWithPlan(page);
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForURL('**/workout');
+    await expect(page.getByText('80 kg × 8')).toBeVisible();
+    await page.getByRole('button', { name: 'Log set' }).click();
+    await expect(page.getByRole('cell', { name: '80 kilograms' })).toBeVisible();
+
+    await page.evaluate(() =>
+      (
+        window as unknown as {
+          __seedPlan(override: { revision: number; loadKg: number; reps: number }): Promise<void>;
+        }
+      ).__seedPlan({ revision: 2, loadKg: 100, reps: 3 }),
+    );
+    await page.reload();
+
+    await expect(page.getByRole('heading', { name: 'In progress' })).toBeVisible();
+    await expect(page.getByText('100 kg × 3')).toHaveCount(0);
+    await expect(page.getByText('The plan changed after this workout started')).toBeVisible();
+    // Recorded facts and the way out of the workout both survive.
+    await expect(page.getByRole('cell', { name: '80 kilograms' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Finish workout' })).toBeVisible();
+  });
+
+  test('keeps each recorded set under its own exercise when the plan revision moves on', async ({
+    page,
+  }) => {
+    await openTodayWithPlan(page, { multiple: true });
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForURL('**/workout');
+    await page.getByRole('button', { name: 'Log set' }).click();
+    await expect(page.getByRole('cell', { name: '80 kilograms' })).toBeVisible();
+    await page.getByRole('button', { name: 'Bench press' }).click();
+    await page.getByRole('button', { name: 'Log set' }).click();
+    await expect(page.getByRole('cell', { name: '60 kilograms' })).toBeVisible();
+
+    await page.evaluate(() =>
+      (
+        window as unknown as {
+          __seedPlan(override: { revision: number; loadKg: number; reps: number }): Promise<void>;
+        }
+      ).__seedPlan({ revision: 2, loadKg: 100, reps: 3 }),
+    );
+    await page.reload();
+
+    await expect(page.getByText('The plan changed after this workout started')).toBeVisible();
+    // The chips still filter the table; each exercise keeps only its own sets.
+    const table = page.getByRole('table', { name: 'Sets recorded' });
+    await expect(table.getByRole('cell', { name: '80 kilograms' })).toBeVisible();
+    await expect(table.getByRole('cell', { name: '60 kilograms' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Bench press' }).click();
+    await expect(table.getByRole('cell', { name: '60 kilograms' })).toBeVisible();
+    await expect(table.getByRole('cell', { name: '80 kilograms' })).toHaveCount(0);
+    await expect(page.getByRole('cell', { name: '100 kilograms' })).toHaveCount(0);
+
+    await finishWorkout(page);
+    await page.waitForURL('**/summary?session=**');
+    await expect(page.getByRole('heading', { name: 'Back squat' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Bench press' })).toBeVisible();
+  });
+
+  test('ignores Finish workout while a set is still being saved', async ({ page }) => {
+    await openTodayWithPlan(page);
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForURL('**/workout');
+    await expect(page.getByRole('button', { name: 'Log set' })).toBeVisible();
+    // Finish is confirmed one task after Log set, while the set's write is still in flight. The
+    // write and the completion each put a whole session snapshot, so an overlap would lose one.
+    await page.evaluate(async () => {
+      const press = (label: string, within = 'body') =>
+        [...document.querySelectorAll(`${within} button`)]
+          .find((b) => b.textContent?.trim() === label)
+          ?.click();
+      press('Log set');
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      press('Finish workout');
+      press('Finish workout', 'dialog');
+    });
+    await expect(
+      page
+        .getByRole('button', { name: 'Next set' })
+        .or(page.getByRole('cell', { name: '80 kilograms' })),
+    ).toBeVisible();
+    if (!page.url().includes('/summary')) await finishWorkout(page);
+    await page.waitForURL('**/summary?session=**');
+    await expect(page.getByRole('cell', { name: '80 kilograms' })).toBeVisible();
+  });
+
   test('says plainly that no plan has reached the device', async ({ page }) => {
     // The honest empty state. Nothing can sync yet, and the screen says so rather than
     // showing an invented plan.
@@ -199,7 +416,7 @@ test.describe('the workout journey', () => {
     await openTodayWithPlan(page);
     await page.getByRole('button', { name: 'Start workout' }).click();
     await page.waitForURL('**/workout');
-    await page.getByRole('button', { name: 'Done' }).click();
+    await finishWorkout(page);
 
     await page.waitForURL('**/summary?session=**');
     await expect(page.getByRole('heading', { name: 'Finished' })).toBeVisible();
@@ -238,12 +455,31 @@ const isPainted = (control: Locator): Promise<boolean> =>
     return hit !== null && (hit === element || element.contains(hit) || hit.contains(element));
   });
 
-type LandscapePlan = { unilateral?: boolean; combinedLoad?: boolean; twoExercises?: boolean };
+/** Focuses a control the way a keyboard does, so the browser shows its focus ring. */
+const focusByKeyboard = async (page: Page, control: Locator) => {
+  await control.focus();
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Shift+Tab');
+  await expect(control).toBeFocused();
+};
+
+type LandscapePlan = {
+  unilateral?: boolean;
+  combinedLoad?: boolean;
+  multiple?: boolean;
+  many?: boolean;
+};
 
 test.describe('a phone held sideways (layout.landscape.two-pane)', () => {
   const PROFILES: readonly { name: string; plan: LandscapePlan; scrolls: boolean }[] = [
     { name: 'one exercise', plan: {}, scrolls: false },
-    { name: 'two exercises', plan: { twoExercises: true }, scrolls: false },
+    { name: 'two exercises', plan: { multiple: true }, scrolls: false },
+    { name: 'five exercises with long names', plan: { many: true }, scrolls: false },
+    {
+      name: 'two exercises, one of them one-sided',
+      plan: { multiple: true, unilateral: true },
+      scrolls: true,
+    },
     { name: 'a unilateral exercise', plan: { unilateral: true }, scrolls: true },
     {
       name: 'a unilateral exercise with combined load',
@@ -431,6 +667,299 @@ test.describe('a phone held sideways (layout.landscape.two-pane)', () => {
     });
   }
 
+  test.describe('the exercise strip (VLA-199)', () => {
+    const LONG = 'Seated cable row with a wide neutral grip';
+    /** The strip is the scroller around the Exercises section. */
+    const stripOf = (page: Page): Locator =>
+      page
+        .getByRole('region', { name: 'Exercises' })
+        .locator('xpath=ancestor::div[contains(@class, "lead")]');
+
+    for (const [count, plan] of [
+      [2, { multiple: true }],
+      [5, { many: true }],
+      [2, { multiple: true, unilateral: true }],
+    ] as const) {
+      test(`is one 54 px row in the left pane for ${count} exercises${plan.unilateral ? ' (one-sided)' : ''}`, async ({
+        page,
+      }) => {
+        await openSetView(page, plan);
+        const strip = await boxOf(stripOf(page));
+        const name = await boxOf(page.getByRole('heading', { level: 1 }));
+        const controls = await boxOf(page.getByRole('region', { name: 'Set controls' }));
+
+        expect(strip.height).toBeCloseTo(54, 0);
+        expect(strip.x + strip.width).toBeLessThanOrEqual(controls.x);
+        expect(name.y).toBeCloseTo(strip.y + strip.height + 8, 0);
+        expect(name.y + name.height).toBeLessThanOrEqual(375);
+
+        // The section keeps its accessible name; only the visible heading is gone.
+        const heading = await boxOf(page.getByRole('heading', { name: 'Exercises' }));
+        expect(heading.width).toBeLessThanOrEqual(1);
+
+        // Log set is where it is with one exercise: 315 to 371 in a 375 px viewport.
+        const logSet = await boxOf(page.getByRole('button', { name: 'Log set' }));
+        expect(logSet.y + logSet.height).toBeLessThanOrEqual(375);
+        expect(await page.evaluate(() => window.scrollY)).toBe(0);
+      });
+    }
+
+    test('scrolls sideways only, with chips of at least 44 px and 8 px between them', async ({
+      page,
+    }) => {
+      await openSetView(page, { many: true });
+      const strip = stripOf(page);
+      const measure = await strip.evaluate((element) => ({
+        overflowY: element.scrollHeight - element.clientHeight,
+        overflowX: element.scrollWidth - element.clientWidth,
+      }));
+      expect(measure.overflowY).toBeLessThanOrEqual(0);
+      expect(measure.overflowX).toBeGreaterThan(0);
+      const page$ = await page.evaluate(() => ({
+        scrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+      }));
+      expect(page$.scrollWidth).toBeLessThanOrEqual(page$.clientWidth);
+
+      const chips = page.getByRole('region', { name: 'Exercises' }).getByRole('button');
+      const first = await boxOf(chips.nth(0));
+      const second = await boxOf(chips.nth(1));
+      expect(first.height).toBeGreaterThanOrEqual(44);
+      expect(second.height).toBeGreaterThanOrEqual(44);
+      expect(second.x - (first.x + first.width)).toBeCloseTo(8, 0);
+    });
+
+    test('cuts a long name short on screen and keeps it whole for assistive technology', async ({
+      page,
+    }) => {
+      await openSetView(page, { many: true });
+      const strip = await boxOf(stripOf(page));
+      const chip = page.getByRole('button', { name: LONG });
+      const box = await boxOf(chip);
+      expect(box.width).toBeLessThanOrEqual(strip.width * 0.8 + 1);
+      expect(await chip.locator('span').evaluate((s) => s.scrollWidth > s.clientWidth)).toBe(true);
+    });
+
+    test('brings the chosen chip into view without moving the page or Log set', async ({
+      page,
+    }) => {
+      await openSetView(page, { many: true });
+      const before = await boxOf(page.getByRole('button', { name: 'Log set' }));
+      const strip = stripOf(page);
+
+      // Tab to the last chip: the strip must follow focus, not the page.
+      await page.getByRole('button', { name: LONG }).focus();
+      await page.keyboard.press('Enter');
+      await expect(page.getByRole('heading', { level: 1, name: LONG })).toBeVisible();
+
+      const stripBox = await boxOf(strip);
+      const chipBox = await boxOf(page.getByRole('button', { name: LONG }));
+      expect(chipBox.x).toBeGreaterThanOrEqual(stripBox.x - 0.5);
+      expect(chipBox.x + chipBox.width).toBeLessThanOrEqual(stripBox.x + stripBox.width + 0.5);
+      await expect(page.getByRole('button', { name: LONG })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+      await expect(page.getByRole('button', { name: LONG })).toBeFocused();
+      expect(await boxOf(page.getByRole('button', { name: 'Log set' }))).toEqual(before);
+      expect(await page.evaluate(() => window.scrollY)).toBe(0);
+    });
+
+    /** The room a focus ring needs outside its chip, read from the ring itself. */
+    const ringRoom = (chip: Locator) =>
+      chip.evaluate((element) => {
+        const style = getComputedStyle(element);
+        return Number.parseFloat(style.outlineWidth) + Number.parseFloat(style.outlineOffset);
+      });
+
+    /** True when focusing the chip paints something in the band just outside `side` of it. */
+    const ringShowsOn = async (page: Page, chip: Locator, side: 'left' | 'right' | 'top') => {
+      const room = await ringRoom(chip);
+      expect(await chip.evaluate((element) => element.matches(':focus-visible'))).toBe(true);
+      const box = await boxOf(chip);
+      const clip =
+        side === 'left'
+          ? { x: box.x - room, y: box.y, width: room, height: box.height }
+          : side === 'right'
+            ? { x: box.x + box.width, y: box.y, width: room, height: box.height }
+            : { x: box.x, y: box.y - room, width: box.width, height: room };
+      const focused = await page.screenshot({ clip });
+      await chip.blur();
+      const blurred = await page.screenshot({ clip });
+      await focusByKeyboard(page, chip);
+      return !focused.equals(blurred);
+    };
+
+    test('shows the whole focus ring on the first and the last chip', async ({ page }) => {
+      await openSetView(page, { many: true });
+      const chips = page.getByRole('region', { name: 'Exercises' }).getByRole('button');
+      const first = chips.first();
+      const last = chips.last();
+
+      await focusByKeyboard(page, first);
+      expect(await ringShowsOn(page, first, 'left'), 'left of the first chip is clipped').toBe(
+        true,
+      );
+      expect(await ringShowsOn(page, first, 'top'), 'top of the first chip is clipped').toBe(true);
+
+      await focusByKeyboard(page, last);
+      expect(await ringShowsOn(page, last, 'right'), 'right of the last chip is clipped').toBe(
+        true,
+      );
+      expect(await ringShowsOn(page, last, 'top'), 'top of the last chip is clipped').toBe(true);
+    });
+
+    test('stays where it was while resting, and is offered again while editing a set', async ({
+      page,
+    }) => {
+      await openSetView(page, { multiple: true });
+      const strip = stripOf(page);
+      // Rest moves focus to its heading, which may scroll the page; compare on the page, not the screen.
+      const onPage = async () => {
+        const box = await boxOf(strip);
+        return { ...box, y: box.y + (await page.evaluate(() => window.scrollY)) };
+      };
+      const at = await onPage();
+
+      await page.getByRole('button', { name: 'Log set' }).click();
+      await expect(page.getByRole('heading', { name: 'Rest' })).toBeVisible();
+      await expect(page.getByRole('region', { name: 'Exercises' })).toHaveCount(1);
+      expect(await onPage()).toEqual(at);
+
+      await page.getByRole('button', { name: 'Next set' }).click();
+      await page.getByRole('button', { name: /^Edit set 1/ }).click();
+      await expect(page.getByRole('button', { name: 'Save changes' })).toBeVisible();
+      await expect(page.getByRole('region', { name: 'Exercises' })).toHaveCount(1);
+    });
+  });
+
+  for (const plan of [{ multiple: true }, { many: true }] satisfies LandscapePlan[]) {
+    test(`keeps the page still through log, rest and next set with ${plan.many ? 'five' : 'two'} exercises`, async ({
+      page,
+    }) => {
+      await openSetView(page, plan);
+      const scrollY = () => page.evaluate(() => window.scrollY);
+
+      await page.getByRole('button', { name: 'Log set' }).click();
+      await expect(page.getByRole('heading', { name: 'Rest' })).toBeVisible();
+      expect(await scrollY(), 'rest view scrolled the page').toBe(0);
+
+      await page.getByRole('button', { name: 'Next set' }).click();
+      await expect(page.getByRole('button', { name: 'Log set' })).toBeVisible();
+      expect(await scrollY(), 'Next set scrolled the page').toBe(0);
+      const logSet = await boxOf(page.getByRole('button', { name: 'Log set' }));
+      expect(logSet.y).toBeGreaterThanOrEqual(0);
+      expect(logSet.y + logSet.height).toBeLessThanOrEqual(375);
+    });
+
+    test(`keeps Save changes in view when editing a set with ${plan.many ? 'five' : 'two'} exercises`, async ({
+      page,
+    }) => {
+      await openSetView(page, plan);
+      await page.getByRole('button', { name: 'Log set' }).click();
+      await page.getByRole('button', { name: 'Next set' }).click();
+      await page.getByRole('button', { name: /^Edit set 1/ }).click();
+      const save = page.getByRole('button', { name: 'Save changes' });
+      await expect(save).toBeVisible();
+      await expect(save).toBeInViewport({ ratio: 1 });
+    });
+  }
+
+  test('reserves room for the tabs only where tabs are shown', async ({ page }) => {
+    const reserved = () =>
+      page.evaluate(() => getComputedStyle(document.documentElement).scrollPaddingBottom);
+    await openSetView(page, {});
+    expect(await reserved(), 'the workout has no tabs').toBe('0px');
+    await page.goto('/today');
+    await expect(page.getByRole('navigation')).toBeVisible();
+    expect(await reserved(), 'the tabs can cover focus').not.toBe('0px');
+  });
+
+  for (const size of [
+    { name: 'landscape', width: 667, height: 375 },
+    { name: 'portrait', width: 375, height: 667 },
+  ]) {
+    test.describe(`choosing an exercise from the keyboard in ${size.name}`, () => {
+      const open = async (page: Page) => {
+        await page.setViewportSize({ width: size.width, height: size.height });
+        await openTodayWithPlan(page, { multiple: true });
+        await page.getByRole('button', { name: 'Start workout' }).click();
+        await page.waitForURL('**/workout');
+        await expect(page.getByRole('button', { name: 'Log set' })).toBeVisible();
+      };
+      const chips = (page: Page) =>
+        page.getByRole('region', { name: 'Exercises' }).getByRole('button');
+
+      /** Chooses the other exercise by keyboard, then expects its chip to hold focus. */
+      const chooseOther = async (page: Page) => {
+        const other = chips(page).and(page.locator('[aria-pressed="false"]'));
+        const name = (await other.innerText()).trim();
+        await other.focus();
+        await page.keyboard.press('Enter');
+        const chosen = page.getByRole('button', { name, exact: true });
+        await expect(chosen).toHaveAttribute('aria-pressed', 'true');
+        await expect(chosen, 'focus is lost when the view changes').toBeFocused();
+        expect(await page.evaluate(() => document.activeElement?.tagName)).toBe('BUTTON');
+      };
+
+      test('keeps focus on the chosen chip from the set view', async ({ page }) => {
+        await open(page);
+        await chooseOther(page);
+        await expect(page.getByRole('button', { name: 'Log set' })).toBeVisible();
+      });
+
+      test('keeps focus on the chosen chip from the rest view', async ({ page }) => {
+        await open(page);
+        await page.getByRole('button', { name: 'Log set' }).click();
+        await expect(page.getByRole('heading', { name: 'Rest' })).toBeVisible();
+        await chooseOther(page);
+        await expect(page.getByRole('button', { name: 'Log set' })).toBeVisible();
+      });
+
+      test('keeps focus on the chosen chip from the edit view', async ({ page }) => {
+        await open(page);
+        await page.getByRole('button', { name: 'Log set' }).click();
+        await page.getByRole('button', { name: 'Next set' }).click();
+        await page.getByRole('button', { name: /^Edit set 1/ }).click();
+        await expect(page.getByRole('button', { name: 'Save changes' })).toBeVisible();
+        await chooseOther(page);
+        await expect(page.getByRole('button', { name: 'Save changes' })).toBeHidden();
+      });
+    });
+  }
+
+  test('lays the chips out as a wrapping row, not a strip, in portrait', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await openTodayWithPlan(page, { many: true });
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForURL('**/workout');
+    const region = page.getByRole('region', { name: 'Exercises' });
+    const chips = region.getByRole('button');
+    await expect(chips).toHaveCount(5);
+
+    const boxes = await Promise.all([0, 1, 2, 3, 4].map((n) => boxOf(chips.nth(n))));
+    for (const box of boxes) {
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(375);
+      expect(box.height).toBeGreaterThanOrEqual(44);
+    }
+    expect(
+      new Set(boxes.map((box) => Math.round(box.y))).size,
+      'chips wrap onto rows',
+    ).toBeGreaterThan(1);
+    const overflow = await page.evaluate(() => ({
+      scrollWidth: document.documentElement.scrollWidth,
+      clientWidth: document.documentElement.clientWidth,
+    }));
+    expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth);
+    await expect(page.getByRole('button', { name: 'Log set' })).toBeVisible();
+
+    await focusByKeyboard(page, chips.first());
+    expect(await chips.first().evaluate((element) => element.matches(':focus-visible'))).toBe(true);
+    const first = await boxOf(chips.first());
+    expect(first.x).toBeGreaterThanOrEqual(5);
+  });
+
   test('shows every Load value whole', async ({ page }) => {
     await openSetView(page, {});
     const load = page.getByRole('spinbutton', { name: 'Load' });
@@ -531,7 +1060,7 @@ test.describe('logging a set', () => {
     await openTodayWithPlan(page);
     await page.getByRole('button', { name: 'Start workout' }).click();
     await page.waitForURL('**/workout');
-    await expect(page.getByRole('heading', { name: 'back-squat' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Back squat' })).toBeVisible();
   }
 
   test('records a set performed as prescribed in one action', async ({ page }) => {
@@ -660,7 +1189,7 @@ test('@a11y the live set view fits a 375 by 667 phone with no sideways scrolling
   await openTodayWithPlan(page);
   await page.getByRole('button', { name: 'Start workout' }).click();
   await page.waitForURL('**/workout');
-  await expect(page.getByRole('heading', { name: 'back-squat' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Back squat' })).toBeVisible();
 
   const overflow = await page.evaluate(() => ({
     scrollWidth: document.documentElement.scrollWidth,
@@ -694,6 +1223,8 @@ test.describe('the offline journey', () => {
     await expect(
       page.getByRole('heading', { name: 'That session is not on this device' }),
     ).toBeVisible();
+    await page.goto('/history');
+    await expect(page.getByRole('heading', { name: 'No finished workouts yet' })).toBeVisible();
     await page.goto('/today');
     await expect(page.getByRole('button', { name: 'Start workout' })).toBeVisible();
 
@@ -701,7 +1232,7 @@ test.describe('the offline journey', () => {
 
     await page.getByRole('button', { name: 'Start workout' }).click();
     await page.waitForURL('**/workout');
-    await expect(page.getByRole('heading', { name: 'back-squat' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Back squat' })).toBeVisible();
 
     await page.getByRole('button', { name: 'Log set' }).click();
     await expect(page.getByRole('cell', { name: '80 kilograms' })).toBeVisible();
@@ -714,7 +1245,7 @@ test.describe('the offline journey', () => {
     await page.getByRole('button', { name: 'Log set' }).click();
     await expect(page.getByRole('cell', { name: '82.5 kilograms' })).toBeVisible();
 
-    await page.getByRole('button', { name: 'Done' }).click();
+    await finishWorkout(page);
     await page.waitForURL('**/summary?session=**');
     await expect(page.getByRole('heading', { name: 'Finished' })).toBeVisible();
 
@@ -738,6 +1269,12 @@ test.describe('the offline journey', () => {
         }),
     );
     expect(queued, 'a change recorded offline was lost').toBe(4);
+
+    // History is a primary tab, so it has to survive the network being off like the rest of the
+    // journey: the shell comes from the service worker and the finished session from IndexedDB.
+    // Without /history in the precache list this lands on /offline instead.
+    await page.goto('/history');
+    await expect(page.getByRole('list', { name: 'Workouts' })).toBeVisible();
 
     await context.setOffline(false);
   });
@@ -837,83 +1374,86 @@ test.describe('discarding a workout (task 5.3)', () => {
   });
 });
 
-test.describe('a full device (task 4.8)', () => {
-  /**
-   * Makes the next write meet a full device, using the browser's own error.
-   *
-   * Chromium's quota override does not reject a small IndexedDB write even with the quota at
-   * one byte (see browser-store.spec.ts), so the store is given a factory that raises the real
-   * QuotaExceededError from the next put. Nothing in the application is modified for the test.
-   */
-  async function failTheNextWrite(page: Page): Promise<void> {
-    await page.addInitScript(() => {
-      const forward = (target: object, prop: string | symbol) => {
-        const value = Reflect.get(target, prop, target);
-        return typeof value === 'function' ? (value as () => unknown).bind(target) : value;
-      };
-      const setOnTarget = (target: object, prop: string | symbol, value: unknown) => {
-        Reflect.set(target, prop, value, target);
-        return true;
-      };
-      let armed = false;
-      (window as unknown as { __failNextWrite(): void }).__failNextWrite = () => {
-        armed = true;
-      };
+/**
+ * Makes the next write meet a full device, using the browser's own error.
+ *
+ * Chromium's quota override does not reject a small IndexedDB write even with the quota at
+ * one byte (see browser-store.spec.ts), so the store is given a factory that raises the real
+ * QuotaExceededError from the next put. Nothing in the application is modified for the test.
+ */
+async function failTheNextWrite(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const forward = (target: object, prop: string | symbol) => {
+      const value = Reflect.get(target, prop, target);
+      return typeof value === 'function' ? (value as () => unknown).bind(target) : value;
+    };
+    const setOnTarget = (target: object, prop: string | symbol, value: unknown) => {
+      Reflect.set(target, prop, value, target);
+      return true;
+    };
+    let armed: string | undefined;
+    (window as unknown as { __failNextWrite(name?: string): void }).__failNextWrite = (
+      name = 'QuotaExceededError',
+    ) => {
+      armed = name;
+    };
 
-      const wrapStore = (store: IDBObjectStore) =>
-        new Proxy(store, {
-          set: setOnTarget,
-          get(target, prop) {
-            if (prop === 'put' && armed) {
-              armed = false;
-              return () => {
-                throw new DOMException('the device is full', 'QuotaExceededError');
-              };
-            }
-            return forward(target, prop);
-          },
-        });
-      const wrapTransaction = (transaction: IDBTransaction) =>
-        new Proxy(transaction, {
-          set: setOnTarget,
-          get: (target, prop) =>
-            prop === 'objectStore'
-              ? (name: string) => wrapStore(target.objectStore(name))
-              : forward(target, prop),
-        });
-      const wrapDatabase = (database: IDBDatabase) =>
-        new Proxy(database, {
-          set: setOnTarget,
-          get: (target, prop) =>
-            prop === 'transaction'
-              ? (...args: unknown[]) =>
-                  wrapTransaction(
-                    (target.transaction as (...a: unknown[]) => IDBTransaction)(...args),
-                  )
-              : forward(target, prop),
-        });
-
-      const open = indexedDB.open.bind(indexedDB);
-      Object.defineProperty(indexedDB, 'open', {
-        configurable: true,
-        value: (name: string, version?: number) => {
-          const request = open(name, version);
-          return new Proxy(request, {
-            set: setOnTarget,
-            get: (target, prop) =>
-              prop === 'result' ? wrapDatabase(target.result) : forward(target, prop),
-          });
+    const wrapStore = (store: IDBObjectStore) =>
+      new Proxy(store, {
+        set: setOnTarget,
+        get(target, prop) {
+          if (prop === 'put' && armed) {
+            const name = armed;
+            armed = undefined;
+            return () => {
+              throw new DOMException('the write failed', name);
+            };
+          }
+          return forward(target, prop);
         },
       });
-    });
-  }
+    const wrapTransaction = (transaction: IDBTransaction) =>
+      new Proxy(transaction, {
+        set: setOnTarget,
+        get: (target, prop) =>
+          prop === 'objectStore'
+            ? (name: string) => wrapStore(target.objectStore(name))
+            : forward(target, prop),
+      });
+    const wrapDatabase = (database: IDBDatabase) =>
+      new Proxy(database, {
+        set: setOnTarget,
+        get: (target, prop) =>
+          prop === 'transaction'
+            ? (...args: unknown[]) =>
+                wrapTransaction(
+                  (target.transaction as (...a: unknown[]) => IDBTransaction)(...args),
+                )
+            : forward(target, prop),
+      });
 
+    const open = indexedDB.open.bind(indexedDB);
+    Object.defineProperty(indexedDB, 'open', {
+      configurable: true,
+      value: (name: string, version?: number) => {
+        const request = open(name, version);
+        return new Proxy(request, {
+          set: setOnTarget,
+          get: (target, prop) =>
+            prop === 'result' ? wrapDatabase(target.result) : forward(target, prop),
+        });
+      },
+    });
+  });
+}
+
+test.describe('a full device (task 4.8)', () => {
   test('refuses the set, says the device is full, and offers the export', async ({ page }) => {
     await failTheNextWrite(page);
     await openTodayWithPlan(page);
     await page.getByRole('button', { name: 'Start workout' }).click();
     await page.waitForURL('**/workout');
-    await expect(page.getByRole('heading', { name: 'back-squat' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Back squat' })).toBeVisible();
 
     await page.evaluate(() => (window as unknown as { __failNextWrite(): void }).__failNextWrite());
     await page.getByRole('button', { name: 'Log set' }).click();
@@ -923,6 +1463,26 @@ test.describe('a full device (task 4.8)', () => {
     await expect(page.getByRole('button', { name: 'Export everything' })).toBeVisible();
     // Nothing was recorded, and what was already queued is untouched.
     await expect(page.getByRole('cell', { name: '80 kilograms' })).toHaveCount(0);
+  });
+
+  test('a failed finish says so, offers the export, and the next finish completes', async ({
+    page,
+  }) => {
+    await failTheNextWrite(page);
+    await openTodayWithPlan(page);
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForURL('**/workout');
+    await expect(page.getByRole('heading', { name: 'Back squat' })).toBeVisible();
+
+    await page.evaluate(() => (window as unknown as { __failNextWrite(): void }).__failNextWrite());
+    await finishWorkout(page);
+
+    await expect(page.getByText('the workout was not finished')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Export everything' })).toBeVisible();
+    expect(page.url()).toContain('/workout');
+
+    await finishWorkout(page);
+    await page.waitForURL('**/summary?session=**');
   });
 
   test('the export the offer produces is the whole archive', async ({ page }) => {
@@ -958,7 +1518,7 @@ test.describe('unilateral entry (tasks 5.9 and 5.9a)', () => {
     await openTodayWithPlan(page, { unilateral: true });
     await page.getByRole('button', { name: 'Start workout' }).click();
     await page.waitForURL('**/workout');
-    await expect(page.getByRole('heading', { name: 'split-squat' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Split squat' })).toBeVisible();
 
     // The side is asked for, and left is where it starts.
     const side = page.getByRole('group', { name: 'Side' });
@@ -1061,5 +1621,398 @@ test.describe('unilateral entry (tasks 5.9 and 5.9a)', () => {
     await semantics.getByRole('radio', { name: 'Per side' }).focus();
     await page.keyboard.press('ArrowRight');
     await expect(semantics.getByRole('radio', { name: 'In total' })).toBeChecked();
+  });
+});
+
+/**
+ * Makes every read from the device fail once the next write has committed, until restored:
+ * the write succeeded and the screen cannot read it back. Nothing in the application changes.
+ */
+async function failReadsAfterNextWrite(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    let armed = false;
+    let failing = false;
+    const control = window as unknown as Record<string, () => void>;
+    control.__failReadsAfterNextWrite = () => {
+      armed = true;
+    };
+    control.__restoreReads = () => {
+      armed = false;
+      failing = false;
+    };
+    const open = IDBDatabase.prototype.transaction;
+    IDBDatabase.prototype.transaction = function (
+      this: IDBDatabase,
+      ...args: Parameters<IDBDatabase['transaction']>
+    ) {
+      const transaction = open.apply(this, args);
+      if (armed && args[1] === 'readwrite' && [args[0]].flat().includes('outbox')) {
+        armed = false;
+        transaction.addEventListener('complete', () => {
+          failing = true;
+        });
+      }
+      return transaction;
+    };
+    for (const prototype of [IDBObjectStore.prototype, IDBIndex.prototype]) {
+      for (const method of ['get', 'getAll'] as const) {
+        const original = prototype[method] as (this: unknown, ...args: unknown[]) => unknown;
+        (prototype as unknown as Record<string, unknown>)[method] = function (
+          this: unknown,
+          ...args: unknown[]
+        ) {
+          if (failing) throw new DOMException('the read failed', 'UnknownError');
+          return original.apply(this, args);
+        };
+      }
+    }
+  });
+}
+
+test.describe('plan-to-workout design conformance (VLA-14, P1 deltas)', () => {
+  const noRawIds = async (page: Page): Promise<void> => {
+    const text = await page.locator('body').innerText();
+    expect(text).not.toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:/);
+    expect(text).not.toMatch(/\b(back|bench|split)-(squat|press)\b/);
+    expect(text).not.toContain('{"');
+  };
+
+  async function startWorkout(
+    page: Page,
+    multiple = true,
+    options: SeedOptions = {},
+  ): Promise<void> {
+    await openTodayWithPlan(page, { multiple, ...options });
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForURL('**/workout');
+    await expect(page.getByRole('heading', { name: 'Back squat', level: 1 })).toBeVisible();
+  }
+
+  type PlanMove = {
+    revision: number;
+    loadKg?: number;
+    reps?: number;
+    profile?: 'strength' | 'unilateral_strength';
+    swap?: boolean;
+  };
+  const moveThePlanOn = (page: Page, move: PlanMove = { revision: 2, loadKg: 100, reps: 3 }) =>
+    page.evaluate(
+      (override) =>
+        (window as unknown as { __seedPlan(override: PlanMove): Promise<void> }).__seedPlan(
+          override,
+        ),
+      move,
+    );
+
+  test('D-3: with no plan, Today is a heading, one sentence and one secondary button', async ({
+    page,
+  }) => {
+    await page.goto('/today');
+    await expect(page.getByRole('heading', { name: 'No plan on this device yet' })).toBeVisible();
+    await expect(
+      page.getByText('A plan arrives when this device syncs. There is no server to sync with yet.'),
+    ).toBeVisible();
+    await expect(page.getByText(/saved on the device first/)).toHaveCount(0);
+    await page.getByRole('button', { name: 'See your history' }).click();
+    await page.waitForURL('**/history');
+
+    await page.goto('/settings');
+    await expect(page.getByText(/saved on the device first/)).toBeVisible();
+  });
+
+  test('D-1, D-2: Today, History and Summary show names and dates, never ids or ISO times', async ({
+    page,
+  }) => {
+    await openTodayWithPlan(page);
+    await expect(page.getByText(/Session mon, Fri 18 Sept/)).toBeVisible();
+    await noRawIds(page);
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForURL('**/workout');
+    await expect(page.getByText(/^Started \w{3} \d{1,2} \w{3}/)).toBeVisible();
+    await noRawIds(page);
+    await finishWorkout(page);
+    await page.waitForURL('**/summary?session=**');
+    await expect(page.getByRole('heading', { name: 'Back squat', level: 2 })).toBeVisible();
+    await noRawIds(page);
+    await page.goto('/history');
+    await expect(page.getByText('1 exercise · 0 sets')).toBeVisible();
+    await noRawIds(page);
+  });
+
+  test('D-4, D-5: the workout bar shows position and sync, and Close leaves without ending', async ({
+    page,
+  }) => {
+    await startWorkout(page);
+    await expect(page.getByText('Exercise 1 of 2')).toBeVisible();
+    await expect(page.getByText('On device')).toBeVisible();
+    await expect(page.getByText('Nothing waiting to sync')).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Workout', level: 1 })).toHaveCount(0);
+
+    await page.getByRole('button', { name: 'Bench press' }).click();
+    await expect(page.getByText('Exercise 2 of 2')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Close' }).click();
+    await page.waitForURL('**/today');
+    await expect(page.getByRole('heading', { name: 'A workout is in progress' })).toBeVisible();
+  });
+
+  test('D-7: the selected chip carries a check as well as aria-pressed; a single exercise has no chips', async ({
+    page,
+  }) => {
+    await startWorkout(page);
+    const selected = page.getByRole('button', { name: 'Back squat' });
+    const other = page.getByRole('button', { name: 'Bench press' });
+    await expect(selected).toHaveAttribute('aria-pressed', 'true');
+    await expect(selected.locator('svg')).toHaveCount(1);
+    await expect(other).toHaveAttribute('aria-pressed', 'false');
+    await expect(other.locator('svg')).toHaveCount(0);
+
+    await other.click();
+    await expect(other.locator('svg')).toHaveCount(1);
+    await expect(selected.locator('svg')).toHaveCount(0);
+  });
+
+  test('D-7: no chip row for a single-exercise session', async ({ page }) => {
+    await startWorkout(page, false);
+    await expect(page.getByRole('button', { name: 'Back squat' })).toHaveCount(0);
+    await expect(page.getByText('Exercise 1 of 1')).toBeVisible();
+  });
+
+  test('D-12: Log set is the one primary button and Finish workout is secondary', async ({
+    page,
+  }) => {
+    await startWorkout(page);
+    const primaries = page.locator('button[data-variant="primary"]:visible');
+    await expect(primaries).toHaveCount(1);
+    await expect(primaries).toHaveText('Log set');
+    await expect(page.getByRole('button', { name: 'Finish workout' })).toHaveAttribute(
+      'data-variant',
+      'secondary',
+    );
+  });
+
+  test('D-13: Finish workout asks first, Keep going loses nothing, confirming replaces history', async ({
+    page,
+  }) => {
+    await startWorkout(page);
+    await page.getByRole('button', { name: 'Log set' }).click();
+    await expect(page.getByRole('cell', { name: '80 kilograms' })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Finish workout' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Finish this workout?' });
+    await expect(dialog).toContainText('You have recorded 1 set.');
+    await dialog.getByRole('button', { name: 'Keep going' }).click();
+    await expect(dialog).toBeHidden();
+    expect(page.url()).toContain('/workout');
+    await expect(page.getByRole('cell', { name: '80 kilograms' })).toBeVisible();
+
+    await finishWorkout(page);
+    await page.waitForURL('**/summary?session=**');
+    await page.goBack();
+    expect(page.url()).not.toContain('/workout');
+  });
+
+  test('D-14: a set that did not save says so in words and Retry resubmits it', async ({
+    page,
+  }) => {
+    await failTheNextWrite(page);
+    await startWorkout(page, false);
+    await page.evaluate(() =>
+      (window as unknown as { __failNextWrite(name: string): void }).__failNextWrite('DataError'),
+    );
+    await page.getByRole('button', { name: 'Log set' }).click();
+
+    await expect(
+      page.getByText('That set was not saved. Nothing already recorded has been lost.'),
+    ).toBeVisible();
+    await noRawIds(page);
+    await page.getByRole('button', { name: 'Retry' }).click();
+    await expect(page.getByRole('heading', { name: 'Rest' })).toBeVisible();
+    await expect(page.getByRole('cell', { name: '80 kilograms' })).toBeVisible();
+    await expect(page.getByText('That set was not saved')).toHaveCount(0);
+  });
+
+  test('D-16: with no prescription there is a stale message, no Target, and an empty control', async ({
+    page,
+  }) => {
+    await startWorkout(page);
+    await page.getByRole('button', { name: 'Log set' }).click();
+    await expect(page.getByRole('cell', { name: '80 kilograms' })).toBeVisible();
+    await moveThePlanOn(page);
+    await page.reload();
+
+    await expect(
+      page.getByText(
+        'The plan changed after this workout started, so there are no targets to show. Everything you have recorded is safe.',
+      ),
+    ).toBeVisible();
+    await expect(page.getByText('100 kg × 3')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Back squat', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Bench press', exact: true })).toBeVisible();
+    await expect(page.getByText('Exercise 1 of 2')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Finish workout' })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Bench press', exact: true }).click();
+    await page.getByRole('button', { name: 'Log a set anyway' }).click();
+    await expect(page.getByLabel('Target')).toHaveCount(0);
+    await expect(page.getByRole('spinbutton', { name: 'Reps' })).toHaveValue('');
+    await expect(page.getByRole('spinbutton', { name: 'Load' })).toHaveValue('');
+
+    await page.getByRole('button', { name: 'Log set' }).click();
+    await expect(page.getByText('Enter how many reps you did')).toBeVisible();
+    await page.getByRole('spinbutton', { name: 'Reps' }).fill('5');
+    await page.getByRole('spinbutton', { name: 'Reps' }).blur();
+    await page.getByRole('button', { name: 'Log set' }).click();
+    await expect(page.getByRole('heading', { name: 'Rest' })).toBeVisible();
+    await expect(page.getByRole('cell', { name: '5', exact: true })).toBeVisible();
+    await expect(page.getByRole('cell', { name: '100 kilograms' })).toHaveCount(0);
+  });
+
+  const openUnprescribed = async (page: Page, move: PlanMove, heading: string) => {
+    await openTodayWithPlan(page, { unilateral: true });
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForURL('**/workout');
+    await expect(page.getByRole('heading', { name: heading })).toBeVisible();
+    await moveThePlanOn(page, move);
+    await page.reload();
+    await page.getByRole('button', { name: 'Log a set anyway' }).click();
+    await expect(page.getByLabel('Target')).toHaveCount(0);
+    await expect(page.getByRole('spinbutton', { name: 'Load' })).toHaveValue('');
+  };
+
+  const logFiveReps = async (page: Page) => {
+    await page.getByRole('spinbutton', { name: 'Reps' }).fill('5');
+    await page.getByRole('spinbutton', { name: 'Reps' }).blur();
+    await page.getByRole('button', { name: 'Log set' }).click();
+    await expect(page.getByRole('heading', { name: 'Rest' })).toBeVisible();
+  };
+
+  const sideGroup = (page: Page) => page.getByRole('group', { name: 'Side' });
+
+  test('D-16: a one-sided exercise stays one-sided when the plan moves on to two-sided', async ({
+    page,
+  }) => {
+    await openUnprescribed(page, { revision: 2, profile: 'strength' }, 'Split squat');
+    await expect(sideGroup(page).getByRole('radio', { name: 'Left' })).toBeChecked();
+    await sideGroup(page).getByRole('radio', { name: 'Right' }).check({ force: true });
+    await logFiveReps(page);
+    await page.getByRole('button', { name: /^Edit set 1/ }).click();
+    await expect(sideGroup(page).getByRole('radio', { name: 'Right' })).toBeChecked();
+  });
+
+  test('D-16: a two-sided exercise stays two-sided when the plan moves on to one-sided', async ({
+    page,
+  }) => {
+    await startWorkout(page, false);
+    await moveThePlanOn(page, { revision: 2, profile: 'unilateral_strength' });
+    await page.reload();
+    await page.getByRole('button', { name: 'Log a set anyway' }).click();
+    await expect(sideGroup(page)).toHaveCount(0);
+    await logFiveReps(page);
+    await page.getByRole('button', { name: /^Edit set 1/ }).click();
+    await expect(sideGroup(page)).toHaveCount(0);
+  });
+
+  test('D-16: a one-sided exercise stays one-sided when the plan no longer has it', async ({
+    page,
+  }) => {
+    await openUnprescribed(page, { revision: 2, swap: true }, 'Split squat');
+    await expect(sideGroup(page).getByRole('radio', { name: 'Left' })).toBeChecked();
+    await expect(page.getByRole('heading', { name: 'Split squat' })).toBeVisible();
+    await expect(page.getByText('Overhead press')).toHaveCount(0);
+    await logFiveReps(page);
+  });
+
+  test('a prescription with reps and no load shows the reps and leaves Load empty', async ({
+    page,
+  }) => {
+    await startWorkout(page, false, { bodyweight: true });
+    await expect(page.getByLabel('Target')).toContainText('8 reps');
+    await expect(page.getByLabel('Target')).not.toContainText('kg');
+    await expect(page.getByRole('spinbutton', { name: 'Load' })).toHaveValue('');
+    await page.getByRole('button', { name: 'Log set' }).click();
+    await expect(page.getByRole('heading', { name: 'Rest' })).toBeVisible();
+    await expect(page.getByRole('cell', { name: '8', exact: true })).toBeVisible();
+    await expect(page.getByRole('cell', { name: /kilogram/ })).toHaveCount(0);
+  });
+
+  test('a set that saved but could not be read back keeps the workout and Retry only reads', async ({
+    page,
+  }) => {
+    await failReadsAfterNextWrite(page);
+    let failedReads = 0;
+    page.on('console', (message) => {
+      if (message.text().startsWith('workout not read')) failedReads += 1;
+    });
+    await startWorkout(page, false);
+    await page.evaluate(() =>
+      (window as unknown as { __failReadsAfterNextWrite(): void }).__failReadsAfterNextWrite(),
+    );
+    await page.getByRole('button', { name: 'Log set' }).click();
+
+    await expect(page.getByRole('heading', { name: 'Rest' })).toBeVisible();
+    await expect(page.getByText('This screen could not be refreshed')).toBeVisible();
+    await expect(page.getByText('That set was not saved')).toHaveCount(0);
+
+    expect(failedReads).toBe(1);
+    await page.getByRole('button', { name: 'Retry' }).click();
+    await expect.poll(() => failedReads).toBe(2);
+    await expect(page.getByText('This screen could not be refreshed')).toBeVisible();
+
+    // The table is stale: it must not number the next set as the one already saved, nor
+    // tell Finish that nothing was recorded.
+    await page.getByRole('button', { name: 'Next set' }).click();
+    await expect.poll(() => failedReads).toBe(3);
+    await expect(page.getByRole('heading', { name: 'Rest' })).toBeVisible();
+    await expect(page.getByText('Set 1', { exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Finish workout' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Finish this workout?' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog).not.toContainText(/recorded \d+ sets?/);
+    await expect(dialog).not.toContainText('0 sets');
+    await dialog.getByRole('button', { name: 'Keep going' }).click();
+
+    await page.evaluate(() => (window as unknown as { __restoreReads(): void }).__restoreReads());
+    await page.getByRole('button', { name: 'Next set' }).click();
+    await expect(page.getByText('This screen could not be refreshed')).toHaveCount(0);
+    await expect(page.getByText('Set 2', { exact: true })).toBeVisible();
+    await expect(page.getByRole('cell', { name: '80 kilograms' })).toHaveCount(1);
+    await page.getByRole('button', { name: 'Finish workout' }).click();
+    await expect(page.getByRole('dialog', { name: 'Finish this workout?' })).toContainText(
+      'You have recorded 1 set.',
+    );
+  });
+
+  test('switching exercises waits for a read that works, so a saved set is never renumbered', async ({
+    page,
+  }) => {
+    await failReadsAfterNextWrite(page);
+    await startWorkout(page, true);
+    await page.evaluate(() =>
+      (window as unknown as { __failReadsAfterNextWrite(): void }).__failReadsAfterNextWrite(),
+    );
+    await page.getByRole('button', { name: 'Log set' }).click();
+    await expect(page.getByRole('heading', { name: 'Rest' })).toBeVisible();
+    await expect(page.getByText('This screen could not be refreshed')).toBeVisible();
+
+    // The table is stale, so the exercise chips must not remount the set view on it.
+    await page.getByRole('button', { name: 'Bench press' }).click();
+    await expect(page.getByRole('button', { name: 'Back squat', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await expect(page.getByRole('heading', { name: 'Rest' })).toBeVisible();
+    await expect(page.getByText('Set 1', { exact: true })).toHaveCount(0);
+
+    await page.evaluate(() => (window as unknown as { __restoreReads(): void }).__restoreReads());
+    await page.getByRole('button', { name: 'Bench press' }).click();
+    await expect(page.getByRole('button', { name: 'Bench press', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await expect(page.getByText('This screen could not be refreshed')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Back squat' }).click();
+    await expect(page.getByText('Set 2', { exact: true })).toBeVisible();
+    await expect(page.getByRole('cell', { name: '80 kilograms' })).toHaveCount(1);
   });
 });

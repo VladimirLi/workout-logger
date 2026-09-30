@@ -5,10 +5,11 @@ import { expect, test } from '@playwright/test';
  * registers a service worker - not that any product feature works.
  */
 
-test('the shell renders with a main landmark and a heading', async ({ page }) => {
+test('the app opens on Today with a main landmark and a heading', async ({ page }) => {
   await page.goto('/');
 
-  await expect(page.getByRole('heading', { level: 1, name: 'Foundation shell' })).toBeVisible();
+  await expect(page).toHaveURL(/\/today$/);
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   await expect(page.locator('main#main')).toBeVisible();
 });
 
