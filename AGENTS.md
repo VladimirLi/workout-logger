@@ -53,8 +53,8 @@ What still requires a human:
 
 - Approving or changing product intent — `VISION.md`, `ROADMAP.md`, `AGENTS.md`, an ADR, or
   an OpenSpec change that alters product behavior.
-- Changing the design system's foundations, approving visual baselines, and validating it
-  (gate G-10).
+- Changing the design system's foundations and validating it (gate G-10). Approving a visual
+  baseline update is **not** a human item; the team approves it (see Working on UI).
 - Anything security-sensitive or irreversible: credentials, cloud provisioning, DNS, the
   WebAuthn relying-party ID, production data, branch rulesets.
 - Signing off a license exception (gate G-11).
@@ -137,8 +137,21 @@ route around it.
 
 Not permitted: a raw colour, size, duration, or layer value in component CSS; a new UI
 framework, component library, icon package, or font; `className` on a primitive; committing
-baselines outside an owner-approved visual-change PR; or claiming accessibility conformance,
-journey validation, or installability without the recorded evidence G-10 lists.
+baselines outside a dedicated visual-change PR that meets the baseline rule below; or claiming
+accessibility conformance, journey validation, or installability without the recorded evidence
+G-10 lists.
+
+**Baseline updates are approved by the team, not the owner** (owner instruction, VLA-189,
+2026-09-30). A baseline update is its own PR, labeled visual-change. It is approved only
+when all of these hold:
+
+- the PR shows the before, after, and diff images for every changed baseline;
+- the independent review agent approves it (D-034), and the reviewer is not the implementer;
+- the QA agent confirms the visual change is intended, and records that confirmation on the PR.
+
+Any new commit invalidates both approvals. This changes who approves, not what is checked:
+`pnpm test:visual` still never writes a baseline, and baselines are still committed only in a
+dedicated visual-change PR.
 
 ## Where a change belongs
 

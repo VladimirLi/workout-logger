@@ -429,7 +429,8 @@ requires identical bytes; `toHaveScreenshot` alone cannot prove that. It proves 
 within a run on one machine, not across machines.
 
 `pnpm test:visual` never writes a baseline, so a missing one fails. `pnpm visual:update`
-writes them, and its output may be committed only in a visual-change PR the owner approves.
+writes them, and its output may be committed only in a dedicated visual-change PR that the team
+approves under the baseline rule in AGENTS.md § Working on UI.
 
 **Darwin and Linux baselines both exist.** Linux baselines were generated in
 `mcr.microsoft.com/playwright:v1.63.0-noble` (linux/amd64) only after every target rendered
