@@ -71,7 +71,7 @@ candidate and attests its review or CI result (R-023).
 | Implementation agent | Write a branch and open a PR | Approve or merge it |
 | Independent review agent | Read candidate source and evidence, issue a structured verdict | Hold any write credential |
 | CI gatekeeper | Execute the gates and publish an immutable result | Approve a change |
-| Release automation | Deploy an attested merge commit via short-lived OIDC | Deploy an unattested commit |
+| Release automation | Deploy a merge commit whose `verify` result is confirmed, using OIDC where the platform accepts it and one scoped `main`-only token otherwise (ADR-0013) | Deploy a commit without a confirmed `verify` result |
 | Incident agent | Read sanitized evidence, diagnose, open a tested fix PR | Mutate production |
 
 Execution isolation: ephemeral workspaces, no production credentials, default-denied egress
