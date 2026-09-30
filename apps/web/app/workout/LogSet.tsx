@@ -63,6 +63,7 @@ export function LogSet({
   onNextSet,
   notSaved,
   notice,
+  chooser,
 }: {
   prescription: Prescription;
   setNumber: number;
@@ -73,6 +74,8 @@ export function LogSet({
   onNextSet: () => void;
   /** The page's undo toast, shown above the action bar and kept through set and rest. */
   notice?: ReactNode;
+  /** The exercise chips, which sit above the exercise name in the set view and in rest. */
+  chooser?: ReactNode;
 }) {
   const form = useRef<HTMLFormElement>(null);
   const [restStartedAt, setRestStartedAt] = useState<number | undefined>(undefined);
@@ -110,30 +113,40 @@ export function LogSet({
         return saved;
       }}
       rest={
-        <>
-          <Heading level={1} id={REST_HEADING_ID} focusTarget>
-            {messages.rest.heading}
-          </Heading>
-          <Text weight="label">Set {loggedNumber ?? setNumber} recorded</Text>
-          <StatusMessage kind="success">
-            {messages.set.saved(loggedNumber ?? setNumber, prescription.restSeconds)}
-          </StatusMessage>
-          <Button variant="secondary" size="lg" expand onClick={onNextSet}>
-            Next set
-          </Button>
-          <Surface tone="card" aria-label="Rest timer">
-            {/* Elapsed time comes from the timestamp, so a suspended tab does not drift (5.6). */}
-            <RestTimer
-              durationSeconds={prescription.restSeconds}
-              startedAt={restStartedAt ?? Date.now()}
-              initialNow={Date.now()}
-            />
-          </Surface>
-        </>
+        <TwoPane
+          lead={chooser}
+          focus={
+            <>
+              <Heading level={1} id={REST_HEADING_ID} focusTarget>
+                {messages.rest.heading}
+              </Heading>
+              <Text weight="label">Set {loggedNumber ?? setNumber} recorded</Text>
+              <StatusMessage kind="success">
+                {messages.set.saved(loggedNumber ?? setNumber, prescription.restSeconds)}
+              </StatusMessage>
+            </>
+          }
+          detail={
+            <>
+              <Button variant="secondary" size="lg" expand onClick={onNextSet}>
+                Next set
+              </Button>
+              <Surface tone="card" aria-label="Rest timer">
+                {/* Elapsed time comes from the timestamp, so a suspended tab does not drift (5.6). */}
+                <RestTimer
+                  durationSeconds={prescription.restSeconds}
+                  startedAt={restStartedAt ?? Date.now()}
+                  initialNow={Date.now()}
+                />
+              </Surface>
+            </>
+          }
+        />
       }
       set={(log) => (
         <TwoPane
           detailLabel={messages.set.controls}
+          lead={chooser}
           focus={
             <Stack gap={3}>
               <Heading level={1} id={SET_HEADING_ID} focusTarget>

@@ -17,6 +17,8 @@ type SeedOptions = {
   unilateral?: boolean;
   combinedLoad?: boolean;
   multiple?: boolean;
+  /** Five exercises, three of them with long names. */
+  many?: boolean;
   /** The first exercise prescribes reps and no load. */
   bodyweight?: boolean;
 };
@@ -33,6 +35,7 @@ async function seedPlan(page: Page, options: SeedOptions = {}): Promise<void> {
       unilateral: boolean;
       combinedLoad: boolean;
       multiple: boolean;
+      many: boolean;
       bodyweight: boolean;
     }) => {
       const { source } = input;
@@ -105,6 +108,50 @@ async function seedPlan(page: Page, options: SeedOptions = {}): Promise<void> {
         return plan;
       };
 
+      const moreNames = input.many
+        ? [
+            'bench-press',
+            'incline-dumbbell-bench-press-with-a-pause',
+            'romanian-deadlift',
+            'seated-cable-row-with-a-wide-neutral-grip',
+          ]
+        : input.multiple
+          ? ['bench-press']
+          : [];
+      const exercisesOf = (override: Override | undefined): Exercise[] => [
+        input.unilateral
+          ? {
+              exerciseId: 'split-squat',
+              prescription: {
+                schemaVersion: 1,
+                profile: 'unilateral_strength',
+                side: 'left',
+                loadSemantics: 'per_side',
+                repetitions: 10,
+                load: { unit: 'kg', value: 22.5 },
+              },
+              ...(input.combinedLoad ? { combinedLoadPermitted: true } : {}),
+            }
+          : {
+              exerciseId: 'back-squat',
+              prescription: {
+                schemaVersion: 1,
+                profile: 'strength',
+                repetitions: override?.reps ?? 8,
+                ...loadOf(override?.loadKg ?? 80),
+              },
+            },
+        ...moreNames.map((exerciseId) => ({
+          exerciseId,
+          prescription: {
+            schemaVersion: 1,
+            profile: 'strength',
+            repetitions: 6,
+            load: { unit: 'kg', value: 60 },
+          },
+        })),
+      ];
+
       // The override is how a test moves the downloaded plan on to a later revision, which is
       // what the device would hold after a sync. Saving the same plan id overwrites the
       // record, exactly as the adapter does for a real download.
@@ -126,45 +173,7 @@ async function seedPlan(page: Page, options: SeedOptions = {}): Promise<void> {
                 {
                   id: 'session-mon',
                   scheduledFor: '2026-09-18',
-                  exercises: input.unilateral
-                    ? [
-                        {
-                          exerciseId: 'split-squat',
-                          prescription: {
-                            schemaVersion: 1,
-                            profile: 'unilateral_strength',
-                            side: 'left',
-                            loadSemantics: 'per_side',
-                            repetitions: 10,
-                            load: { unit: 'kg', value: 22.5 },
-                          },
-                          ...(input.combinedLoad ? { combinedLoadPermitted: true } : {}),
-                        },
-                      ]
-                    : [
-                        {
-                          exerciseId: 'back-squat',
-                          prescription: {
-                            schemaVersion: 1,
-                            profile: 'strength',
-                            repetitions: override?.reps ?? 8,
-                            ...loadOf(override?.loadKg ?? 80),
-                          },
-                        },
-                        ...(input.multiple
-                          ? [
-                              {
-                                exerciseId: 'bench-press',
-                                prescription: {
-                                  schemaVersion: 1,
-                                  profile: 'strength',
-                                  repetitions: 6,
-                                  load: { unit: 'kg', value: 60 },
-                                },
-                              },
-                            ]
-                          : []),
-                      ],
+                  exercises: exercisesOf(override),
                 },
               ],
             },
@@ -178,6 +187,7 @@ async function seedPlan(page: Page, options: SeedOptions = {}): Promise<void> {
       unilateral: options.unilateral === true,
       combinedLoad: options.combinedLoad === true,
       multiple: options.multiple === true,
+      many: options.many === true,
       bodyweight: options.bodyweight === true,
     },
   );
@@ -445,12 +455,23 @@ const isPainted = (control: Locator): Promise<boolean> =>
     return hit !== null && (hit === element || element.contains(hit) || hit.contains(element));
   });
 
-type LandscapePlan = { unilateral?: boolean; combinedLoad?: boolean; multiple?: boolean };
+type LandscapePlan = {
+  unilateral?: boolean;
+  combinedLoad?: boolean;
+  multiple?: boolean;
+  many?: boolean;
+};
 
 test.describe('a phone held sideways (layout.landscape.two-pane)', () => {
   const PROFILES: readonly { name: string; plan: LandscapePlan; scrolls: boolean }[] = [
     { name: 'one exercise', plan: {}, scrolls: false },
     { name: 'two exercises', plan: { multiple: true }, scrolls: false },
+    { name: 'five exercises with long names', plan: { many: true }, scrolls: false },
+    {
+      name: 'two exercises, one of them one-sided',
+      plan: { multiple: true, unilateral: true },
+      scrolls: true,
+    },
     { name: 'a unilateral exercise', plan: { unilateral: true }, scrolls: true },
     {
       name: 'a unilateral exercise with combined load',
@@ -637,6 +658,127 @@ test.describe('a phone held sideways (layout.landscape.two-pane)', () => {
       });
     });
   }
+
+  test.describe('the exercise strip (VLA-199)', () => {
+    const LONG = 'Seated cable row with a wide neutral grip';
+    /** The strip is the scroller around the Exercises section. */
+    const stripOf = (page: Page): Locator =>
+      page
+        .getByRole('region', { name: 'Exercises' })
+        .locator('xpath=ancestor::div[contains(@class, "lead")]');
+
+    for (const [count, plan] of [
+      [2, { multiple: true }],
+      [5, { many: true }],
+      [2, { multiple: true, unilateral: true }],
+    ] as const) {
+      test(`is one 54 px row in the left pane for ${count} exercises${plan.unilateral ? ' (one-sided)' : ''}`, async ({
+        page,
+      }) => {
+        await openSetView(page, plan);
+        const strip = await boxOf(stripOf(page));
+        const name = await boxOf(page.getByRole('heading', { level: 1 }));
+        const controls = await boxOf(page.getByRole('region', { name: 'Set controls' }));
+
+        expect(strip.height).toBeCloseTo(54, 0);
+        expect(strip.x + strip.width).toBeLessThanOrEqual(controls.x);
+        expect(name.y).toBeCloseTo(strip.y + strip.height + 8, 0);
+        expect(name.y + name.height).toBeLessThanOrEqual(375);
+
+        // The section keeps its accessible name; only the visible heading is gone.
+        const heading = await boxOf(page.getByRole('heading', { name: 'Exercises' }));
+        expect(heading.width).toBeLessThanOrEqual(1);
+
+        // Log set is where it is with one exercise: 315 to 371 in a 375 px viewport.
+        const logSet = await boxOf(page.getByRole('button', { name: 'Log set' }));
+        expect(logSet.y + logSet.height).toBeLessThanOrEqual(375);
+        expect(await page.evaluate(() => window.scrollY)).toBe(0);
+      });
+    }
+
+    test('scrolls sideways only, with chips of at least 44 px and 8 px between them', async ({
+      page,
+    }) => {
+      await openSetView(page, { many: true });
+      const strip = stripOf(page);
+      const measure = await strip.evaluate((element) => ({
+        overflowY: element.scrollHeight - element.clientHeight,
+        overflowX: element.scrollWidth - element.clientWidth,
+      }));
+      expect(measure.overflowY).toBeLessThanOrEqual(0);
+      expect(measure.overflowX).toBeGreaterThan(0);
+      const page$ = await page.evaluate(() => ({
+        scrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+      }));
+      expect(page$.scrollWidth).toBeLessThanOrEqual(page$.clientWidth);
+
+      const chips = page.getByRole('region', { name: 'Exercises' }).getByRole('button');
+      const first = await boxOf(chips.nth(0));
+      const second = await boxOf(chips.nth(1));
+      expect(first.height).toBeGreaterThanOrEqual(44);
+      expect(second.height).toBeGreaterThanOrEqual(44);
+      expect(second.x - (first.x + first.width)).toBeCloseTo(8, 0);
+    });
+
+    test('cuts a long name short on screen and keeps it whole for assistive technology', async ({
+      page,
+    }) => {
+      await openSetView(page, { many: true });
+      const strip = await boxOf(stripOf(page));
+      const chip = page.getByRole('button', { name: LONG });
+      const box = await boxOf(chip);
+      expect(box.width).toBeLessThanOrEqual(strip.width * 0.8 + 1);
+      expect(await chip.locator('span').evaluate((s) => s.scrollWidth > s.clientWidth)).toBe(true);
+    });
+
+    test('brings the chosen chip into view without moving the page or Log set', async ({
+      page,
+    }) => {
+      await openSetView(page, { many: true });
+      const before = await boxOf(page.getByRole('button', { name: 'Log set' }));
+      const strip = stripOf(page);
+
+      // Tab to the last chip: the strip must follow focus, not the page.
+      await page.getByRole('button', { name: LONG }).focus();
+      await page.keyboard.press('Enter');
+      await expect(page.getByRole('heading', { level: 1, name: LONG })).toBeVisible();
+
+      const stripBox = await boxOf(strip);
+      const chipBox = await boxOf(page.getByRole('button', { name: LONG }));
+      expect(chipBox.x).toBeGreaterThanOrEqual(stripBox.x - 0.5);
+      expect(chipBox.x + chipBox.width).toBeLessThanOrEqual(stripBox.x + stripBox.width + 0.5);
+      await expect(page.getByRole('button', { name: LONG })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+      expect(await boxOf(page.getByRole('button', { name: 'Log set' }))).toEqual(before);
+      expect(await page.evaluate(() => window.scrollY)).toBe(0);
+    });
+
+    test('stays where it was while resting, and is offered again while editing a set', async ({
+      page,
+    }) => {
+      await openSetView(page, { multiple: true });
+      const strip = stripOf(page);
+      // Rest moves focus to its heading, which may scroll the page; compare on the page, not the screen.
+      const onPage = async () => {
+        const box = await boxOf(strip);
+        return { ...box, y: box.y + (await page.evaluate(() => window.scrollY)) };
+      };
+      const at = await onPage();
+
+      await page.getByRole('button', { name: 'Log set' }).click();
+      await expect(page.getByRole('heading', { name: 'Rest' })).toBeVisible();
+      await expect(page.getByRole('region', { name: 'Exercises' })).toHaveCount(1);
+      expect(await onPage()).toEqual(at);
+
+      await page.getByRole('button', { name: 'Next set' }).click();
+      await page.getByRole('button', { name: /^Edit set 1/ }).click();
+      await expect(page.getByRole('button', { name: 'Save changes' })).toBeVisible();
+      await expect(page.getByRole('region', { name: 'Exercises' })).toHaveCount(1);
+    });
+  });
 
   test('shows every Load value whole', async ({ page }) => {
     await openSetView(page, {});

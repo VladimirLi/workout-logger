@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import moduleStyles from './Screen.module.css';
 
 /** CSS Module class names used here; ui/css-modules.test.ts checks each exists. */
-const styles = moduleStyles as Record<'content' | 'pane' | 'screen' | 'twoPane', string>;
+const styles = moduleStyles as Record<'content' | 'lead' | 'pane' | 'screen' | 'twoPane', string>;
 
 type ScreenProps = {
   children: ReactNode;
@@ -30,6 +30,11 @@ export function Screen({ children, bar, bottom }: ScreenProps) {
 }
 
 type TwoPaneProps = {
+  /**
+   * A chooser above the focal value, such as the exercise chips. In a phone held sideways it
+   * is a fixed-height, one-row strip, so choosing among many never moves the action.
+   */
+  lead?: ReactNode;
   focus: ReactNode;
   detail: ReactNode;
   /** Names the detail pane, which scrolls on its own in landscape when its controls are tall. */
@@ -40,10 +45,13 @@ type TwoPaneProps = {
  * layout.landscape.two-pane: on a phone held sideways the focal value and its controls sit
  * side by side. A tall detail pane scrolls inside itself, above the action, never under it.
  */
-export function TwoPane({ focus, detail, detailLabel }: TwoPaneProps) {
+export function TwoPane({ lead, focus, detail, detailLabel }: TwoPaneProps) {
   return (
     <div className={styles.twoPane}>
-      <div className={styles.pane}>{focus}</div>
+      <div className={styles.pane}>
+        {lead ? <div className={styles.lead}>{lead}</div> : null}
+        {focus}
+      </div>
       <div
         className={styles.pane}
         {...(detailLabel ? { role: 'region', 'aria-label': detailLabel } : {})}

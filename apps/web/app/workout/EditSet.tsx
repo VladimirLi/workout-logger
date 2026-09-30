@@ -76,6 +76,7 @@ export function EditSet({
   recorded,
   failure,
   notice,
+  chooser,
   onSave,
   onCancel,
   onDelete,
@@ -86,6 +87,8 @@ export function EditSet({
   recorded: RecordedValues;
   failure: EditFailure | undefined;
   notice?: ReactNode;
+  /** The exercise chips, in the same place as in the set view. */
+  chooser?: ReactNode;
   onSave: (values: SetValues) => Promise<boolean>;
   onCancel: () => void;
   onDelete: () => Promise<boolean>;
@@ -165,6 +168,7 @@ export function EditSet({
     >
       <form ref={form} onSubmit={(event: FormEvent<HTMLFormElement>) => event.preventDefault()}>
         <TwoPane
+          lead={chooser}
           focus={
             <Stack gap={3}>
               <Heading level={1} id={EDIT_HEADING_ID} focusTarget>

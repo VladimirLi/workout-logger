@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import {
   Button,
   ConfirmDialog,
@@ -141,28 +141,41 @@ function ExerciseChips({
   selected: Prescription | undefined;
   onSelect: (exerciseId: string) => void;
 }) {
+  const row = useRef<HTMLDivElement>(null);
+  const selectedId = selected?.exerciseId;
+  // Sideways the chips are a strip that scrolls. Bringing the chosen chip into view scrolls the
+  // strip only: block 'nearest' keeps the page, and the action on it, where it is.
+  useEffect(() => {
+    if (selectedId === undefined) return;
+    row.current
+      ?.querySelector('[aria-pressed="true"]')
+      ?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+  }, [selectedId]);
+
   return (
-    <Stack as="section" gap={2} aria-labelledby="exercise-heading">
-      <Heading level={2} id="exercise-heading">
-        Exercises
-      </Heading>
-      <Stack direction="inline" wrap gap={2}>
-        {exercises.map((item) => {
-          const isSelected = item.exerciseId === selected?.exerciseId;
-          return (
-            <Button
-              key={item.exerciseId}
-              variant={isSelected ? 'secondary' : 'tertiary'}
-              aria-pressed={isSelected}
-              {...(isSelected ? { icon: 'check' as const } : {})}
-              onClick={() => onSelect(item.exerciseId)}
-            >
-              {item.name}
-            </Button>
-          );
-        })}
+    <div ref={row}>
+      <Stack as="section" gap={2} aria-labelledby="exercise-heading">
+        <Heading level={2} id="exercise-heading">
+          Exercises
+        </Heading>
+        <Stack direction="inline" wrap gap={2}>
+          {exercises.map((item) => {
+            const isSelected = item.exerciseId === selected?.exerciseId;
+            return (
+              <Button
+                key={item.exerciseId}
+                variant={isSelected ? 'secondary' : 'tertiary'}
+                aria-pressed={isSelected}
+                {...(isSelected ? { icon: 'check' as const } : {})}
+                onClick={() => onSelect(item.exerciseId)}
+              >
+                {item.name}
+              </Button>
+            );
+          })}
+        </Stack>
       </Stack>
-    </Stack>
+    </div>
   );
 }
 
@@ -518,6 +531,25 @@ async function startNextSet(stale: boolean, refresh: () => Promise<boolean>, adv
   if (!stale || (await refresh())) advance();
 }
 
+function chooserFor(
+  exercises: SessionView['exercises'],
+  selected: Prescription | undefined,
+  onSelect: (exerciseId: string) => void,
+) {
+  return exercises.length > 1 ? (
+    <ExerciseChips exercises={exercises} selected={selected} onSelect={onSelect} />
+  ) : undefined;
+}
+
+/** In the set layouts the chips are part of the left pane, so choosing never moves the action. Only one place shows them. */
+function chooserPlaces(chooser: ReactNode, editing: boolean, logging: boolean) {
+  return {
+    above: editing || logging ? undefined : chooser,
+    edit: editing ? chooser : undefined,
+    log: editing || !logging ? undefined : chooser,
+  };
+}
+
 function ReadyWorkout({
   session,
   selected,
@@ -581,6 +613,17 @@ function ReadyWorkout({
   };
 
   const logSetShown = selected && (session.prescribed || loggingUnprescribed);
+  const chooser = chooserFor(
+    exercises,
+    selected,
+    (id) =>
+      void startNextSet(stale, onRefresh, () => {
+        stopEditing();
+        onSelect(id);
+        setSetInProgress((n) => n + 1);
+      }),
+  );
+  const places = chooserPlaces(chooser, editingRecorded !== undefined, Boolean(logSetShown));
   const undoAndFocus = (target: { setId: string; number: number }) => {
     void onUndo(target).then((restored) => {
       if (restored) setFocusAt({ row: target.setId });
@@ -598,24 +641,13 @@ function ReadyWorkout({
 
   return (
     <Stack gap={4}>
-      {exercises.length > 1 && (
-        <ExerciseChips
-          exercises={exercises}
-          selected={selected}
-          onSelect={(id) =>
-            void startNextSet(stale, onRefresh, () => {
-              stopEditing();
-              onSelect(id);
-              setSetInProgress((n) => n + 1);
-            })
-          }
-        />
-      )}
+      {places.above}
 
       {editing && editingRecorded && selected && (
         <EditSet
           key={editing.id}
           exerciseName={selected.name}
+          chooser={places.edit}
           target={selected.target}
           config={selected}
           recorded={editingRecorded}
@@ -641,6 +673,7 @@ function ReadyWorkout({
           <LogSet
             key={`${selected.exerciseId}-${setInProgress}`}
             prescription={selected}
+            chooser={places.log}
             setNumber={rows.length + 1}
             notSaved={logFailed}
             {...(editing ? {} : { notice })}
