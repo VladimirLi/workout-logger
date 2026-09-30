@@ -219,8 +219,12 @@ supersedes ADR-0007). UI work builds on it; it does not re-decide it.
   component API change needs an OpenSpec change; a fix needs a PR note and, if pixels
   move, a baseline update.
 - **Baselines.** `pnpm test:visual` never writes a baseline. `pnpm visual:update` does, and
-  its output may be committed only in a visual-change PR approved by the owner. Baselines
-  are per platform; see DESIGN_SYSTEM.md § Visual regression for the open Linux/CI gap.
+  its output may be committed only in a dedicated visual-change PR that shows the before,
+  after, and diff images for every changed baseline, is approved by the independent review
+  agent (not the implementer), and has the QA agent's confirmation that the change is
+  intended. Any new commit invalidates both approvals (AGENTS.md § Working on UI).
+  Baselines are per platform; see DESIGN_SYSTEM.md § Visual regression for the open
+  Linux/CI gap.
 - **Automated checks are not conformance.** `pnpm test:a11y` is the routine CI baseline
   (accessibility.testing.auto-only). Manual keyboard, screen-reader, zoom, orientation,
   contrast, and touch-target checks are still required before any conformance claim (R-007).
