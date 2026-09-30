@@ -1,6 +1,6 @@
 # 0013 — Hosting, environments, deploy identity, and rollback
 
-**Status:** Proposed — pending approval by Vladimir (see [Open decisions](#open-decisions-for-vladimir))
+**Status:** Accepted 2026-09-30 — direction approved by Vladimir on VLA-253 (decisions 2 and 3 below). Decisions 1 and 4–7 are not answered and remain open (see [Open decisions](#open-decisions-for-vladimir))
 **Date:** 2026-09-30
 **Discovery:** D-023, D-042, D-043, D-044, D-045, D-046, R-015, R-016, R-017, R-020
 **Relates to:** [0009](0009-platform-repository-and-relying-party-decisions.md), [0011](0011-supabase-development-project.md), [0012](0012-one-trusted-write-boundary.md), gates G-2, G-3, G-4, G-7, G-8 in [external-gates.md](../external-gates.md)
@@ -74,7 +74,8 @@ The token is stored as a secret of a GitHub environment named `production`, rest
 review, or QA agents (R-023). Its scope is the least Vercel offers; whether Vercel can scope a
 token to one project rather than the whole team was not confirmed, and is part of the approval.
 
-**This deviates from AGENTS.md and G-4's "short-lived OIDC".** It is recommended anyway
+**This deviates from the original "short-lived OIDC" wording in AGENTS.md and G-4. Vladimir accepted
+the deviation on 2026-09-30; AGENTS.md and G-4 are amended accordingly.** It was recommended
 because the alternatives are worse for what D-043 requires:
 
 - *Auto-assign on, no token.* Every green Vercel build goes live whether or not CI passed and
@@ -169,9 +170,9 @@ MCP host.** Until then `apps/mcp` remains a skeleton and nothing in this ADR pro
 - Schema and app roll back independently, which is what makes D-043 safe with D-044.
 
 **Bad.**
-- Static token contradicts AGENTS.md's wording. Approving this ADR is therefore also a decision
-  to accept the deviation; AGENTS.md must be amended by Vladimir (human-approved file), and this
-  ADR does not change it.
+- A static token is a long-lived credential, which the original AGENTS.md wording ruled out.
+  Vladimir accepted this on 2026-09-30 and AGENTS.md's release-automation row was amended in
+  the same PR.
 - Previews share one dev database and can interfere with each other.
 - There is no place to run migrations against production-shaped data before production.
 - Promotion depends on a `repository_dispatch` from the Vercel integration reaching GitHub.
@@ -187,12 +188,17 @@ One list, also in the [spike](../discovery/mcp-hosting-spike.md#open-decisions-f
 Each needs your action because it is spend, an account, DNS, a credential, or a change to a file
 agents may not edit.
 
+Resolved by Vladimir's approval of the direction on VLA-253 (2026-09-30): **2** (token accepted)
+and **3** (MCP host: second Vercel project, Fly.io as fallback). Still open, with no answer
+recorded: **1, 4, 5, 6, 7**. Nothing below is provisioned or paid for.
+
 1. **Vercel plan tier.** Hobby (free, non-commercial personal use, 300 s functions) or Pro
    ($20/month, 800 s functions, spend management). Recommended: Pro. Confirm what the
    "existing subscription" is.
-2. **Accept one scoped Vercel token in place of OIDC** for promote and rollback (section 3), and
+2. **Resolved: accepted.** One scoped Vercel token in place of OIDC for promote and rollback (section 3), and
    amend AGENTS.md's release-automation row and the G-4 "done when" accordingly.
-3. **MCP host.** Recommended: second Vercel project. Fallback: Fly.io.
+3. **Resolved: second Vercel project.** Fly.io stays the fallback if the MCP server needs
+   long-lived streaming, or Vercel cold starts prove unacceptable in a drill.
 4. **MCP SDK line.** Stay on `@modelcontextprotocol/sdk` 1.x (current) or move to v2
    (`@modelcontextprotocol/server`, `mcp-handler` 2.x). Whether 1.x supports spec 2026-07-28 was
    not established; see the spike.
