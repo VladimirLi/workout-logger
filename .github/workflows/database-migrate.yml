@@ -1,0 +1,149 @@
+name: database-migrate
+
+# Applies supabase/migrations/ to one environment, and only after a verified backup.
+#
+#   backup   encrypted dump of `public`, restored into a throwaway database with matching row
+#            counts, uploaded outside Supabase and Vercel, SHA-256 bound to the release.
+#   migrate  needs: backup. If the backup job fails, is cancelled, or is skipped, this job does
+#            not run. There is no input that skips the backup.
+#
+# Called by the deploy workflow (workflow_call) once one exists (docs/external-gates.md, G-4).
+# Until then it runs by hand. Only `development` exists; `production` is added by a reviewed
+# change after the restore drill has been signed off (G-8), never before.
+#
+# Credentials are per-environment secrets (docs/runbooks/pre-migration-backup.md): a read-only
+# database role for the dump, and a separate migration-only role for `db push`. Neither is the
+# Supabase service key, and the application never holds either.
+#
+# GUARDRAIL FILE.
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to migrate
+        type: choice
+        options: [development]
+        required: true
+      release:
+        description: Release identifier the backup is bound to (tag or commit SHA)
+        type: string
+        required: true
+  workflow_call:
+    inputs:
+      environment:
+        type: string
+        required: true
+      release:
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: database-migrate-${{ inputs.environment }}
+  cancel-in-progress: false
+
+env:
+  # Newer AWS CLIs add checksum headers that S3-compatible stores other than AWS reject.
+  AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+  AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+
+jobs:
+  backup:
+    name: backup
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: ${{ inputs.environment }}
+    outputs:
+      sha256: ${{ steps.backup.outputs.sha256 }}
+    services:
+      postgres:
+        image: postgres:17.6@sha256:00bc86618629af00d2937fdc5a5d63db3ff8450acf52f0636ec813c7f4902929
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install tools
+        run: scripts/backup/install-ci-tools.sh
+
+      - name: Back up, verify by restore, and record the checksum
+        id: backup
+        env:
+          RELEASE: ${{ inputs.release }}
+          BACKUP_SOURCE_URL: ${{ secrets.BACKUP_SOURCE_URL }}
+          BACKUP_STORE_URL: ${{ secrets.BACKUP_STORE_URL }}
+          BACKUP_AGE_RECIPIENT: ${{ vars.BACKUP_AGE_RECIPIENT }}
+          RESTORE_ADMIN_URL: postgresql://postgres@127.0.0.1:5432/postgres
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_ENDPOINT_URL: ${{ vars.AWS_ENDPOINT_URL }}
+          AWS_DEFAULT_REGION: ${{ vars.AWS_DEFAULT_REGION }}
+          # Development only. Present, it makes the job also decrypt what it stored. The
+          # production private key is never a CI secret.
+          BACKUP_AGE_IDENTITY: ${{ secrets.BACKUP_AGE_IDENTITY }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$BACKUP_AGE_IDENTITY" ]]; then
+            printf '%s\n' "$BACKUP_AGE_IDENTITY" >"$RUNNER_TEMP/age-identity.txt"
+            export BACKUP_AGE_IDENTITY_FILE="$RUNNER_TEMP/age-identity.txt"
+          fi
+          scripts/pre-migration-backup.sh backup --release "$RELEASE" >manifest.json
+          sha256=$(jq -er .sha256 manifest.json)
+          echo "sha256=$sha256" >>"$GITHUB_OUTPUT"
+          {
+            echo "### Pre-migration backup"
+            echo
+            echo "Release \`$RELEASE\`, SHA-256 \`$sha256\`."
+            echo
+            echo '```json'
+            cat manifest.json
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the manifest
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: backup-manifest-${{ inputs.release }}
+          path: manifest.json
+          if-no-files-found: error
+          retention-days: 90
+
+  migrate:
+    name: migrate
+    needs: backup
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Require a recorded backup checksum
+        env:
+          BACKUP_SHA256: ${{ needs.backup.outputs.sha256 }}
+        run: |
+          [[ "$BACKUP_SHA256" =~ ^[0-9a-f]{64}$ ]] || { echo "no verified backup checksum; refusing to migrate" >&2; exit 1; }
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up the Supabase CLI
+        uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
+        with:
+          version: 2.117.0
+
+      - name: Apply pending migrations
+        env:
+          MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          supabase db push --db-url "$MIGRATION_DATABASE_URL" --dry-run
+          supabase db push --db-url "$MIGRATION_DATABASE_URL"

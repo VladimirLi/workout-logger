@@ -1,0 +1,60 @@
+name: backup-rehearsal
+
+# Proves scripts/pre-migration-backup.sh works, with no cloud resource and no credential: a
+# throwaway Postgres 17 plays both the source (built from supabase/migrations/) and the restore
+# target, and a stand-in for `aws s3` keeps the bucket local. It also proves the script refuses
+# every way a backup can be unsound. It does not exercise S3 or Supabase; the restore drill does.
+#
+# GUARDRAIL FILE.
+
+on:
+  pull_request:
+    paths:
+      - scripts/pre-migration-backup*.sh
+      - scripts/backup/**
+      - supabase/migrations/**
+      - .github/workflows/backup-rehearsal.yml
+  push:
+    branches: [main]
+    paths:
+      - scripts/pre-migration-backup*.sh
+      - scripts/backup/**
+      - supabase/migrations/**
+      - .github/workflows/backup-rehearsal.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup-rehearsal-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rehearsal:
+    name: rehearsal
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17.6@sha256:00bc86618629af00d2937fdc5a5d63db3ff8450acf52f0636ec813c7f4902929
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install tools
+        run: scripts/backup/install-ci-tools.sh
+
+      - name: Rehearse backup, restore, and every refusal
+        env:
+          REHEARSAL_PG_URL: postgresql://postgres@127.0.0.1:5432/postgres
+        run: scripts/pre-migration-backup-rehearsal.sh
