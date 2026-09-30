@@ -132,6 +132,8 @@ function toRow(set: ReturnType<typeof liveSets>[number]): Row {
   };
 }
 
+const EXERCISE_CHIPS_ID = 'exercise-chips';
+
 function ExerciseChips({
   exercises,
   selected,
@@ -153,7 +155,7 @@ function ExerciseChips({
   }, [selectedId]);
 
   return (
-    <div ref={row}>
+    <div ref={row} id={EXERCISE_CHIPS_ID}>
       <Stack as="section" gap={2} aria-labelledby="exercise-heading">
         <Heading level={2} id="exercise-heading">
           Exercises
@@ -502,7 +504,7 @@ function FailureMessages({
   );
 }
 
-type FocusTarget = { row: string } | { heading: true };
+type FocusTarget = { row: string } | { heading: true } | { chip: true };
 
 /** Moves focus to the target once its element is on the page, then clears it. */
 function useFocusOnce(
@@ -511,14 +513,23 @@ function useFocusOnce(
 ) {
   useEffect(() => {
     if (focusAt === undefined) return;
-    const id = 'row' in focusAt ? editButtonId(focusAt.row) : undefined;
-    // Either the set view's heading or rest's is on the page, never both.
-    const target = id
-      ? document.getElementById(id)
-      : (document.getElementById(SET_HEADING_ID) ?? document.getElementById(REST_HEADING_ID));
-    target?.focus();
+    focusTargetOf(focusAt)?.focus();
     setFocusAt(undefined);
   }, [focusAt, setFocusAt]);
+}
+
+function focusTargetOf(focusAt: FocusTarget): HTMLElement | null {
+  if ('row' in focusAt) return document.getElementById(editButtonId(focusAt.row));
+  // Choosing an exercise remounts the view the chips sit in, so focus returns to the chosen chip.
+  if ('chip' in focusAt) {
+    return (
+      document
+        .getElementById(EXERCISE_CHIPS_ID)
+        ?.querySelector<HTMLElement>('[aria-pressed="true"]') ?? null
+    );
+  }
+  // Either the set view's heading or rest's is on the page, never both.
+  return document.getElementById(SET_HEADING_ID) ?? document.getElementById(REST_HEADING_ID);
 }
 
 function finishBody(stale: boolean, recorded: number): string {
@@ -621,6 +632,7 @@ function ReadyWorkout({
         stopEditing();
         onSelect(id);
         setSetInProgress((n) => n + 1);
+        setFocusAt({ chip: true });
       }),
   );
   const places = chooserPlaces(chooser, editingRecorded !== undefined, Boolean(logSetShown));

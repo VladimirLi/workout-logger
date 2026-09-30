@@ -455,6 +455,14 @@ const isPainted = (control: Locator): Promise<boolean> =>
     return hit !== null && (hit === element || element.contains(hit) || hit.contains(element));
   });
 
+/** Focuses a control the way a keyboard does, so the browser shows its focus ring. */
+const focusByKeyboard = async (page: Page, control: Locator) => {
+  await control.focus();
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Shift+Tab');
+  await expect(control).toBeFocused();
+};
+
 type LandscapePlan = {
   unilateral?: boolean;
   combinedLoad?: boolean;
@@ -752,8 +760,53 @@ test.describe('a phone held sideways (layout.landscape.two-pane)', () => {
         'aria-pressed',
         'true',
       );
+      await expect(page.getByRole('button', { name: LONG })).toBeFocused();
       expect(await boxOf(page.getByRole('button', { name: 'Log set' }))).toEqual(before);
       expect(await page.evaluate(() => window.scrollY)).toBe(0);
+    });
+
+    /** The room a focus ring needs outside its chip, read from the ring itself. */
+    const ringRoom = (chip: Locator) =>
+      chip.evaluate((element) => {
+        const style = getComputedStyle(element);
+        return Number.parseFloat(style.outlineWidth) + Number.parseFloat(style.outlineOffset);
+      });
+
+    /** True when focusing the chip paints something in the band just outside `side` of it. */
+    const ringShowsOn = async (page: Page, chip: Locator, side: 'left' | 'right' | 'top') => {
+      const room = await ringRoom(chip);
+      expect(await chip.evaluate((element) => element.matches(':focus-visible'))).toBe(true);
+      const box = await boxOf(chip);
+      const clip =
+        side === 'left'
+          ? { x: box.x - room, y: box.y, width: room, height: box.height }
+          : side === 'right'
+            ? { x: box.x + box.width, y: box.y, width: room, height: box.height }
+            : { x: box.x, y: box.y - room, width: box.width, height: room };
+      const focused = await page.screenshot({ clip });
+      await chip.blur();
+      const blurred = await page.screenshot({ clip });
+      await focusByKeyboard(page, chip);
+      return !focused.equals(blurred);
+    };
+
+    test('shows the whole focus ring on the first and the last chip', async ({ page }) => {
+      await openSetView(page, { many: true });
+      const chips = page.getByRole('region', { name: 'Exercises' }).getByRole('button');
+      const first = chips.first();
+      const last = chips.last();
+
+      await focusByKeyboard(page, first);
+      expect(await ringShowsOn(page, first, 'left'), 'left of the first chip is clipped').toBe(
+        true,
+      );
+      expect(await ringShowsOn(page, first, 'top'), 'top of the first chip is clipped').toBe(true);
+
+      await focusByKeyboard(page, last);
+      expect(await ringShowsOn(page, last, 'right'), 'right of the last chip is clipped').toBe(
+        true,
+      );
+      expect(await ringShowsOn(page, last, 'top'), 'top of the last chip is clipped').toBe(true);
     });
 
     test('stays where it was while resting, and is offered again while editing a set', async ({
@@ -778,6 +831,91 @@ test.describe('a phone held sideways (layout.landscape.two-pane)', () => {
       await expect(page.getByRole('button', { name: 'Save changes' })).toBeVisible();
       await expect(page.getByRole('region', { name: 'Exercises' })).toHaveCount(1);
     });
+  });
+
+  for (const size of [
+    { name: 'landscape', width: 667, height: 375 },
+    { name: 'portrait', width: 375, height: 667 },
+  ]) {
+    test.describe(`choosing an exercise from the keyboard in ${size.name}`, () => {
+      const open = async (page: Page) => {
+        await page.setViewportSize({ width: size.width, height: size.height });
+        await openTodayWithPlan(page, { multiple: true });
+        await page.getByRole('button', { name: 'Start workout' }).click();
+        await page.waitForURL('**/workout');
+        await expect(page.getByRole('button', { name: 'Log set' })).toBeVisible();
+      };
+      const chips = (page: Page) =>
+        page.getByRole('region', { name: 'Exercises' }).getByRole('button');
+
+      /** Chooses the other exercise by keyboard, then expects its chip to hold focus. */
+      const chooseOther = async (page: Page) => {
+        const other = chips(page).and(page.locator('[aria-pressed="false"]'));
+        const name = (await other.innerText()).trim();
+        await other.focus();
+        await page.keyboard.press('Enter');
+        const chosen = page.getByRole('button', { name, exact: true });
+        await expect(chosen).toHaveAttribute('aria-pressed', 'true');
+        await expect(chosen, 'focus is lost when the view changes').toBeFocused();
+        expect(await page.evaluate(() => document.activeElement?.tagName)).toBe('BUTTON');
+      };
+
+      test('keeps focus on the chosen chip from the set view', async ({ page }) => {
+        await open(page);
+        await chooseOther(page);
+        await expect(page.getByRole('button', { name: 'Log set' })).toBeVisible();
+      });
+
+      test('keeps focus on the chosen chip from the rest view', async ({ page }) => {
+        await open(page);
+        await page.getByRole('button', { name: 'Log set' }).click();
+        await expect(page.getByRole('heading', { name: 'Rest' })).toBeVisible();
+        await chooseOther(page);
+        await expect(page.getByRole('button', { name: 'Log set' })).toBeVisible();
+      });
+
+      test('keeps focus on the chosen chip from the edit view', async ({ page }) => {
+        await open(page);
+        await page.getByRole('button', { name: 'Log set' }).click();
+        await page.getByRole('button', { name: 'Next set' }).click();
+        await page.getByRole('button', { name: /^Edit set 1/ }).click();
+        await expect(page.getByRole('button', { name: 'Save changes' })).toBeVisible();
+        await chooseOther(page);
+        await expect(page.getByRole('button', { name: 'Save changes' })).toBeHidden();
+      });
+    });
+  }
+
+  test('lays the chips out as a wrapping row, not a strip, in portrait', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await openTodayWithPlan(page, { many: true });
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForURL('**/workout');
+    const region = page.getByRole('region', { name: 'Exercises' });
+    const chips = region.getByRole('button');
+    await expect(chips).toHaveCount(5);
+
+    const boxes = await Promise.all([0, 1, 2, 3, 4].map((n) => boxOf(chips.nth(n))));
+    for (const box of boxes) {
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(375);
+      expect(box.height).toBeGreaterThanOrEqual(44);
+    }
+    expect(
+      new Set(boxes.map((box) => Math.round(box.y))).size,
+      'chips wrap onto rows',
+    ).toBeGreaterThan(1);
+    const overflow = await page.evaluate(() => ({
+      scrollWidth: document.documentElement.scrollWidth,
+      clientWidth: document.documentElement.clientWidth,
+    }));
+    expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth);
+    await expect(page.getByRole('button', { name: 'Log set' })).toBeVisible();
+
+    await focusByKeyboard(page, chips.first());
+    expect(await chips.first().evaluate((element) => element.matches(':focus-visible'))).toBe(true);
+    const first = await boxOf(chips.first());
+    expect(first.x).toBeGreaterThanOrEqual(5);
   });
 
   test('shows every Load value whole', async ({ page }) => {
