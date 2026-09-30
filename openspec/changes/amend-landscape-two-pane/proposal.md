@@ -45,8 +45,11 @@ Serves: ADR-0008 (design-system change control), VLA-130, VLA-144, VLA-189.
 `openspec/changes/decide-design-system/tasks.md`. No code, token, story, test or baseline is
 touched here. The behaviour is implemented in PR #34 (VLA-130). Not a guardrail path change.
 
-**Owner gate:** `DESIGN_SYSTEM.md` is a design-system foundation, and this change alters product
-behaviour, so it needs owner approval on the PR (CODEOWNERS routes `/DESIGN_SYSTEM.md`).
+**Owner gate:** This is a layout-behaviour rule, not a foundation in the `DESIGN_SYSTEM.md`
+change-control table (token tier, palette, type, spacing, motion), so it needs an OpenSpec change
+but no ADR. It alters product behaviour and edits `DESIGN_SYSTEM.md`, so it needs owner approval
+on the PR (CODEOWNERS routes `/DESIGN_SYSTEM.md`). If the owner classifies it as a foundation,
+an owner-approved ADR is added instead.
 
 **Follow-up:** the `apps/web/e2e/design-system.spec.ts` test "at 667 x 375 the set screen needs
 no vertical scrolling" checks an ordinary set only. It stays valid as ordinary-case evidence
