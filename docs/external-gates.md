@@ -142,7 +142,9 @@ drilled.
 
 ## G-5 — Telemetry backend and alerting
 
-**Status:** not performed.
+**Status:** not performed. A design is proposed in
+[docs/design/telemetry-and-synthetic-checks.md](design/telemetry-and-synthetic-checks.md)
+(2026-09-30). It is not accepted, and nothing is provisioned or run.
 
 **Required (D-049, R-018, R-019).** An OpenTelemetry-compatible backend. Dual-path
 alerting: an independent alert manager paging Telegram directly, **and** independently
@@ -157,9 +159,15 @@ telemetry canary test runs locally against the in-process exporter and proves se
 workout content is dropped — that part is **verified without credentials**.
 
 **Unverified boundary.** Export to a real backend, alert routing, and Telegram delivery.
+Also unverified: Grafana Cloud Free keeps 14 days of data, while OBSERVABILITY.md asks for 30 days
+and a 30-day SLO window, so production needs a paid plan or a policy change (design, D-2).
+Synthetic checks need a synthetic-user credential that does not exist and needs its own spec.
 
+**Needs from the owner.** Grafana Cloud stack and tokens, a Telegram bot and chat ID, the Hermes
+webhook URL and HMAC key. The full list of decisions and accounts is in section 9 of the design.
 **Done when.** Both alert paths are drilled independently, each with the other disabled,
-and the canary passes against the real exporter configuration.
+and the canary passes against the real exporter configuration. Synthetic journeys run on the
+isolated account every 15 minutes and on each deploy.
 
 ---
 
