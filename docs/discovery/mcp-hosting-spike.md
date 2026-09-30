@@ -132,9 +132,9 @@ Same list as [ADR-0013](../adr/0013-hosting-and-deployment.md#open-decisions-for
 the MCP items highlighted.
 
 1. Vercel plan tier: Hobby or Pro. Recommended: Pro.
-2. Accept one scoped Vercel token in place of OIDC for promote and rollback, and amend AGENTS.md
+2. **Resolved 2026-09-30: accepted.** One scoped Vercel token in place of OIDC for promote and rollback; AGENTS.md
    and G-4 "done when".
-3. **MCP host.** Recommended: second Vercel project. Fallback: Fly.io.
+3. **Resolved 2026-09-30: second Vercel project.** Fallback: Fly.io.
 4. **MCP SDK line:** stay on 1.x or move to v2.
 5. Production Supabase Pro project (about $25/month) and revoking default `anon`/`authenticated`
    privileges before it holds data.

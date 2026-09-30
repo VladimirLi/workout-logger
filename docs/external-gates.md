@@ -120,18 +120,18 @@ any passkey is enrolled. (The RP ID decision is recorded in ADR-0009.)
 ## G-4 — Hosting and deployment
 
 **Status:** designed, not performed. [ADR-0013](adr/0013-hosting-and-deployment.md)
-(Proposed, awaiting Vladimir) specifies the web deploy path; nothing is configured, deployed,
-or paid for. The MCP host is a recommendation, not a decision.
+(Accepted 2026-09-30) specifies the web deploy path; nothing is configured, deployed,
+or paid for. MCP host: second Vercel project, approved 2026-09-30; Fly.io is the fallback.
 
 **Decided 2026-09-17 (ADR-0009, D3).** The web PWA uses Vercel under the existing
-subscription. **Proposed 2026-09-30 (ADR-0013, unapproved):** `preview` per pull request on the
+subscription. **Accepted 2026-09-30 (ADR-0013):** `preview` per pull request on the
 Supabase dev project and `production` at gym.vladimirli.com, no staging; staged production
 deployments promoted by a CI release job that checks `verify` for the same SHA, runs synthetic
 checks before and after promotion, and rolls the app back automatically on failure (D-043); the
 schema keeps its expansion and only the app rolls back. The plan tier is not decided.
 
 **MCP hosting.** [Spike](discovery/mcp-hosting-spike.md) recommends a second Vercel project
-(fallback: a small Fly.io container). Vladimir approves the final host. The choice does not
+(fallback: a small Fly.io container). Vladimir approved the second Vercel project on 2026-09-30. The choice does not
 block the web deploy.
 
 **Required (D-023, D-042, D-043).** Private, authenticated, single-user HTTPS hosting
@@ -144,18 +144,16 @@ workflow exists; it is a guardrail-path change and needs its own PR after the ac
 **Unverified boundary.** Everything on a real platform: the Vercel project, staged promotion,
 the `repository_dispatch` trigger, Trusted Sources, MCP cold start and streaming through a
 proxy, and rollback itself. **Vercel does not accept GitHub OIDC for promote or rollback**, so
-the design needs one scoped Vercel token in a `main`-only GitHub environment. That contradicts
-"short-lived OIDC" below and in AGENTS.md until Vladimir accepts or rejects it.
+the design needs one scoped Vercel token in a `main`-only GitHub environment. Vladimir
+accepted that on 2026-09-30, so "short-lived OIDC" no longer applies to promote and rollback.
 
 **Needs Vladimir (spend, account, DNS, credential).** Plan tier; Vercel project, token, and
-Trusted Sources entry; DNS (G-3); production Supabase Pro project (G-2); MCP host and SDK line.
+Trusted Sources entry; DNS (G-3); production Supabase Pro project (G-2); MCP SDK line.
 The full list is in ADR-0013.
 
 **Done when.** Targets for both the web app and the MCP server are recorded in an ADR, deploys
-are automatic from an attested merge commit via short-lived OIDC, and a rollback has been
-drilled. *Pending Vladimir's decision on the token deviation, the second clause becomes:
-deploys are automatic from a merge commit whose `verify` result is confirmed, using OIDC
-wherever the platform accepts it and one scoped token otherwise.*
+are automatic from a merge commit whose `verify` result is confirmed, using OIDC wherever the
+platform accepts it and one scoped token otherwise, and a rollback has been drilled.
 
 ---
 
