@@ -234,7 +234,7 @@ implemented by the design-system change.
 
 ## Governance
 - **Deterministic fixtures** (governance.def.fixtures). Fixed clock (2026-09-14 10:00), seeded data, fonts ready, animations disabled, caret hidden.
-- **Baseline approval** (governance.def.baseline). Baseline updates only in a PR labeled visual-change, approved by Vladimir.
+- **Baseline approval** (governance.def.baseline). Baseline updates only in a PR labeled visual-change, approved by the team under AGENTS.md § Working on UI (owner instruction, VLA-189, 2026-09-30).
 - **Automated accessibility** (governance.def.a11y-checks). axe on each lab page and key screen in CI. Fails on serious and critical issues.
 - **Design-to-code reconciliation** (governance.def.reconcile). Code and lab are the source of truth. Mockups are references; differences are logged in DESIGN_SYSTEM.md, then resolved.
 - **Versioning** (governance.def.versioning). Semantic version in DESIGN_SYSTEM.md. Major: token rename or removal. Minor: new token or component. Patch: fix.
@@ -286,7 +286,7 @@ implemented by the design-system change.
 | State matrix | All states per component and system state | Lab renders every cell |
 | Motion spec | Duration and easing tokens, allowed transitions, reduced-motion map | Reduced-motion E2E check |
 | ICONS_LICENSES.md | Icon and font sources, licenses, versions | CI checks icon imports against ledger |
-| Visual baselines | 375×667 and 1280×800, light and dark | Approved in a visual-change PR |
+| Visual baselines | 375×667 and 1280×800, light and dark | Approved by the team in a visual-change PR |
 | Reference screens | Set Focus, Rest, History, Settings, Empty, Error | Built only from ui/ components |
 
 ## Performance
