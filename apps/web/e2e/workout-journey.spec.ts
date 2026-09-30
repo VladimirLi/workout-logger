@@ -833,6 +833,48 @@ test.describe('a phone held sideways (layout.landscape.two-pane)', () => {
     });
   });
 
+  for (const plan of [{ multiple: true }, { many: true }] satisfies LandscapePlan[]) {
+    test(`keeps the page still through log, rest and next set with ${plan.many ? 'five' : 'two'} exercises`, async ({
+      page,
+    }) => {
+      await openSetView(page, plan);
+      const scrollY = () => page.evaluate(() => window.scrollY);
+
+      await page.getByRole('button', { name: 'Log set' }).click();
+      await expect(page.getByRole('heading', { name: 'Rest' })).toBeVisible();
+      expect(await scrollY(), 'rest view scrolled the page').toBe(0);
+
+      await page.getByRole('button', { name: 'Next set' }).click();
+      await expect(page.getByRole('button', { name: 'Log set' })).toBeVisible();
+      expect(await scrollY(), 'Next set scrolled the page').toBe(0);
+      const logSet = await boxOf(page.getByRole('button', { name: 'Log set' }));
+      expect(logSet.y).toBeGreaterThanOrEqual(0);
+      expect(logSet.y + logSet.height).toBeLessThanOrEqual(375);
+    });
+
+    test(`keeps Save changes in view when editing a set with ${plan.many ? 'five' : 'two'} exercises`, async ({
+      page,
+    }) => {
+      await openSetView(page, plan);
+      await page.getByRole('button', { name: 'Log set' }).click();
+      await page.getByRole('button', { name: 'Next set' }).click();
+      await page.getByRole('button', { name: /^Edit set 1/ }).click();
+      const save = page.getByRole('button', { name: 'Save changes' });
+      await expect(save).toBeVisible();
+      await expect(save).toBeInViewport({ ratio: 1 });
+    });
+  }
+
+  test('reserves room for the tabs only where tabs are shown', async ({ page }) => {
+    const reserved = () =>
+      page.evaluate(() => getComputedStyle(document.documentElement).scrollPaddingBottom);
+    await openSetView(page, {});
+    expect(await reserved(), 'the workout has no tabs').toBe('0px');
+    await page.goto('/today');
+    await expect(page.getByRole('navigation')).toBeVisible();
+    expect(await reserved(), 'the tabs can cover focus').not.toBe('0px');
+  });
+
   for (const size of [
     { name: 'landscape', width: 667, height: 375 },
     { name: 'portrait', width: 375, height: 667 },

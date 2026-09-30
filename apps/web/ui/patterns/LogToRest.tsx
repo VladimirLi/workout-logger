@@ -141,16 +141,24 @@ export function SetFocusLayout({
   children,
   action,
   notice,
+  formRef,
 }: {
   children: ReactNode;
   action: ReactNode;
   notice?: ReactNode;
+  /** Reaches the form that holds the controls; as in LogToRest, the form is the view itself. */
+  formRef?: Ref<HTMLFormElement>;
 }) {
   return (
-    <div className={styles.layout}>
-      <div className={styles.view} data-entering>
+    <div className={styles.layout} data-view="set">
+      <form
+        ref={formRef}
+        className={styles.view}
+        data-entering
+        onSubmit={(event) => event.preventDefault()}
+      >
         {children}
-      </div>
+      </form>
       <StickyActionBar notice={notice}>{action}</StickyActionBar>
     </div>
   );

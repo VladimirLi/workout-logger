@@ -83,7 +83,7 @@ export type TabHrefs = Readonly<Record<Tab, Route>>;
 /** navigation.primary.bottom-tabs: three labelled tabs, hidden during a workout. */
 export function BottomTabs({ current, hrefs }: { current: Tab; hrefs: TabHrefs }) {
   return (
-    <nav className={styles.tabs} aria-label={messages.nav.label}>
+    <nav className={styles.tabs} aria-label={messages.nav.label} data-bottom-tabs>
       <ul className={styles.tabList}>
         {TABS.map((tab) => (
           <li key={tab.id}>

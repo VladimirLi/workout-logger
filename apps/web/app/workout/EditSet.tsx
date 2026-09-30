@@ -1,6 +1,6 @@
 'use client';
 
-import { type FormEvent, type ReactNode, useEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import {
   Button,
   formatLoadReps,
@@ -154,6 +154,7 @@ export function EditSet({
   return (
     <SetFocusLayout
       notice={notice}
+      formRef={form}
       action={
         <Button
           variant="primary"
@@ -166,77 +167,75 @@ export function EditSet({
         </Button>
       }
     >
-      <form ref={form} onSubmit={(event: FormEvent<HTMLFormElement>) => event.preventDefault()}>
-        <TwoPane
-          lead={chooser}
-          focus={
-            <Stack gap={3}>
-              <Heading level={1} id={EDIT_HEADING_ID} focusTarget>
-                {exerciseName}
-              </Heading>
-              <Text size="label" tone="muted">
-                {messages.set.editing(recorded.number)}
-              </Text>
-              {target && (
-                <Surface tone="card" aria-label="Target">
-                  <Stack gap={1}>
-                    <Text size="label" tone="muted" weight="label">
-                      Target
-                    </Text>
-                    <Value size="display">{formatLoadReps(target.loadKg, target.reps)}</Value>
-                  </Stack>
-                </Surface>
-              )}
+      <TwoPane
+        lead={chooser}
+        focus={
+          <Stack gap={3}>
+            <Heading level={1} id={EDIT_HEADING_ID} focusTarget>
+              {exerciseName}
+            </Heading>
+            <Text size="label" tone="muted">
+              {messages.set.editing(recorded.number)}
+            </Text>
+            {target && (
+              <Surface tone="card" aria-label="Target">
+                <Stack gap={1}>
+                  <Text size="label" tone="muted" weight="label">
+                    Target
+                  </Text>
+                  <Value size="display">{formatLoadReps(target.loadKg, target.reps)}</Value>
+                </Stack>
+              </Surface>
+            )}
+          </Stack>
+        }
+        detail={
+          <>
+            <SetControls {...config} defaults={defaults} />
+            {repsMissing && (
+              <StatusMessage kind="error" live="assertive">
+                Enter how many reps you did, then save the change.
+              </StatusMessage>
+            )}
+            {failure && (
+              <StatusMessage
+                kind={failure.full ? 'warning' : 'error'}
+                live="assertive"
+                action={
+                  failure.full ? (
+                    <Button variant="secondary" onClick={() => void downloadEverything()}>
+                      {messages.actions.exportEverything}
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="secondary"
+                      onClick={() =>
+                        failure.op === 'save' ? void save() : void run('delete', onDelete)
+                      }
+                    >
+                      {messages.actions.retry}
+                    </Button>
+                  )
+                }
+              >
+                {failure.full
+                  ? messages.set.changeDeviceFull
+                  : failure.op === 'save'
+                    ? messages.set.changeNotSaved
+                    : messages.set.notDeleted}
+              </StatusMessage>
+            )}
+            <Stack gap={2}>
+              <Button variant="secondary" expand onClick={onCancel}>
+                {messages.actions.cancel}
+              </Button>
+              <Button variant="tertiary" expand onClick={() => void run('delete', onDelete)}>
+                {messages.actions.deleteSet}
+              </Button>
             </Stack>
-          }
-          detail={
-            <>
-              <SetControls {...config} defaults={defaults} />
-              {repsMissing && (
-                <StatusMessage kind="error" live="assertive">
-                  Enter how many reps you did, then save the change.
-                </StatusMessage>
-              )}
-              {failure && (
-                <StatusMessage
-                  kind={failure.full ? 'warning' : 'error'}
-                  live="assertive"
-                  action={
-                    failure.full ? (
-                      <Button variant="secondary" onClick={() => void downloadEverything()}>
-                        {messages.actions.exportEverything}
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="secondary"
-                        onClick={() =>
-                          failure.op === 'save' ? void save() : void run('delete', onDelete)
-                        }
-                      >
-                        {messages.actions.retry}
-                      </Button>
-                    )
-                  }
-                >
-                  {failure.full
-                    ? messages.set.changeDeviceFull
-                    : failure.op === 'save'
-                      ? messages.set.changeNotSaved
-                      : messages.set.notDeleted}
-                </StatusMessage>
-              )}
-              <Stack gap={2}>
-                <Button variant="secondary" expand onClick={onCancel}>
-                  {messages.actions.cancel}
-                </Button>
-                <Button variant="tertiary" expand onClick={() => void run('delete', onDelete)}>
-                  {messages.actions.deleteSet}
-                </Button>
-              </Stack>
-            </>
-          }
-        />
-      </form>
+          </>
+        }
+      />
     </SetFocusLayout>
   );
 }
