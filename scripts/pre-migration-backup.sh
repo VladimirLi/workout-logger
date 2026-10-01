@@ -204,16 +204,18 @@ restore() {
   keys=$(aws s3 ls "$prefix" | awk '{print $NF}' | grep -E '^[0-9]{8}T[0-9]{6}Z\.json$' | sort || true)
   [[ -n "$keys" ]] || die "no backup manifest found under $prefix"
 
-  # The bucket is writable by CI, so nothing in it is trusted to name its own checksum: pick the
-  # manifest that records the externally supplied one, then hold the artifact to the same value.
+  # The bucket is writable by CI, so nothing in it is trusted to name its own checksum or release:
+  # pick the manifest that records both the externally supplied checksum and the requested release
+  # (a backup copied from another release's prefix records that release), then hold the artifact
+  # to the same checksum.
   while IFS= read -r key; do
     aws s3 cp --only-show-errors "$prefix$key" "$WORK/candidate.json"
-    if [[ "$(jq -r '.sha256? // empty' "$WORK/candidate.json" 2>/dev/null || true)" == "$sha" ]]; then
+    if [[ "$(jq -r '(.sha256? // empty) + " " + (.release? // empty)' "$WORK/candidate.json" 2>/dev/null || true)" == "$sha $RELEASE" ]]; then
       manifest=$(jq -c . "$WORK/candidate.json")
       break
     fi
   done <<<"$keys"
-  [[ -n "$manifest" ]] || die "no manifest under $prefix records the expected checksum $sha"
+  [[ -n "$manifest" ]] || die "no manifest under $prefix records release $RELEASE with the expected checksum $sha"
   artifact=$(jq -r '.artifact // empty' <<<"$manifest")
   [[ "$artifact" =~ ^[0-9]{8}T[0-9]{6}Z\.tar\.age$ ]] || die "the manifest names an artifact that is not a backup artifact: $artifact"
   aws s3 cp --only-show-errors "$prefix$artifact" "$WORK/bundle.tar.age"

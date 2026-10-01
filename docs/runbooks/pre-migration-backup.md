@@ -106,15 +106,33 @@ pooler** URL (port 5432). Through it a role is addressed as `<role>.<project-ref
 transaction mode (6543): `pg_dump` and `db push` need a session.
 
 **Migration-only credential.** Two dedicated database roles per environment, created once by a
-human with the `postgres` role in the SQL editor. Neither is the service key: that key is a
+human with the `postgres` role through `psql`, not the dashboard SQL editor, which saves the
+query text. Neither is the service key: that key is a
 runtime API credential for reading and writing user data, and CI must not hold it. Neither
 role is used by the application.
 
+A password given to `psql -v`, `psql "<url with password>"` or any other command-line argument
+is visible to every local user in the process list and is saved in shell history. So neither
+password below is ever typed into a command line, a URL or a file. Each is generated into an
+environment variable of the shell that runs the commands (`export` is a shell builtin, so it is
+not a process argument, and the history records the command, not its output), and `psql` prompts
+for the `postgres` password when the URL has none. Use a new shell, and close it afterwards.
+
 ```sh
 # Dump: reads every row, writes nothing. As `postgres`, once per environment.
-psql "<postgres role URL>" -v backup_role=ci_backup -v backup_password='<generated, 32+ characters>' \
-  -f scripts/backup/ci-backup-role.sql
+export BACKUP_ROLE_PASSWORD=$(openssl rand -hex 24)
+psql "postgresql://postgres.<project-ref>@<pooler-host>:5432/postgres" \
+  -v backup_role=ci_backup -f scripts/backup/ci-backup-role.sql
+# Store the connection URL as the BACKUP_SOURCE_URL environment secret. printf is a builtin and
+# gh reads the value from stdin, so it reaches neither a process argument nor history.
+printf 'postgresql://ci_backup.<project-ref>:%s@<pooler-host>:5432/postgres' "$BACKUP_ROLE_PASSWORD" |
+  gh secret set BACKUP_SOURCE_URL --env <environment>
+unset BACKUP_ROLE_PASSWORD
 ```
+
+`scripts/backup/ci-backup-role.sql` reads `BACKUP_ROLE_PASSWORD` itself and refuses to create the
+role if it is unset or shorter than 32 characters. The rehearsal needs no human: it creates the
+role the same way, from a test-only password generated for that run on a disposable server.
 
 `scripts/backup/ci-backup-role.sql` creates `ci_backup` with `BYPASSRLS`, `pg_read_all_data` and a
 read-only default. The `BYPASSRLS` is needed because every `public` table `FORCE`s row level
@@ -128,11 +146,25 @@ the credential can read all user data, which is why it is a per-environment secr
 limited, and rotated as below. The script refuses to run as a role that lacks `BYPASSRLS` (or is
 not a superuser) or whose sessions are not read-only by default.
 
+```sh
+# Migrations: can change the schema, cannot be used by the app or the API. Same shell rules as above.
+export MIGRATOR_ROLE_PASSWORD=$(openssl rand -hex 24)
+psql "postgresql://postgres.<project-ref>@<pooler-host>:5432/postgres"
+```
+
 ```sql
--- Migrations: can change the schema, cannot be used by the app or the API.
-CREATE ROLE ci_migrator LOGIN CONNECTION LIMIT 2 PASSWORD '<generated, 32+ characters>';
+-- Typed into that psql session: the text holds a variable name, never the password.
+\set ON_ERROR_STOP on
+\set migrator_password `printenv MIGRATOR_ROLE_PASSWORD`
+CREATE ROLE ci_migrator LOGIN CONNECTION LIMIT 2 PASSWORD :'migrator_password';
 GRANT postgres TO ci_migrator;
 ALTER ROLE ci_migrator SET role = postgres;
+```
+
+```sh
+printf 'postgresql://ci_migrator.<project-ref>:%s@<pooler-host>:5432/postgres' "$MIGRATOR_ROLE_PASSWORD" |
+  gh secret set MIGRATION_DATABASE_URL --env <environment>
+unset MIGRATOR_ROLE_PASSWORD
 ```
 
 Why `ci_migrator` is a member of `postgres`: every migration that defines a boundary function

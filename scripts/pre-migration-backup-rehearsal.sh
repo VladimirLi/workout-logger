@@ -21,7 +21,7 @@ TMP=$(mktemp -d "${TMPDIR:-/tmp}/backup-rehearsal.XXXXXX")
 SUFFIX=$(openssl rand -hex 4)
 SRC_DB="rehearsal_src_$SUFFIX"
 BACKUP_ROLE="ci_backup_$SUFFIX" PLAIN_ROLE="ci_plain_$SUFFIX" WRITER_ROLE="ci_writer_$SUFFIX"
-ROLE_PASSWORD="rehearsal-$(openssl rand -hex 8)"
+ROLE_PASSWORD="rehearsal-$(openssl rand -hex 16)"
 trap 'psql "$REHEARSAL_PG_URL" -X -qAt -c "DROP DATABASE IF EXISTS \"$SRC_DB\" WITH (FORCE)" >/dev/null 2>&1 || true
   psql "$REHEARSAL_PG_URL" -X -qAt -c "DROP DATABASE IF EXISTS \"${SRC_DB}_empty\" WITH (FORCE)" >/dev/null 2>&1 || true
   for r in "$BACKUP_ROLE" "$PLAIN_ROLE" "$WRITER_ROLE"; do psql "$REHEARSAL_PG_URL" -X -qAt -c "DROP ROLE IF EXISTS \"$r\"" >/dev/null 2>&1 || true; done
@@ -69,8 +69,20 @@ RLS_BEFORE=$(rls_state)
 [[ "$(psql "$SRC_URL" -X -qAt -c "SELECT count(*) FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relkind = 'r' AND NOT relforcerowsecurity")" == "0" ]] ||
   fail "the rehearsal source has a public table that does not FORCE row level security, so it would not prove the RLS case"
 
-psql "$REHEARSAL_PG_URL" -X -q -v ON_ERROR_STOP=1 -v backup_role="$BACKUP_ROLE" -v backup_password="$ROLE_PASSWORD" \
-  -f "$ROOT/scripts/backup/ci-backup-role.sql"
+# The role file takes its password from the environment, as the runbook prescribes, never from argv.
+create_backup_role() {
+  BACKUP_ROLE_PASSWORD="$1" psql "$REHEARSAL_PG_URL" -X -q -v backup_role="$BACKUP_ROLE" -f "$ROOT/scripts/backup/ci-backup-role.sql"
+}
+if out=$(create_backup_role "too-short" 2>&1); then fail "the role file accepted a password shorter than 32 characters"; fi
+grep -q '32 or more characters' <<<"$out" || { echo "$out" >&2; fail "a short role password failed, but not with the length message"; }
+if out=$(env -u BACKUP_ROLE_PASSWORD psql "$REHEARSAL_PG_URL" -X -q -v backup_role="$BACKUP_ROLE" -f "$ROOT/scripts/backup/ci-backup-role.sql" 2>&1); then
+  fail "the role file accepted an unset password"
+fi
+grep -q '32 or more characters' <<<"$out" || { echo "$out" >&2; fail "an unset role password failed, but not with the length message"; }
+[[ "$(psql "$REHEARSAL_PG_URL" -X -qAt -c "SELECT count(*) FROM pg_roles WHERE rolname = '$BACKUP_ROLE'")" == "0" ]] ||
+  fail "a refused role password still created the role"
+echo "rehearsal: ok - the role file refuses a missing or short password" >&2
+create_backup_role "$ROLE_PASSWORD"
 # Two ways to get the role wrong, each of which must be refused rather than back up partial data.
 psql "$REHEARSAL_PG_URL" -X -q -v ON_ERROR_STOP=1 <<SQL
 CREATE ROLE "$PLAIN_ROLE" LOGIN PASSWORD '$ROLE_PASSWORD';
@@ -130,14 +142,20 @@ printf 'x' >>"$ARTIFACT"
 expect_failure "a tampered artifact" "does not match the expected checksum" "$SCRIPT" restore --release rehearsal-1 --expect-sha256 "$SHA"
 # An attacker with the bucket key replaces the artifact and rewrites its manifest to match.
 jq --arg sha "$(openssl dgst -sha256 -r "$ARTIFACT" | cut -d' ' -f1)" '.sha256 = $sha' "$MANIFEST" >"$TMP/forged.json" && cp "$TMP/forged.json" "$MANIFEST"
-expect_failure "an artifact and manifest forged together" "records the expected checksum" "$SCRIPT" restore --release rehearsal-1 --expect-sha256 "$SHA"
+expect_failure "an artifact and manifest forged together" "with the expected checksum" "$SCRIPT" restore --release rehearsal-1 --expect-sha256 "$SHA"
 restore_good
 jq '.artifact = "../rehearsal-2/20260101T000000Z.tar.age"' "$MANIFEST" >"$TMP/forged.json" && cp "$TMP/forged.json" "$MANIFEST"
 expect_failure "a manifest that names an artifact elsewhere" "not a backup artifact" "$SCRIPT" restore --release rehearsal-1 --expect-sha256 "$SHA"
 restore_good
+# A valid backup of another release, copied unchanged under this release's prefix: its checksum is
+# right and its artifact intact, so only the release it records can show it is the wrong backup.
+mkdir -p "$FAKE_S3_DIR/rehearsal/backups/rehearsal-copy"
+cp "$ARTIFACT" "$MANIFEST" "$FAKE_S3_DIR/rehearsal/backups/rehearsal-copy/"
+expect_failure "a backup copied from another release" "records release rehearsal-copy" \
+  "$SCRIPT" restore --release rehearsal-copy --expect-sha256 "$SHA"
 expect_failure "no expected checksum" "requires --expect-sha256" "$SCRIPT" restore --release rehearsal-1
 expect_failure "a malformed expected checksum" "64 lowercase hex" "$SCRIPT" restore --release rehearsal-1 --expect-sha256 "$(tr a-f A-F <<<"$SHA")"
-expect_failure "a different expected checksum" "records the expected checksum" \
+expect_failure "a different expected checksum" "with the expected checksum" \
   "$SCRIPT" restore --release rehearsal-1 --expect-sha256 "$(printf '0%.0s' {1..64})"
 expect_failure "an unknown release" "no backup manifest" "$SCRIPT" restore --release nothing-here --expect-sha256 "$SHA"
 expect_failure "a wrong private key" "no identity matched" env "BACKUP_AGE_IDENTITY_FILE=$TMP/other.txt" \
