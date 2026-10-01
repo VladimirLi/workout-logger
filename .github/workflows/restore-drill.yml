@@ -1,0 +1,95 @@
+name: restore-drill
+
+# The restore drill (docs/runbooks/pre-migration-backup.md): fetch a stored backup, check its
+# checksum against the one the backup job recorded, decrypt it, restore it into a throwaway
+# Postgres 17, and compare row counts. The
+# printed record is what gets written into the runbook: date, checksum, duration, row counts.
+#
+# Development only. The production private key is never a CI secret; a production drill is run
+# by a human with the key. A drill is signed off by someone other than whoever ran it.
+#
+# GUARDRAIL FILE.
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment whose backup to restore
+        type: choice
+        options: [development]
+        required: true
+      release:
+        description: Release identifier the backup is bound to
+        type: string
+        required: true
+      expect_sha256:
+        description: >-
+          SHA-256 recorded by the backup job's run summary or manifest artifact for this release,
+          copied from there and never from the bucket. The bucket's key can write, so the bucket
+          cannot vouch for its own contents.
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+  AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+
+jobs:
+  drill:
+    name: drill
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: ${{ inputs.environment }}
+    services:
+      postgres:
+        image: postgres:17.6@sha256:00bc86618629af00d2937fdc5a5d63db3ff8450acf52f0636ec813c7f4902929
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install tools
+        run: scripts/backup/install-ci-tools.sh
+
+      - name: Restore and compare row counts
+        env:
+          RELEASE: ${{ inputs.release }}
+          EXPECT_SHA256: ${{ inputs.expect_sha256 }}
+          BACKUP_STORE_URL: ${{ secrets.BACKUP_STORE_URL }}
+          BACKUP_AGE_IDENTITY: ${{ secrets.BACKUP_AGE_IDENTITY }}
+          RESTORE_ADMIN_URL: postgresql://postgres@127.0.0.1:5432/postgres
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_ENDPOINT_URL: ${{ vars.AWS_ENDPOINT_URL }}
+          AWS_DEFAULT_REGION: ${{ vars.AWS_DEFAULT_REGION }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$BACKUP_AGE_IDENTITY" >"$RUNNER_TEMP/age-identity.txt"
+          export BACKUP_AGE_IDENTITY_FILE="$RUNNER_TEMP/age-identity.txt"
+          scripts/pre-migration-backup.sh restore --release "$RELEASE" --expect-sha256 "$EXPECT_SHA256" >drill.json
+          {
+            echo "### Restore drill"
+            echo
+            echo '```json'
+            cat drill.json
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the drill record
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: drill-record-${{ inputs.release }}
+          path: drill.json
+          if-no-files-found: error
+          retention-days: 90

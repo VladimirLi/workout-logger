@@ -238,7 +238,8 @@ promoting, and the release meets SLSA Build Level 2.
 
 ## G-8 — Pre-migration backup path
 
-**Status:** not performed. Depends on G-2.
+**Status:** partly performed. The backup path is executable and rehearsed on a scratch
+Postgres; it has not been drilled against the development project. Depends on G-2.
 
 **Required (R-015, R-017).** Before **every** production migration: encrypted logical
 Postgres dump, stored outside the application provider, verified readable, checksum
@@ -246,11 +247,25 @@ recorded against the release, **fail closed** if any step fails.
 
 **What ships now.** `pnpm test:migrations` validates migration files and fails honestly
 once migrations exist. The backup runbook is `docs/runbooks/pre-migration-backup.md`.
+`scripts/pre-migration-backup.sh` dumps, verifies by restore, encrypts, uploads and records the
+SHA-256 against the release, failing closed. The `database-migrate` workflow applies migrations
+only after that job succeeds, using a migration-only role rather than the service key (design in
+the runbook, nothing created). `restore-drill` runs the drill. `scripts/pre-migration-backup-rehearsal.sh`
+and the `backup-rehearsal` workflow prove the script and its refusals with no credential.
 
-**Unverified boundary.** No dump has been taken, stored, or restored.
+**Unverified boundary.** No dump has been taken from a Supabase project, stored in a bucket, or
+restored from one. The S3 transport, the pooler connection, the two database roles (including
+that `postgres` may create `ci_backup` with `BYPASSRLS`) and the CI tool installation have not run.
+The rehearsal proves `ci_backup` against a scratch server whose tables `FORCE` row level
+security. The restore drill record is empty.
 
-**Done when.** A restore drill into an isolated project has succeeded at least once and
-the checksum-to-release binding is automated.
+**Blocked on Vladimir (VLA-255).** An off-platform S3-compatible bucket and key, an age keypair
+for development, the two database roles on the development project, and the `development`
+GitHub environment holding the secrets listed in the runbook. Nothing was created.
+
+**Done when.** A restore drill into an isolated project has succeeded at least once, signed off
+by someone other than whoever ran it, and the checksum-to-release binding is automated. The
+binding is automated in code; the drill is what remains.
 
 **Explicitly accepted risk.** No PITR and no scheduled backups while single-user. Total
 loss of data created *between* migrations is accepted. Revisit before onboarding any
