@@ -1,13 +1,13 @@
 # External setup gates
 
 **Status:** Normative checklist. One cloud resource exists: a Supabase **Free development**
-project, authorised on 2026-09-18 for development only (G-2, ADR-0011). No remote, no DNS
-record, no deployment, and nothing in production.
+project, authorised on 2026-09-18 for development only (G-2, ADR-0011). GitHub origin exists
+(verified 2026-09-30). No DNS record, no deployment, and nothing in production.
 Owner decisions recorded here (for example ADR-0009) do not perform any gate.
 
 Every item below requires the **user's authorization** and credentials for an external
 service. No agent provisions any of it. This repository deliberately contains no secrets,
-no cloud resources, no DNS records, no GitHub remote, and no deployment.
+no cloud resources, no DNS records, no deployment, and no production enrollment.
 
 Each gate states what is unverified, what the repository ships instead, and what "done"
 means.
@@ -16,7 +16,7 @@ means.
 
 ## G-1 — GitHub remote and repository ruleset
 
-**Status:** not performed. No remote exists.
+**Status:** partially performed. GitHub origin exists at https://github.com/VladimirLi/workout-logger (verified 2026-09-30). Ruleset remains unverified.
 
 **Decided 2026-09-17 (ADR-0009, D2).** The repository will be **public**, with the intent to
 open-source the project. **Project licence chosen 2026-09-24:** MIT. The dependency exception
@@ -34,8 +34,16 @@ rules.
 applied, the workflows are advisory. "CI is authoritative" is documented intent, not an
 enforced fact, until this gate closes.
 
-**Done when.** `gh api repos/{owner}/{repo}/rulesets` returns the ruleset in
-`docs/branch-protection.md` with `enforcement: active`.
+**How to verify.** This agent lacks GitHub admin scope to query the live ruleset. Run:
+
+```bash
+gh api repos/VladimirLi/workout-logger/rulesets --jq '.[] | {name, enforcement}'
+```
+
+Confirmation: `enforcement` must read `active` for all rules. The ruleset structure must
+match `docs/branch-protection.md`.
+
+**Done when.** The above command returns all rules with `enforcement: active`.
 
 ---
 
