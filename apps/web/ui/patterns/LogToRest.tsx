@@ -8,7 +8,7 @@ import { StickyActionBar } from './Bars';
 import moduleStyles from './LogToRest.module.css';
 
 /** CSS Module class names used here; ui/css-modules.test.ts checks each exists. */
-const styles = moduleStyles as Record<'layout' | 'view', string>;
+const styles = moduleStyles as Record<'actions' | 'layout' | 'view', string>;
 
 type LogToRestProps = {
   /** A function receives the same action the primary button runs, for a Retry beside a failure. */
@@ -136,15 +136,20 @@ export function LogToRest({
  * The Set Focus layout without the log-to-rest transition, for a set being edited in place:
  * values and controls above, the one primary action in the sticky bar, and in a phone held
  * sideways the same two panes as logging a set.
+ *
+ * A secondary action (Cancel) shares the bar's row, before the primary one. If the two do not
+ * fit on one line the primary wraps above it.
  */
 export function SetFocusLayout({
   children,
   action,
+  secondary,
   notice,
   formRef,
 }: {
   children: ReactNode;
   action: ReactNode;
+  secondary?: ReactNode;
   notice?: ReactNode;
   /** Reaches the form that holds the controls; as in LogToRest, the form is the view itself. */
   formRef?: Ref<HTMLFormElement>;
@@ -159,7 +164,16 @@ export function SetFocusLayout({
       >
         {children}
       </form>
-      <StickyActionBar notice={notice}>{action}</StickyActionBar>
+      <StickyActionBar notice={notice}>
+        {secondary ? (
+          <div className={styles.actions} data-action-row>
+            {secondary}
+            {action}
+          </div>
+        ) : (
+          action
+        )}
+      </StickyActionBar>
     </div>
   );
 }

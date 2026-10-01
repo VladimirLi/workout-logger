@@ -23,6 +23,32 @@ html {
 }
 
 /*
+ * A bar that holds two actions can stack them (320 px, or text at 200%), so it is up to two large
+ * buttons tall, plus its padding. A large button grows with the text, so the row is measured the
+ * way the button is: its 56 px floor, or its label's line plus padding and border.
+ */
+@media not ((orientation: landscape) and (max-height: 500px)) {
+  html:has([data-action-row]) {
+    scroll-padding-block-end: calc(
+      2 *
+      max(
+        var(--target-workout) +
+        var(--space-2),
+        var(--font-size-title) *
+        var(--line-height-label) +
+        var(--space-4) +
+        2 *
+        var(--border-width)
+      ) +
+      var(--space-2) +
+      var(--space-5) +
+      var(--border-width) +
+      env(safe-area-inset-bottom)
+    );
+  }
+}
+
+/*
  * Sideways the action row is part of the set view, not sticky; only the tabs can cover focus.
  * A screen without tabs reserves nothing, so focusing Log set does not scroll the page.
  */

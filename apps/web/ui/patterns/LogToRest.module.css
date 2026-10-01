@@ -24,6 +24,25 @@
   gap: var(--space-5);
 }
 
+/*
+ * Secondary and primary share one row. wrap-reverse puts a line that does not fit above the
+ * first, so at 320 px or 200% text the primary stacks over the secondary while the DOM and
+ * tab order stay secondary, primary.
+ */
+.actions {
+  display: flex;
+  flex-flow: row wrap-reverse;
+  gap: var(--space-2);
+}
+
+.actions > :first-child {
+  flex: none;
+}
+
+.actions > :last-child {
+  flex: 1 1 auto;
+}
+
 .view[data-leaving] {
   animation: leave var(--motion-fast) var(--ease-exit) forwards;
 }
