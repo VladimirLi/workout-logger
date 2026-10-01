@@ -25,14 +25,14 @@ Serves: VLA-326, VLA-321, `DESIGN_SYSTEM.md` `data.set-table.aligned-table`, WCA
 
 ## What Changes
 
-- When the sets table's region is narrower than 13 rem (208 px at 100 % text, 288 px at 150 %,
-  416 px at 200 %), each body row stacks. The measure is in rem so it follows the text size: the
+- When the sets table's region is narrower than 15 rem (240 px at 100 % text, 360 px at 150 %,
+  480 px at 200 %), each body row stacks. The measure is in rem so it follows the text size: the
   same screen stacks at 200 % text and does not at 100 %.
   - Line 1: the set number at the inline-start, the Edit button at the inline-end.
   - Line 2: Load, Reps and RIR, each as a muted label followed by its value, wrapping to a third
     line if they cannot share one.
   - The column headings move out of sight but stay in the accessibility tree.
-- Above 13 rem the table is unchanged: columns Set, Load, Reps, RIR, then Edit.
+- Above 15 rem the table is unchanged: columns Set, Load, Reps, RIR, then Edit.
 - Read-only tables (the summary) follow the same rule, so the table looks and behaves one way.
 - The table still scrolls in its own focusable region as a safety net for content wider than
   expected. It is not the way Edit is reached.
@@ -67,6 +67,8 @@ threshold, so none should change. If one does, it goes in a dedicated visual-cha
 - Reflowing table rows with CSS can drop table semantics in some browsers. After the change the
   accessibility tree must still expose a table with column headers and row headers. If a browser
   drops them, restore them with explicit ARIA roles rather than abandoning the reflow.
-- 13 rem is sized to the current content. Measure the table's natural width with the longest
+- 15 rem is sized to the current content (the designer proposed 13 rem; the implementation
+  measured the unstacked table at 14.7 rem at 100 % text with a 102.5 kg, 12-rep row, so 13 rem
+  would overflow between 208 and 235 px). Measure the table's natural width with the longest
   realistic row (a load such as 102.5 kg, two-digit reps) and raise the number if the
   unstacked table overflows its region anywhere above it. Record the measured values in the PR.
