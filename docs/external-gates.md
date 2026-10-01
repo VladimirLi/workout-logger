@@ -142,9 +142,10 @@ drilled.
 
 ## G-5 — Telemetry backend and alerting
 
-**Status:** not performed. A design is proposed in
+**Status:** not performed. The design in
 [docs/design/telemetry-and-synthetic-checks.md](design/telemetry-and-synthetic-checks.md)
-(2026-09-30). It is not accepted, and nothing is provisioned or run.
+is accepted for D-1 to D-5 and D-7 (owner, 2026-10-01; D-6 declined). Nothing is provisioned or
+run, and the gate stays open.
 
 **Required (D-049, R-018, R-019).** An OpenTelemetry-compatible backend. Dual-path
 alerting: an independent alert manager paging Telegram directly, **and** independently
@@ -172,7 +173,9 @@ webhook URL and HMAC key. The full list of decisions and accounts is in section 
 
 **Done when.** Both alert paths are drilled independently, each with the other disabled,
 and the canary passes against the real exporter configuration. Synthetic journeys run on the
-isolated account every 15 minutes and on each deploy. **Also required:** every D-049 class
+isolated account every 15 minutes and on each deploy. The approved design (D-3) runs only API-level
+journeys every 15 minutes, which does not meet OBSERVABILITY.md's "every 15 min" row as written, so
+that row needs full 15-minute coverage or an owner-approved written change narrowing it. **Also required:** every D-049 class
 (security, possible data loss, authentication, critical-journey failure) has a signal, an alert on
 both paths and a recorded drill; or Vladimir has approved a written change that narrows D-049.
 G-5 must not be marked done while the known gap above is open.
