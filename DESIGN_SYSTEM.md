@@ -97,7 +97,7 @@ workbook's recommendation; the owner chose them deliberately.
 
 ### Feedback
 
-- `feedback.sync-indicator.icon-label`: icon plus "On device", "Syncing", or "Needs attention", always visible.
+- `feedback.sync-indicator.icon-label`: icon plus "On device", "Syncing", or "Needs attention", visible on every screen that shows a workout read from the device. While loading, with no session, or after a failed read it is absent: nothing has been read, so no persistence is claimed.
 - `feedback.set-saved.inline-rest`: the pill gets a check and rest opens in place; a screen reader hears "Set 2 saved. Rest 1:30."
 - `feedback.loading.skeleton-delayed`: nothing for 300 ms, then static blocks in the final shape; no shimmer.
 
