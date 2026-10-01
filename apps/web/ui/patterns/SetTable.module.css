@@ -66,6 +66,11 @@
     display: block;
   }
 
+  /* A block table puts the caption in an anonymous table box sized to its narrowest word. */
+  .caption {
+    display: block;
+  }
+
   .table thead {
     position: absolute;
     inline-size: 1px;
