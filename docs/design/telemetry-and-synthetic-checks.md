@@ -219,10 +219,9 @@ they are switched off after 60 days without repository activity, and on a privat
 free 2,000 minutes a month would not cover 2,880 runs. It is a bad source for an SLO that says
 "at least every 15 minutes".
 
-**Deviation to confirm (decision D-3).** OBSERVABILITY.md says the synthetic *critical journeys*
+**Deviation (decision D-3, approved as design direction; OBSERVABILITY.md not yet changed).** OBSERVABILITY.md says the synthetic *critical journeys*
 run every 15 minutes. This design runs the API-level subset on the schedule and the full set, including
-browser-only journeys, on each deploy. If Vladimir wants browser journeys every 15 minutes, the
-alternative is Grafana browser checks (10,000 free executions a month, which fits) at the price
+browser-only journeys, on each deploy. The alternative, not chosen, is Grafana browser checks (10,000 free executions a month, which fits) at the price
 of rewriting those journeys in k6 browser.
 
 `verify-deployment` takes a deployment URL and exits non-zero on failure. G-4 wires that exit code
@@ -342,10 +341,13 @@ that has not been run; the first month's invoice replaces it.
 - **D-1** (approved 2026-10-01) Approve Grafana Cloud as the provider (stays provisional until the drills pass).
 - **D-2** (approved: Pro at go-live) Production needs Pro (about 19 USD a month), or change the 30-day retention and window
   in OBSERVABILITY.md. Recommendation: Pro at production go-live.
-- **D-3** (approved: recommended option) API-level journeys every 15 minutes and the full set on deploy (recommended), or browser
-  journeys every 15 minutes via k6 browser (more rewriting). The subset is a deviation from
-  OBSERVABILITY.md; until Vladimir approves it, it does not satisfy the "every 15 minutes" SLO row
-  and G-5 cannot close on it.
+- **D-3** (approved 2026-10-01: recommended option) API-level journeys every 15 minutes and the
+  full set on deploy. The alternative, browser journeys every 15 minutes via k6 browser, was not
+  chosen. The approval settles the design direction only. OBSERVABILITY.md still says "every 15
+  min" for the critical journeys and is unchanged, so the API-only subset does not yet satisfy
+  that SLO row. G-5 stays blocked on full 15-minute coverage until either browser journeys run
+  every 15 minutes or Vladimir approves a written change to OBSERVABILITY.md that narrows the row
+  to the API subset.
 - **D-4** (approved) Approve an OpenSpec change for the synthetic user: how it authenticates, how it is
   excluded from views and recommendations, and how `synthetic=true` is set server-side.
 - **D-5** (approved) Approve the low-volume rule for the error budget (300-request floor, then probes).
