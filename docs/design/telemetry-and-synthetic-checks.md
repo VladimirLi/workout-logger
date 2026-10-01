@@ -1,7 +1,7 @@
 # Design: telemetry, alerting and synthetic checks (G-5)
 
-**Status:** Accepted for D-1 to D-5 (Vladimir, 2026-10-01, VLA-256 confirmation); D-6 declined; D-7
-still open. Nothing here is provisioned or run. It changes no product intent by itself. Pricing and limits were read
+**Status:** Accepted for D-1 to D-5 and D-7 (Vladimir, 2026-10-01, VLA-256 confirmations); D-6
+declined. Nothing here is provisioned or run. It changes no product intent by itself. Pricing and limits were read
 from Grafana's public pages on 2026-09-30 and are re-confirmed at account setup (G-5).
 **Inputs:** [OBSERVABILITY.md](../../OBSERVABILITY.md) (normative, not changed here),
 [external-gates.md](../external-gates.md) G-4, G-5, G-9, [ROADMAP.md](../../ROADMAP.md) O-3.
@@ -132,10 +132,9 @@ Three layers, each a gate that fails when it cannot run:
    rolled back (D-043). Nothing is transmitted in any outcome except a clean probe. Unconfigured
    (no endpoint or token) skips the probe and is plain `NoopExporter`; that is not a canary failure.
 
-   Whether a failed gate should also stop the process is a decision for review, not made here
-   (D-7 in section 9). The recommendation is no: crash-looping would take workout logging offline
-   over a telemetry defect, while sticky Noop plus an unhealthy health route already blocks
-   promotion and leaks nothing.
+   A failed gate does not stop the process (D-7a, approved 2026-10-01): crash-looping would take
+   workout logging offline over a telemetry defect, while sticky Noop plus an unhealthy health
+   route already blocks promotion and leaks nothing.
 
    What the runtime canary does not cover: the probe stands in for everything above the transport.
    Headers, the request body encoding and anything the OTLP exporter itself adds are covered only
@@ -351,10 +350,9 @@ that has not been run; the first month's invoice replaces it.
   excluded from views and recommendations, and how `synthetic=true` is set server-side.
 - **D-5** (approved) Approve the low-volume rule for the error budget (300-request floor, then probes).
 - **D-6** (declined, no external heartbeat for now) Optional: an external heartbeat monitor for the "Grafana is down" case.
-- **D-7** (open, not covered by the 2026-10-01 approval) Confirm two points. (a) A failed runtime canary leaves telemetry off and the health
-  route unhealthy but does not stop the process (recommended), or also exits. (b) G-5 stays open
-  until T11 and T12 ship with drilled alerts (recommended), or Vladimir approves a written change
-  that narrows D-049 and OBSERVABILITY.md.
+- **D-7** (approved 2026-10-01, both recommendations) (a) A failed runtime canary leaves telemetry off and the health
+  route unhealthy but does not stop the process. (b) G-5 stays open until T11 and T12 ship with
+  drilled alerts; no narrowing of D-049 or OBSERVABILITY.md is proposed.
 
 **Accounts and credentials (none exist; none requested until phase 2 starts)**
 
@@ -385,7 +383,7 @@ Each code task gets the usual review, QA and merge children. Guardrail tasks are
 | T9 | Client queue age on `sync.flush` (spec, then code) | Product/spec agent, Software Engineer | D-4-style approval | Yes if the allowlist changes |
 | T11 | Possible-data-loss signal (6.1): OpenSpec change, allowlist change, instrumentation, alert rule, drill | Product/spec agent, then Software Engineer, Platform & Reliability | Spec approval; allowlist change is its own PR; alert and drill need T3 | Yes if the allowlist changes |
 | T12 | Security and authentication signals (6.1): OpenSpec change (touches authorization), allowlist change, instrumentation, alert rules, drill | Product/spec agent, then Software Engineer, Platform & Reliability | Human approval of the spec; T3 for the alert | Yes if the allowlist changes |
-| T10 | Close G-5: run drills against the production stack and recheck cost against the first invoice. **Blocked by T11 and T12** unless D-7(b) is approved as a narrowing change | Platform & Reliability | Production credentials from Vladimir (G-9) | No |
+| T10 | Close G-5: run drills against the production stack and recheck cost against the first invoice. **Blocked by T11 and T12** (D-7b) | Platform & Reliability | Production credentials from Vladimir (G-9) | No |
 
 Suggested order: T1, T3, T5, T11 and T12 specs in parallel; then T2, T4, T6; then T7, T8, T9 and the
 T11/T12 implementations; T10 last.
