@@ -10,7 +10,7 @@
 
 ## 2. Implementation and proof (separate PR; builds on VLA-321 / PR #45, not done here)
 
-- [ ] 2.1 `SetTable` stacks each row below 13 rem as specified, using a container query in rem
+- [ ] 2.1 `SetTable` stacks each row below 15 rem as specified, using a container query in rem
 - [ ] 2.2 Table semantics survive the reflow (accessibility tree shows table, column headers, row
       headers); explicit ARIA roles only if a browser drops them
 - [ ] 2.3 Measure the unstacked table with the longest realistic row; set the threshold above it

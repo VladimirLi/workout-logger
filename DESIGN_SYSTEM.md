@@ -116,7 +116,7 @@ workbook's recommendation; the owner chose them deliberately.
 ### Data
 
 - `data.charts-v1.defer`: no charts in v1; summaries and tables only. Chart rules are kept for later.
-- `data.set-table.aligned-table`: columns Set, Load, Reps, RIR; tabular, right-aligned, real table markup. Where the table has a row action (Edit) it is the last column. When the table's region is narrower than 13 rem (so it follows text size: 320 px at 200 % text, not at 100 %), each row stacks: set number and Edit on the first line, labelled Load, Reps and RIR below, with the column headings kept for assistive technology. Edit is then never cut off and never needs scrolling to reach; the table still scrolls in its own region for unexpectedly wide content.
+- `data.set-table.aligned-table`: columns Set, Load, Reps, RIR; tabular, right-aligned, real table markup. Where the table has a row action (Edit) it is the last column. When the table's region is narrower than 15 rem (so it follows text size: 320 px at 200 % text, not at 100 %), each row stacks: set number and Edit on the first line, labelled Load, Reps and RIR below, with the column headings kept for assistive technology. Edit is then never cut off and never needs scrolling to reach; the table still scrolls in its own region for unexpectedly wide content.
 - `data.comparison.delta-text`: "+2.5 kg vs last" with an up or down arrow in a neutral colour.
 
 ### Content
