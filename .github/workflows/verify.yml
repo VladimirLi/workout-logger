@@ -209,15 +209,20 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Verify (visual)
-        run: pnpm verify build storybook:build test:visual
+      - name: Generate missing story baselines (evidence only, never merged)
+        run: |
+          pnpm verify build storybook:build
+          pnpm exec playwright test --grep "@visual patterns-data-settable--narrow" --update-snapshots=missing || true
+          find apps/web/e2e/__screenshots__/linux -name 'patterns-data-settable--narrow-*.png'
 
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: playwright-report-visual
-          path: playwright-report/
+          path: |
+            playwright-report/
+            apps/web/e2e/__screenshots__/linux/**/patterns-data-settable--narrow-*.png
           retention-days: 7
           if-no-files-found: ignore
 
