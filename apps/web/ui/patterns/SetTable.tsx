@@ -1,10 +1,11 @@
+import type { ReactNode } from 'react';
 import { formatLoad, formatNumber, MISSING, speakLoad } from '../i18n/format';
 import { messages } from '../i18n/messages';
 import { Button } from '../primitives/Button';
 import moduleStyles from './SetTable.module.css';
 
 /** CSS Module class names used here; ui/css-modules.test.ts checks each exists. */
-const styles = moduleStyles as Record<'caption' | 'scroller' | 'table' | 'unit', string>;
+const styles = moduleStyles as Record<'caption' | 'label' | 'scroller' | 'table' | 'unit', string>;
 
 export type SetRow = {
   set: number;
@@ -29,10 +30,20 @@ function Missing() {
   );
 }
 
+/** The visible name of a value when a narrow row stacks; the column heading names it otherwise. */
+function Label({ children }: { children: ReactNode }) {
+  return (
+    <span className={styles.label} aria-hidden="true">
+      {children}
+    </span>
+  );
+}
+
 /**
- * data.set-table.aligned-table: a real table, right-aligned tabular numbers. At large text
- * sizes a table may be wider than a phone; it then scrolls inside its own keyboard-focusable
- * region, and the page itself never scrolls sideways (WCAG 1.4.10).
+ * data.set-table.aligned-table: a real table, right-aligned tabular numbers. Where its region is
+ * narrower than 15 rem (a phone at large text) each row stacks: set number and Edit, then the
+ * labelled values, so nothing needs scrolling to be reached. The region still scrolls, in its
+ * own keyboard-focusable region, for anything wider; the page never scrolls sideways (WCAG 1.4.10).
  */
 export function SetTable({
   caption,
@@ -69,6 +80,9 @@ export function SetTable({
             <tr key={row.set}>
               <th scope="row">{formatNumber(row.set)}</th>
               <td>
+                <Label>
+                  {messages.set.load} <span className={styles.unit}>kg</span>
+                </Label>
                 {row.loadKg === undefined ? (
                   <Missing />
                 ) : (
@@ -78,8 +92,14 @@ export function SetTable({
                   </>
                 )}
               </td>
-              <td>{row.reps === undefined ? <Missing /> : formatNumber(row.reps)}</td>
-              <td>{row.rir === undefined ? <Missing /> : formatNumber(row.rir)}</td>
+              <td>
+                <Label>{messages.set.reps}</Label>
+                {row.reps === undefined ? <Missing /> : formatNumber(row.reps)}
+              </td>
+              <td>
+                <Label>{messages.set.rir}</Label>
+                {row.rir === undefined ? <Missing /> : formatNumber(row.rir)}
+              </td>
               {onEdit && (
                 <td>
                   {row.id !== undefined && (
