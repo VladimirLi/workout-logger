@@ -71,7 +71,7 @@ workbook's recommendation; the owner chose them deliberately.
 
 - `layout.base-unit.four`: spacing 4, 8, 12, 16, 24, 32, 48, 64.
 - `layout.wide-screen.centered-column`: one 520 px column, centred; extra space stays empty.
-- `layout.primary-action.sticky-bottom`: the action bar sits above the safe area with a separator.
+- `layout.primary-action.sticky-bottom`: the action bar sits above the safe area with a separator. On a screen that can be abandoned (the edit view) it also holds Cancel, secondary, to the inline-start of the primary action, 8 px apart, both 48 px; if they cannot share a row (320 px, 200 % text) they stack with the primary on top. Nothing else goes in the bar, and no control needed to save or leave sits in the page below the fields, where the bar can cover it. A rare or destructive action (Delete set) sits beside the heading, away from the bar.
 - `layout.landscape.two-pane`: values left, controls and action right; the action stays in view at the bottom of the right pane. At 667 × 375 an ordinary set fits with no scrolling. A unilateral or combined-load set scrolls its controls inside the right pane, above the action and never under it. The session summary, set table and Done sit below and scroll with the page.
 
 ### Shape
