@@ -32,10 +32,10 @@ Today `Telemetry.record(name, attributes)` sanitizes and hands an event to a `Te
 The default is `NoopExporter`. The change is one new exporter behind that interface, not a second
 API:
 
-- `OtlpExporter` maps each closed event name to OpenTelemetry **stable** signals: a counter and a
-  duration histogram per event (dimensions = allowlisted attributes only), plus a span for
-  `http.server.request`. Dimensions are all closed-domain, so series count is bounded by the
-  enums (hundreds, against the 10,000 free-tier series).
+- `OtlpExporter` maps each closed event name to OpenTelemetry **stable** signals, plus a span for
+  `http.server.request`. Being on the attribute allowlist makes a value safe to export; it does not
+  make it safe as a metric label. Each allowlisted attribute is therefore classified once, and the
+  mapping follows the classification (section 2.1).
 - Use the official OpenTelemetry JS SDK and the OTLP/HTTP exporter. No custom protocol or client.
 - **Resource attributes are a bypass.** SDK defaults and resource detectors add `host.*`,
   `process.*` and `telemetry.sdk.*`, none of which are on the allowlist. The exporter builds its
@@ -48,6 +48,55 @@ API:
   forwarded to Grafana (no log drain, no Vercel OTel integration). Their retention is a Vercel
   setting recorded in the G-4 ADR.
 
+### 2.1 Metric labels, observations and series budget
+
+`duration.ms` admits any integer up to 86,400,000 and `retry.count` up to 100. `migration.version`
+is a 4 to 14 digit string. Used as labels, each distinct value would be a new series. So:
+
+| Allowlisted attribute | Role in OTLP | Why |
+|---|---|---|
+| `http.route` (4 values) | metric label | Enumerated |
+| `operation.type` (8) | metric label | Enumerated |
+| `response.class` (5) | metric label | Enumerated |
+| `queue.state` (3) | metric label | Enumerated |
+| `synthetic` (2) | metric label | Boolean; keeps the SLO numerator separable |
+| `duration.ms` | **histogram observation, never a label** | Fixed explicit bucket boundaries: 5, 10, 25, 50, 100, 250, 500, 1,000, 2,500, 5,000, 10,000, 30,000, 60,000 ms. The 60,000 boundary exists so the 60-second sync SLO is a bucket ratio rather than an estimate |
+| `retry.count` | **histogram observation, never a label** | Bounds 0, 1, 2, 3, 5, 10 |
+| `service.name`, `deployment.environment` | resource attributes | Constant per process; separate stacks or tokens per environment (section 9) |
+| `service.version` | resource attribute on `target_info`, not a label on every series | Alerts and dashboards join to it; cost is one `target_info` series per release, not a multiplier |
+| `migration.version` | **not exported in v1** | Unbounded pattern; nothing in the SLOs or alerts needs it. A spec can reclassify it later |
+
+Event to instrument. One duration histogram per event that has a duration; its `_count` is the
+event counter, so there is no second counter. Events with no duration are a plain counter.
+
+| Event | Instrument | Labels | Ceiling of series |
+|---|---|---|---|
+| `http.server.request` | duration histogram, 13 bounds (16 series per label set) | `http.route`, `response.class`, `synthetic` (40 sets) | 640 |
+| `app.operation` | duration histogram | `operation.type`, `response.class`, `synthetic` (80 sets) | 1,280 |
+| `sync.flush` | duration histogram, plus retries histogram (6 bounds, 9 series) | `response.class`, `synthetic` (10 sets); retries by `synthetic` (2 sets) | 178 |
+| `sync.queue_state_changed` | counter | `queue.state`, `synthetic` | 6 |
+| `proposal.decision` | counter | `synthetic` | 2 |
+| `auth.event` | counter | `response.class`, `synthetic` | 10 |
+| `migration.applied` | counter | none | 1 |
+| `telemetry.canary` | not exported to the backend (runtime canary only, section 3) | none | 0 |
+
+The ceiling is the product of the closed domains, so it is a bound, not a forecast: about 2,100
+series for one service, about 4,200 for both, against 10,000 on Free. Dimensions are fixed in the
+mapping, not derived from whatever attributes an event happens to carry, so a future allowlist
+addition cannot widen a metric by accident.
+
+**Cardinality test (CI, required, part of T1).** Against the real SDK with an in-memory metric
+reader:
+
+1. Every entry of `ALLOWED_ATTRIBUTES` has a classification in the table above; an unclassified
+   attribute fails the test, so adding an attribute forces the label decision.
+2. After emitting several thousand events with random in-domain values, including random
+   `duration.ms` and `retry.count`, no data point carries `duration.ms`, `retry.count` or
+   `migration.version` as an attribute, and the distinct label sets per instrument never exceed the
+   product of their closed domains.
+3. The total series ceiling computed from the mapping stays at or under 5,000 per service pair. A
+   change that raises it needs the design updated.
+
 ## 3. The allowlist and canary stay a required gate
 
 Three layers, each a gate that fails when it cannot run:
@@ -59,10 +108,57 @@ Three layers, each a gate that fails when it cannot run:
    entry point, then asserts the sentinel bytes appear nowhere in the raw request bodies, in
    headers, or in resource attributes. This is what G-5 means by "the canary passes against the
    real exporter configuration" and it needs no Grafana credentials.
-3. **Runtime canary.** At start-up the service runs the same sentinel through its production
-   exporter configuration into a capturing tee. If the sentinel appears, the health route reports
-   unhealthy, so post-deployment verification fails and the deploy is rolled back or never
-   promoted. No new telemetry attribute is needed to report it.
+3. **Runtime canary, a start-up gate that runs before any network exporter exists.** The canary
+   must never touch the pipeline that can transmit, because a sentinel that reaches an exporter
+   able to send has already left the process.
+
+   Initialization is two steps, in this order:
+
+   1. **Probe.** Build the pipeline from the production configuration, with the one difference
+      that the transport is an in-memory capture (the SDK's in-memory metric and span exporters)
+      instead of OTLP/HTTP. Sanitizer, event mapping, label classification, resource builder and
+      fixed names are the same objects the production pipeline uses, built by the same factory
+      function, which takes the transport as its only varying argument. No OTLP exporter, HTTP
+      client, timer or socket has been constructed at this point. Emit the sentinel through every
+      entry point and scan the captured payloads, resource and scope attributes.
+   2. **Commit.** Only if the scan is clean, build the production pipeline with the real OTLP
+      transport. The sentinel is never emitted into it; the probe and the production pipeline are
+      separate instances.
+
+   **Fail closed.** If the scan finds the sentinel, or the probe throws or cannot complete, the
+   process installs `NoopExporter` and never constructs the OTLP transport. The decision is sticky
+   for the life of the process, with no retry and no later switch to the real exporter. The health
+   route reports unhealthy, so `verify-deployment` fails and the deployment is not promoted, or is
+   rolled back (D-043). Nothing is transmitted in any outcome except a clean probe. Unconfigured
+   (no endpoint or token) skips the probe and is plain `NoopExporter`; that is not a canary failure.
+
+   Whether a failed gate should also stop the process is a decision for review, not made here
+   (D-7 in section 9). The recommendation is no: crash-looping would take workout logging offline
+   over a telemetry defect, while sticky Noop plus an unhealthy health route already blocks
+   promotion and leaks nothing.
+
+   What the runtime canary does not cover: the probe stands in for everything above the transport.
+   Headers, the request body encoding and anything the OTLP exporter itself adds are covered only
+   by the wire canary, which is why that one is required too.
+
+**How the wire canary proves this.** It is the same local OTLP receiver, with two cases that
+the CI job requires:
+
+- *Healthy.* The configuration exports to the receiver. Sentinels sent through every entry point
+  appear nowhere in the received bodies, headers or resource attributes, and the receiver did get
+  data (so the test cannot pass by exporting nothing).
+- *Fault injection, no egress.* The factory takes an injectable mapper seam that is a code argument
+  only (no environment variable or configuration can set it) and is used only in tests; the test installs one that deliberately copies the sentinel into a label. The test
+  then asserts: start-up reports unhealthy; the receiver's request count is exactly zero, checked
+  after normal events, after a forced flush, and after shutdown (which flush pending data); events
+  recorded after the failed gate still produce zero requests; and the OTLP exporter class was
+  never constructed (checked with a constructor spy). A pass proves the probe intercepted the
+  sentinel before any production transport existed, which is the property a "failed canary
+  already leaked" bug would break. Because the receiver counts every request, not only those
+  containing the sentinel, a leak of unrelated data after the failure also fails the test.
+
+The gate fails rather than skips: if the receiver cannot start or the injection seam is missing,
+the job fails (OBSERVABILITY.md: a canary that cannot run is a failed gate).
 
 Grafana-side scrubbing is not a control and is not relied on. Anything the allowlist admits is
 already visible there by design.
@@ -142,8 +238,19 @@ change and human approval (D-4). This design does not pick the mechanism.
 
 ## 6. Alerts
 
-All built from metrics. Notify immediately for security, data-loss, authentication and
-critical-journey failures (D-049).
+All built from metrics. D-049 requires immediate notification for four classes: security, possible
+data loss, authentication, and critical-journey failure. **The alerts below cover two of them
+fully or partly. They do not satisfy D-049 on their own.**
+
+| D-049 class | Covered by this design | State |
+|---|---|---|
+| Critical-journey failure | Synthetic failed, synthetic silent, availability and sync fast burn | Covered, once built and drilled |
+| Authentication | `auth.event` with `response.class=5xx` (server-side failure of sign-in) | **Partial.** Failed or abusive attempts and token misuse have no signal |
+| Security | Nothing | **Absent.** No signal exists |
+| Possible data loss | Nothing | **Absent.** No signal exists |
+
+The two absent classes, and the missing half of authentication, are prerequisites of G-5 and are
+tracked as T11 and T12 in section 10. Section 6.1 says what closes them.
 
 | Alert | Condition | Routes |
 |---|---|---|
@@ -154,13 +261,36 @@ critical-journey failures (D-049).
 | Auth failure | any `auth.event` with `response.class=5xx` in 15 min | A + B |
 | Slow burn | 6x over 6 h and 30 min | B only, ticket-style |
 
-**Gap, not solved here.** There is no telemetry signal for "possible data loss" or a security
-event: the allowlist has no outcome attribute, and adding one is a guardrail PR plus a spec
-decision. Accepted-mutation loss is covered by ADR-0003, the outbox tests and the synthetic sync
-round trip, not by an alert. Client-side "60 seconds from usable connectivity" cannot be measured
-by the server alone; the proposal is for the client to send its queue age (bounded integer) with
-each flush and for the server to record it as `duration.ms` on `sync.flush`. That is an app
-change and needs a spec.
+### 6.1 Closing the D-049 gaps
+
+The allowlist has no attribute that can say "a mutation was rejected, duplicated or lost" or "a
+credential was misused". Adding one is a guardrail PR (`allowlist.ts`) plus a spec decision. This
+design does not choose the signals; it makes the work explicit and blocks G-5 on it.
+
+- **T11 (data loss).** OpenSpec change, then implementation, defining server-detectable
+  possible-loss conditions and a closed outcome value for them. Candidates for the spec to accept
+  or reject: an accepted mutation later missing from the sync round trip, an idempotency conflict
+  or duplicate detected, a failed migration, a failed or unverified pre-migration backup (G-8; this
+  one comes from the backup job, not the app, and routes through the same two paths). Existing
+  coverage that is not an alert: ADR-0003, the outbox tests and the synthetic sync round trip.
+- **T12 (security and authentication).** OpenSpec change, then implementation, defining security
+  events (candidates: repeated failed authentication, use of a revoked or invalid MCP token,
+  rejected cross-user access) and a closed outcome value. This touches authorization, so it needs
+  human approval of the spec.
+- Both need a new closed attribute or event, which is a guardrail PR in `packages/observability`,
+  separate from product code (D-035). The metric labels stay low-cardinality: a new outcome is an
+  enum, classified in the table in section 2.1 before it ships.
+- Each new alert is added to the table above, routed A + B, and drilled like the others.
+
+**G-5 cannot close while any D-049 class lacks a signal, an alert and a drill.** The only other
+way to close it is a change to D-049 and OBSERVABILITY.md that narrows the promise, which is a
+product-intent change and needs Vladimir's explicit approval (AGENTS.md). An agent cannot waive it,
+and T10 may not mark G-5 done while T11 or T12 is open (D-7).
+
+**Sync latency.** Client-side "60 seconds from usable connectivity" cannot be measured by the
+server alone; the proposal is for the client to send its queue age (bounded integer) with each
+flush and for the server to record it as a `duration.ms` histogram observation on `sync.flush`,
+using the 60,000 ms bucket boundary in section 2.1. That is an app change and needs a spec (T9).
 
 **Residual risk.** If Grafana Cloud itself is down, nothing pages. The cheap mitigation is an
 external heartbeat check; it is an extra account, so it is offered as an option (D-6), not
@@ -214,11 +344,17 @@ that has not been run; the first month's invoice replaces it.
 - **D-2** Production needs Pro (about 19 USD a month), or change the 30-day retention and window
   in OBSERVABILITY.md. Recommendation: Pro at production go-live.
 - **D-3** API-level journeys every 15 minutes and the full set on deploy (recommended), or browser
-  journeys every 15 minutes via k6 browser (more rewriting).
+  journeys every 15 minutes via k6 browser (more rewriting). The subset is a deviation from
+  OBSERVABILITY.md; until Vladimir approves it, it does not satisfy the "every 15 minutes" SLO row
+  and G-5 cannot close on it.
 - **D-4** Approve an OpenSpec change for the synthetic user: how it authenticates, how it is
   excluded from views and recommendations, and how `synthetic=true` is set server-side.
 - **D-5** Approve the low-volume rule for the error budget (300-request floor, then probes).
 - **D-6** Optional: an external heartbeat monitor for the "Grafana is down" case.
+- **D-7** Confirm two points. (a) A failed runtime canary leaves telemetry off and the health
+  route unhealthy but does not stop the process (recommended), or also exits. (b) G-5 stays open
+  until T11 and T12 ship with drilled alerts (recommended), or Vladimir approves a written change
+  that narrows D-049 and OBSERVABILITY.md.
 
 **Accounts and credentials (none exist; none requested until phase 2 starts)**
 
@@ -238,7 +374,7 @@ Each code task gets the usual review, QA and merge children. Guardrail tasks are
 
 | # | Task | Owner | Needs | Guardrail PR |
 |---|---|---|---|---|
-| T1 | `OtlpExporter` in `packages/observability` with an explicit resource and fixed names; wire canary against a local OTLP receiver; runtime canary and health route hook | Software Engineer | Nothing external | Yes (the package) |
+| T1 | `OtlpExporter` in `packages/observability` with an explicit resource, fixed names and the label classification (2.1); cardinality test; wire canary with the healthy and zero-egress fault-injection cases; two-step probe-then-commit start-up gate and health route hook (3) | Software Engineer | Nothing external | Yes (the package) |
 | T2 | Wire `Telemetry` into `apps/web` and `apps/mcp` at start-up; record the closed events on real routes and operations | Software Engineer | T1 | No (product) |
 | T3 | Alert-as-code: rules, notification policy (two sibling routes), contact points, Telegram and webhook templates, payload schema in `packages/contracts`. Evaluate the Grafana Terraform provider against `grafanactl` and use the maintained one; do not write a client | Platform & Reliability | Grafana stack, tokens (D-1) | Partly (workflow) |
 | T4 | Alert drills 1 to 4 against a **non-production** Grafana stack; record results in `docs/runbooks/alert-drill.md` | Platform & Reliability, signed off by QA | T3, Telegram bot, Hermes URL and key | No |
@@ -247,9 +383,12 @@ Each code task gets the usual review, QA and merge children. Guardrail tasks are
 | T7 | `verify-deployment` workflow around the Playwright journey specs, taking a URL | Platform & Reliability | T5, G-4 ADR | Yes (workflow) |
 | T8 | SLO recording rules, budget query, `feature-deploys-paused` variable and the deploy-workflow check | Platform & Reliability | T3, Pro decision (D-2, D-5) | Yes (workflow) |
 | T9 | Client queue age on `sync.flush` (spec, then code) | Product/spec agent, Software Engineer | D-4-style approval | Yes if the allowlist changes |
-| T10 | Close G-5: run drills against the production stack and recheck cost against the first invoice | Platform & Reliability | Production credentials from Vladimir (G-9) | No |
+| T11 | Possible-data-loss signal (6.1): OpenSpec change, allowlist change, instrumentation, alert rule, drill | Product/spec agent, then Software Engineer, Platform & Reliability | Spec approval; allowlist change is its own PR; alert and drill need T3 | Yes if the allowlist changes |
+| T12 | Security and authentication signals (6.1): OpenSpec change (touches authorization), allowlist change, instrumentation, alert rules, drill | Product/spec agent, then Software Engineer, Platform & Reliability | Human approval of the spec; T3 for the alert | Yes if the allowlist changes |
+| T10 | Close G-5: run drills against the production stack and recheck cost against the first invoice. **Blocked by T11 and T12** unless D-7(b) is approved as a narrowing change | Platform & Reliability | Production credentials from Vladimir (G-9) | No |
 
-Suggested order: T1, T3 and T5 in parallel; then T2, T4, T6; then T7, T8, T9; T10 last.
+Suggested order: T1, T3, T5, T11 and T12 specs in parallel; then T2, T4, T6; then T7, T8, T9 and the
+T11/T12 implementations; T10 last.
 T1 and T2 need no account and can start now. T3 and T4 need a Free Grafana stack, a Telegram bot
 and the Hermes endpoint, which only Vladimir can create (D-1, section 9); they stay blocked until then.
 
@@ -257,4 +396,7 @@ and the Hermes endpoint, which only Vladimir can create (D-1, section 9); they s
 
 Nothing was run. Grafana free-tier figures come from Grafana's pricing page; Pro retention and
 the Pro synthetic allowance came from third-party summaries and must be confirmed at setup. No
-Telegram or webhook delivery, no OTLP export and no synthetic run has happened. G-5 stays open.
+Telegram or webhook delivery, no OTLP export and no synthetic run has happened. The series
+ceilings in section 2.1 are arithmetic on the allowlist domains, not measured. The probe-then-commit
+gate and its zero-egress test are specified, not built. G-5 stays open, and stays open while the
+D-049 security and data-loss signals (T11, T12) do not exist.

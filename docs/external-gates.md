@@ -163,11 +163,19 @@ Also unverified: Grafana Cloud Free keeps 14 days of data, while OBSERVABILITY.m
 and a 30-day SLO window, so production needs a paid plan or a policy change (design, D-2).
 Synthetic checks need a synthetic-user credential that does not exist and needs its own spec.
 
+**Known gap against D-049.** No telemetry signal exists for security events or possible data loss,
+and authentication is covered only for server-side failures. Alerts for those classes cannot exist
+until their signals are specified and built (design 6.1, tasks T11 and T12).
+
 **Needs from the owner.** Grafana Cloud stack and tokens, a Telegram bot and chat ID, the Hermes
 webhook URL and HMAC key. The full list of decisions and accounts is in section 9 of the design.
+
 **Done when.** Both alert paths are drilled independently, each with the other disabled,
 and the canary passes against the real exporter configuration. Synthetic journeys run on the
-isolated account every 15 minutes and on each deploy.
+isolated account every 15 minutes and on each deploy. **Also required:** every D-049 class
+(security, possible data loss, authentication, critical-journey failure) has a signal, an alert on
+both paths and a recorded drill; or Vladimir has approved a written change that narrows D-049.
+G-5 must not be marked done while the known gap above is open.
 
 ---
 
