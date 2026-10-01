@@ -40,10 +40,17 @@ takes an `environment` and a `release`; only `development` exists.
 
 `scripts/pre-migration-backup.sh backup --release <id>` does steps 1 to 5:
 
+0. Refuses a source role that cannot see every row or that is not read-only (see the credential
+   below): a partial dump with matching partial counts would pass every later check.
 1. Counts rows in every table of `public`, dumps `public` with `pg_dump --format=custom`, and
    counts again. If the counts differ, something wrote during the dump and it aborts.
 2. Restores the dump into a freshly created database on a **throwaway** server and requires the
-   same row counts. It refuses a restore target on a Supabase host or on the source's host.
+   same row counts. `RESTORE_ADMIN_URL` must be a plain `postgresql` URL (optional user, password and
+   port, then a database name) whose host is loopback (`127.0.0.1`, `localhost`, `[::1]`), with no
+   query parameters, and must not share a host with the source. libpq lets `?host=`, `?hostaddr=`, `?dbname=`, `?service=`, a
+   host list or a key/value string point a safe-looking URL elsewhere, and the script creates and
+   drops databases through it, so anything else is refused before the first connection. `PGHOST`,
+   `PGHOSTADDR`, `PGPORT`, `PGDATABASE`, `PGSERVICE` and `PGSERVICEFILE` are unset for the same reason.
 3. Encrypts the dump, the `auth.users` ids and the counts as one bundle to an
    [age](https://github.com/FiloSottile/age) public key.
 4. Uploads the ciphertext to an S3-compatible bucket, downloads it back and compares SHA-256.
@@ -54,10 +61,14 @@ takes an `environment` and a `release`; only `development` exists.
 
 Any failing command exits non-zero, prints no manifest and removes the plaintext working files.
 
-`scripts/pre-migration-backup.sh restore --release <id> [--expect-sha256 <hex>]` is the drill. It
-fetches the latest manifest for the release, checks the artifact against the manifest (and against
-`--expect-sha256`, the checksum recorded by the backup job), decrypts with the private key,
-restores into a throwaway database and compares row counts. It prints the drill record.
+`scripts/pre-migration-backup.sh restore --release <id> --expect-sha256 <hex>` is the drill.
+`--expect-sha256` is required and must be the checksum the backup job recorded (its step summary,
+job output or `backup-manifest-<release>` artifact), copied from there and never read from the
+bucket: the bucket key can write, so an attacker or a bug that replaces the artifact can replace
+its manifest too. The drill picks the manifest under the release that records that checksum,
+requires the artifact to hash to it, then decrypts with the private key, restores into a
+throwaway database and compares row counts against both the bundle and the manifest. It prints
+the drill record.
 
 **Scope.** `public` only. `auth` is managed by Supabase and the migration role cannot write to
 it, so it is not dumped: only the user ids are carried, so the foreign keys to `auth.users`
@@ -99,12 +110,25 @@ human with the `postgres` role in the SQL editor. Neither is the service key: th
 runtime API credential for reading and writing user data, and CI must not hold it. Neither
 role is used by the application.
 
-```sql
--- Dump: read-only.
-CREATE ROLE ci_backup LOGIN CONNECTION LIMIT 2 PASSWORD '<generated, 32+ characters>';
-GRANT pg_read_all_data TO ci_backup;
-ALTER ROLE ci_backup SET default_transaction_read_only = on;
+```sh
+# Dump: reads every row, writes nothing. As `postgres`, once per environment.
+psql "<postgres role URL>" -v backup_role=ci_backup -v backup_password='<generated, 32+ characters>' \
+  -f scripts/backup/ci-backup-role.sql
+```
 
+`scripts/backup/ci-backup-role.sql` creates `ci_backup` with `BYPASSRLS`, `pg_read_all_data` and a
+read-only default. The `BYPASSRLS` is needed because every `public` table `FORCE`s row level
+security, which a plain `pg_read_all_data` member is still subject to: `pg_dump` fails, and a
+count query silently returns only the rows a policy allows. It is an attribute of this one role.
+It adds no policy and relaxes none, so `anon`, `authenticated` and `service_role` behave exactly
+as the migrations define, and the rehearsal checks that the policies and the `FORCE` flags are
+identical before and after the role exists. It reads everything but cannot write: it has `SELECT`
+only, so even `SET default_transaction_read_only = off` leaves every write denied. Anyone holding
+the credential can read all user data, which is why it is a per-environment secret, connection
+limited, and rotated as below. The script refuses to run as a role that lacks `BYPASSRLS` (or is
+not a superuser) or whose sessions are not read-only by default.
+
+```sql
 -- Migrations: can change the schema, cannot be used by the app or the API.
 CREATE ROLE ci_migrator LOGIN CONNECTION LIMIT 2 PASSWORD '<generated, 32+ characters>';
 GRANT postgres TO ci_migrator;
@@ -118,7 +142,10 @@ new objects owned by `postgres` as before. What it buys is a credential that is 
 connection-limited, revocable on its own, absent from the app, and stored only in a GitHub
 environment. Narrowing it further needs an ADR. Not yet verified against Supabase: that
 `postgres` may grant itself and `pg_read_all_data` to a new role, and that `SET role` applies
-through the pooler. The first development drill settles both; if either fails, that is a finding
+through the pooler, and that it may create a role with `BYPASSRLS` (a role manager can grant
+only attributes it holds itself, and whether Supabase's `postgres` holds `BYPASSRLS` is
+unverified). The first
+development drill settles all three; if either fails, that is a finding
 for Vladimir, not a reason to fall back to the service key.
 
 Rotate both passwords after any drill that a person other than Vladimir ran, and whenever a

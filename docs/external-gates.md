@@ -238,8 +238,10 @@ the runbook, nothing created). `restore-drill` runs the drill. `scripts/pre-migr
 and the `backup-rehearsal` workflow prove the script and its refusals with no credential.
 
 **Unverified boundary.** No dump has been taken from a Supabase project, stored in a bucket, or
-restored from one. The S3 transport, the pooler connection, the two database roles and the CI
-tool installation have not run. The restore drill record is empty.
+restored from one. The S3 transport, the pooler connection, the two database roles (including
+that `postgres` may create `ci_backup` with `BYPASSRLS`) and the CI tool installation have not run.
+The rehearsal proves `ci_backup` against a scratch server whose tables `FORCE` row level
+security. The restore drill record is empty.
 
 **Blocked on Vladimir (VLA-255).** An off-platform S3-compatible bucket and key, an age keypair
 for development, the two database roles on the development project, and the `development`

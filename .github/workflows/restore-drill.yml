@@ -1,7 +1,8 @@
 name: restore-drill
 
 # The restore drill (docs/runbooks/pre-migration-backup.md): fetch a stored backup, check its
-# checksum, decrypt it, restore it into a throwaway Postgres 17, and compare row counts. The
+# checksum against the one the backup job recorded, decrypt it, restore it into a throwaway
+# Postgres 17, and compare row counts. The
 # printed record is what gets written into the runbook: date, checksum, duration, row counts.
 #
 # Development only. The production private key is never a CI secret; a production drill is run
@@ -22,9 +23,12 @@ on:
         type: string
         required: true
       expect_sha256:
-        description: Checksum recorded by the backup job, to check against the stored manifest
+        description: >-
+          SHA-256 recorded by the backup job's run summary or manifest artifact for this release,
+          copied from there and never from the bucket. The bucket's key can write, so the bucket
+          cannot vouch for its own contents.
         type: string
-        required: false
+        required: true
 
 permissions:
   contents: read
@@ -73,9 +77,7 @@ jobs:
           set -euo pipefail
           printf '%s\n' "$BACKUP_AGE_IDENTITY" >"$RUNNER_TEMP/age-identity.txt"
           export BACKUP_AGE_IDENTITY_FILE="$RUNNER_TEMP/age-identity.txt"
-          args=(--release "$RELEASE")
-          if [[ -n "$EXPECT_SHA256" ]]; then args+=(--expect-sha256 "$EXPECT_SHA256"); fi
-          scripts/pre-migration-backup.sh restore "${args[@]}" >drill.json
+          scripts/pre-migration-backup.sh restore --release "$RELEASE" --expect-sha256 "$EXPECT_SHA256" >drill.json
           {
             echo "### Restore drill"
             echo

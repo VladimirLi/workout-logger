@@ -2,14 +2,16 @@
 # Pre-migration backup and restore drill (docs/runbooks/pre-migration-backup.md, R-015 to R-017).
 #
 #   pre-migration-backup.sh backup  --release <id>
-#   pre-migration-backup.sh restore --release <id> [--expect-sha256 <hex>]
+#   pre-migration-backup.sh restore --release <id> --expect-sha256 <hex>
 #
 # `backup` dumps the `public` schema, proves the dump restores into a throwaway database with
 # identical row counts, encrypts it to an age public key, uploads it outside Supabase and Vercel,
 # downloads it again to prove the stored bytes match, and prints a manifest (with the SHA-256 of
 # the stored artifact, bound to the release) on stdout. Everything else goes to stderr.
-# `restore` is the drill: fetch, check the checksum, decrypt with the private key, restore into a
-# throwaway database, compare row counts, and print a drill record.
+# `restore` is the drill: fetch, check the checksum against the one recorded by the backup job
+# (required, and never read from the bucket: whoever can write the bucket can write a manifest),
+# decrypt with the private key, restore into a throwaway database, compare row counts, and print a
+# drill record.
 #
 # Fail closed: any error exits non-zero and prints no manifest. A deploy must depend on this
 # exit status and must not proceed on anything else.
@@ -26,6 +28,9 @@ BOOTSTRAP="$HERE/backup/throwaway-bootstrap.sql"
 WORK=""
 THROWAWAY_DB=""
 export PGCONNECT_TIMEOUT=15
+# libpq lets these redirect a connection whose URL names a safe host (PGHOSTADDR overrides the
+# address even when a host is given; a service entry can supply host, hostaddr and dbname).
+unset PGHOST PGHOSTADDR PGPORT PGDATABASE PGSERVICE PGSERVICEFILE
 
 log() { printf 'pre-migration-backup: %s\n' "$*" >&2; }
 die() { log "FAILED: $*"; exit 1; }
@@ -69,14 +74,33 @@ row_counts() {
     WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p')" | jq -S -c .
 }
 
-# The restore target must be a scratch server, never the database being protected.
+# The restore target must be a loopback scratch server, never the database being protected.
+# libpq lets a URI query (host, hostaddr, dbname, service, ...), a comma-separated host list or a
+# key/value string redirect a connection that looks safe at a glance, and the script later
+# creates and drops databases through this URL. So accept one exact shape and nothing else: no
+# query, one loopback host, an optional port and a database name.
+SCRATCH_URL_RE='^postgres(ql)?://([A-Za-z0-9._~%+=-]+(:[A-Za-z0-9._~%+=-]*)?@)?(127\.0\.0\.1|localhost|\[::1\])(:[0-9]{1,5})?/[A-Za-z0-9_]+$'
 assert_scratch_target() {
-  local target
-  target=$(url_host "$RESTORE_ADMIN_URL")
-  if [[ "$target" =~ supabase\.(co|com)$ ]]; then die "RESTORE_ADMIN_URL points at a Supabase host ($target); it must be a throwaway server"; fi
-  if [[ -n "${BACKUP_SOURCE_URL:-}" && "$target" == "$(url_host "$BACKUP_SOURCE_URL")" ]]; then
-    die "RESTORE_ADMIN_URL and BACKUP_SOURCE_URL point at the same host ($target)"
+  [[ "$RESTORE_ADMIN_URL" =~ $SCRATCH_URL_RE ]] ||
+    die "RESTORE_ADMIN_URL must be a loopback throwaway server: a postgresql URL whose host is 127.0.0.1, localhost or [::1], with a database name and no query parameters"
+  if [[ -n "${BACKUP_SOURCE_URL:-}" && "${BASH_REMATCH[4]}" == "$(url_host "$BACKUP_SOURCE_URL")" ]]; then
+    die "RESTORE_ADMIN_URL and BACKUP_SOURCE_URL point at the same host (${BASH_REMATCH[4]})"
   fi
+}
+
+# The source role must see every row, or both the dump and the counts are silently partial: the
+# public tables FORCE row level security, which a plain pg_read_all_data member is still subject
+# to (pg_dump then fails; a count query just returns fewer rows). It must also be read-only.
+assert_source_role() {
+  local state
+  state=$(psql "$BACKUP_SOURCE_URL" -X -qAt -v ON_ERROR_STOP=1 -c "
+    SELECT (rolsuper OR rolbypassrls)::text || ' ' || current_setting('transaction_read_only')
+    FROM pg_roles WHERE rolname = current_user")
+  case "$state" in
+    "true on") ;;
+    "true off") die "the backup role is not read-only; set default_transaction_read_only = on on it (docs/runbooks/pre-migration-backup.md)" ;;
+    *) die "the backup role cannot bypass row level security, so the dump and row counts would be partial; create it with BYPASSRLS (docs/runbooks/pre-migration-backup.md)" ;;
+  esac
 }
 
 # Restore <dir>/public.dump into a fresh throwaway database and require the row counts recorded
@@ -119,6 +143,7 @@ backup() {
   started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
   stamp=$(date -u +%Y%m%dT%H%M%SZ)
 
+  assert_source_role
   log "counting rows in the source"
   before=$(row_counts "$BACKUP_SOURCE_URL")
   [[ "$before" != "{}" ]] || die "the source has no tables in public; refusing a backup that verifies nothing"
@@ -167,28 +192,36 @@ backup() {
 restore() {
   need_env RESTORE_ADMIN_URL BACKUP_STORE_URL BACKUP_AGE_IDENTITY_FILE
   need_cmd pg_restore psql age aws jq tar openssl
+  [[ -n "$EXPECT_SHA256" ]] || die "restore requires --expect-sha256, the checksum recorded by the backup job; it is not read from the bucket"
+  [[ "$EXPECT_SHA256" =~ ^[0-9a-f]{64}$ ]] || die "--expect-sha256 must be 64 lowercase hex characters"
   assert_scratch_target
   [[ -r "$BACKUP_AGE_IDENTITY_FILE" ]] || die "BACKUP_AGE_IDENTITY_FILE is not readable"
 
   WORK=$(mktemp -d "${TMPDIR:-/tmp}/pre-migration-restore.XXXXXX")
   SECONDS=0
-  local prefix latest manifest sha
+  local prefix keys key manifest="" artifact sha=$EXPECT_SHA256
   prefix="${BACKUP_STORE_URL%/}/$RELEASE/"
-  latest=$(aws s3 ls "$prefix" | awk '{print $NF}' | grep -E '^[0-9]{8}T[0-9]{6}Z\.json$' | sort | tail -n 1 || true)
-  [[ -n "$latest" ]] || die "no backup manifest found under $prefix"
+  keys=$(aws s3 ls "$prefix" | awk '{print $NF}' | grep -E '^[0-9]{8}T[0-9]{6}Z\.json$' | sort || true)
+  [[ -n "$keys" ]] || die "no backup manifest found under $prefix"
 
-  aws s3 cp --only-show-errors "$prefix$latest" "$WORK/manifest.json"
-  manifest=$(jq -c . "$WORK/manifest.json")
-  sha=$(jq -r .sha256 <<<"$manifest")
-  if [[ -n "${EXPECT_SHA256:-}" && "$EXPECT_SHA256" != "$sha" ]]; then
-    die "the manifest checksum $sha differs from the recorded checksum $EXPECT_SHA256"
-  fi
-  aws s3 cp --only-show-errors "$prefix$(jq -r .artifact <<<"$manifest")" "$WORK/bundle.tar.age"
-  [[ "$(sha256_of "$WORK/bundle.tar.age")" == "$sha" ]] || die "the stored artifact does not match its recorded checksum"
+  # The bucket is writable by CI, so nothing in it is trusted to name its own checksum: pick the
+  # manifest that records the externally supplied one, then hold the artifact to the same value.
+  while IFS= read -r key; do
+    aws s3 cp --only-show-errors "$prefix$key" "$WORK/candidate.json"
+    if [[ "$(jq -r '.sha256? // empty' "$WORK/candidate.json" 2>/dev/null || true)" == "$sha" ]]; then
+      manifest=$(jq -c . "$WORK/candidate.json")
+      break
+    fi
+  done <<<"$keys"
+  [[ -n "$manifest" ]] || die "no manifest under $prefix records the expected checksum $sha"
+  artifact=$(jq -r '.artifact // empty' <<<"$manifest")
+  [[ "$artifact" =~ ^[0-9]{8}T[0-9]{6}Z\.tar\.age$ ]] || die "the manifest names an artifact that is not a backup artifact: $artifact"
+  aws s3 cp --only-show-errors "$prefix$artifact" "$WORK/bundle.tar.age"
+  [[ "$(sha256_of "$WORK/bundle.tar.age")" == "$sha" ]] || die "the stored artifact does not match the expected checksum $sha"
 
   age -d -i "$BACKUP_AGE_IDENTITY_FILE" -o "$WORK/bundle.tar" "$WORK/bundle.tar.age"
   mkdir "$WORK/bundle"
-  tar -C "$WORK/bundle" -xf "$WORK/bundle.tar"
+  tar -C "$WORK/bundle" -xf "$WORK/bundle.tar" public.dump auth_user_ids.txt counts.json
   verify_restore "$WORK/bundle"
   [[ "$RESTORED_COUNTS" == "$(jq -S -c .row_counts <<<"$manifest")" ]] || die "the manifest row counts differ from the restored row counts"
 
