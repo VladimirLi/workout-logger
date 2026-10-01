@@ -4,7 +4,7 @@
       row, wrapping the primary above it when the row is too narrow
 - [x] 1.2 `EditSet` puts Cancel in the bar and Delete set on the "Editing set N" row
 - [x] 1.3 The edit view scrolls to the top when it opens
-- [x] 1.4 `scroll-padding-block-end` clears a two-row bar in portrait
+- [x] 1.4 `scroll-padding-block-end` is the bar's measured height in portrait
 
 ## 2. Proof
 

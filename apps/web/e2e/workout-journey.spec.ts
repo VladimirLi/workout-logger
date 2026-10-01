@@ -2059,6 +2059,34 @@ test.describe('the edit view keeps Cancel, Save changes and Delete set reachable
       });
     });
 
+  /**
+   * Tabs through every control: none outside the bar may end up under it. Measured in the page's
+   * own coordinates: the sets table is wider than 320 px at 200% text, so the browser fits the page.
+   */
+  const focusStaysClearOfTheBar = async (page: Page) => {
+    await page.keyboard.press('Tab');
+    for (let step = 0; step < 40; step += 1) {
+      const { inBar, covered } = await page.evaluate(() => {
+        const element = document.activeElement;
+        // The set view's own bar stays in the page, hidden, while a set is edited.
+        const bar = [...document.querySelectorAll('section[aria-label="Actions"]')].find(
+          (candidate) => candidate.getClientRects().length > 0,
+        );
+        if (element === document.body) return { inBar: true, covered: false };
+        // A radio is a hidden input inside the label that is the target.
+        const box = (element?.closest('label') ?? element)?.getBoundingClientRect();
+        const barBox = bar?.getBoundingClientRect();
+        return {
+          inBar: bar?.contains(element ?? null) ?? false,
+          covered:
+            box && barBox ? box.bottom > barBox.top + 1 && box.top < barBox.bottom - 1 : false,
+        };
+      });
+      if (!inBar) expect(covered, 'focus is under the bar').toBe(false);
+      await page.keyboard.press('Tab');
+    }
+  };
+
   test('@a11y at 375x667 with one exercise nothing sits under the bar and target-size passes', async ({
     page,
   }) => {
@@ -2088,10 +2116,12 @@ test.describe('the edit view keeps Cancel, Save changes and Delete set reachable
   }) => {
     await page.setViewportSize({ width: 375, height: 667 });
     await openEditView(page, {});
-    const order = await page
-      .locator('button')
-      .evaluateAll((elements) => elements.map((element) => element.textContent?.trim() ?? ''));
-    const names = order.filter((name) => ['Delete set', 'Cancel', 'Save changes'].includes(name));
+    const reached: string[] = [];
+    for (let step = 0; step < 40 && !reached.includes('Save changes'); step += 1) {
+      await page.keyboard.press('Tab');
+      reached.push(await page.evaluate(() => document.activeElement?.textContent?.trim() ?? ''));
+    }
+    const names = reached.filter((name) => ['Delete set', 'Cancel', 'Save changes'].includes(name));
     expect(names).toEqual(['Delete set', 'Cancel', 'Save changes']);
     const heading = await boxOf(page.getByRole('heading', { level: 1, name: 'Back squat' }));
     expect((await boxOf(remove(page))).y - heading.y).toBeLessThan(80);
@@ -2122,26 +2152,44 @@ test.describe('the edit view keeps Cancel, Save changes and Delete set reachable
       expect(box.x + box.width).toBeLessThanOrEqual(320);
     }
 
-    // Tab through every control: none outside the bar may end up under it. Measured in the
-    // page's own coordinates: the sets table is wider than 320 px here, so the browser fits the page.
-    await page.keyboard.press('Tab');
-    for (let step = 0; step < 40; step += 1) {
-      const { inBar, covered } = await page.evaluate(() => {
-        const element = document.activeElement;
-        const bar = document.querySelector('section[aria-label]');
-        if (element === document.body) return { inBar: true, covered: false };
-        // A radio is a hidden input inside the label that is the target.
-        const box = (element?.closest('label') ?? element)?.getBoundingClientRect();
-        const barBox = bar?.getBoundingClientRect();
-        return {
-          inBar: bar?.contains(element ?? null) ?? false,
-          covered:
-            box && barBox ? box.bottom > barBox.top + 1 && box.top < barBox.bottom - 1 : false,
-        };
-      });
-      if (!inBar) expect(covered, 'focus is under the bar').toBe(false);
-      await page.keyboard.press('Tab');
+    await focusStaysClearOfTheBar(page);
+  });
+
+  test('at 320 px and 200% text a pending Undo toast above the actions keeps focus clear of the bar', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 320, height: 640 });
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Page.enable');
+    await cdp.send('Page.setFontSizes', { fontSizes: { standard: 32, fixed: 26 } });
+    await openTodayWithPlan(page, {});
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForURL('**/workout');
+    for (let logged = 0; logged < 2; logged += 1) {
+      await page.getByRole('button', { name: 'Log set' }).click();
+      await page.getByRole('button', { name: 'Next set' }).click();
     }
+    // The sets table is wider than 320 px here and its header can cover a tap, so open by keyboard.
+    const openFirstSet = async () => {
+      await page
+        .getByRole('button', { name: /^Edit set/ })
+        .first()
+        .focus();
+      await page.keyboard.press('Enter');
+    };
+    await openFirstSet();
+    await remove(page).click();
+    // Deleting returns to the set view with the delete still undoable; edit the other set now.
+    await expect(page.getByRole('button', { name: 'Undo' })).toBeVisible();
+    await openFirstSet();
+    await expect(save(page)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Undo' })).toBeVisible();
+
+    const barBox = await boxOf(page.getByRole('region', { name: 'Actions' }));
+    const [cancelBox, saveBox] = await Promise.all([cancel(page), save(page)].map(boxOf));
+    expect(saveBox.y, 'Save changes is clear of the toast').toBeGreaterThan(barBox.y);
+    expect(cancelBox.y + cancelBox.height).toBeLessThanOrEqual(barBox.y + barBox.height);
+    await focusStaysClearOfTheBar(page);
   });
 
   test('in landscape Cancel and Save changes share the action row', async ({ page }) => {

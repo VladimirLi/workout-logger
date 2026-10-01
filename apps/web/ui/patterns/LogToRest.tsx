@@ -154,6 +154,25 @@ export function SetFocusLayout({
   /** Reaches the form that holds the controls; as in LogToRest, the form is the view itself. */
   formRef?: Ref<HTMLFormElement>;
 }) {
+  const bar = useRef<HTMLElement>(null);
+
+  // The bar is as tall as its notice, its labels and the text size make it. Reserve exactly that
+  // above it (global.css), so focus never ends up beneath it whatever the font.
+  useEffect(() => {
+    const element = bar.current;
+    if (!element) return;
+    const root = document.documentElement;
+    const reserve = () =>
+      root.style.setProperty('--action-bar-block-size', `${element.offsetHeight}px`);
+    reserve();
+    const observer = new ResizeObserver(reserve);
+    observer.observe(element);
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty('--action-bar-block-size');
+    };
+  }, []);
+
   return (
     <div className={styles.layout} data-view="set">
       <form
@@ -164,7 +183,7 @@ export function SetFocusLayout({
       >
         {children}
       </form>
-      <StickyActionBar notice={notice}>
+      <StickyActionBar ref={bar} notice={notice}>
         {secondary ? (
           <div className={styles.actions} data-action-row>
             {secondary}

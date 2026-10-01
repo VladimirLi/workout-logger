@@ -23,27 +23,15 @@ html {
 }
 
 /*
- * A bar that holds two actions can stack them (320 px, or text at 200%), so it is up to two large
- * buttons tall, plus its padding. A large button grows with the text, so the row is measured the
- * way the button is: its 56 px floor, or its label's line plus padding and border.
+ * A bar that holds two actions can stack them, and can carry a notice above them, so its height
+ * depends on the width, the text size and what is pending. SetFocusLayout sets its measured
+ * height; focus keeps that clear, plus a little room for the focus ring.
  */
 @media not ((orientation: landscape) and (max-height: 500px)) {
   html:has([data-action-row]) {
     scroll-padding-block-end: calc(
-      2 *
-      max(
-        var(--target-workout) +
-        var(--space-2),
-        var(--font-size-title) *
-        var(--line-height-label) +
-        var(--space-4) +
-        2 *
-        var(--border-width)
-      ) +
-      var(--space-2) +
-      var(--space-5) +
-      var(--border-width) +
-      env(safe-area-inset-bottom)
+      var(--action-bar-block-size, var(--target-workout)) +
+      var(--space-2)
     );
   }
 }

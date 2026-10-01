@@ -25,8 +25,9 @@ Serves: VLA-243, VLA-304, `DESIGN_SYSTEM.md` `layout.primary-action.sticky-botto
   confirm and undo behaviour are unchanged.
 - The edit view opens at the top of the page, so opening it from the sets table in landscape no
   longer leaves the page scrolled.
-- When the bar holds two actions, the page's `scroll-padding-block-end` clears a two-row bar, so
-  focus is never scrolled under it.
+- On a screen with Cancel in the bar, the page's `scroll-padding-block-end` is the bar's measured
+  height, so focus is never scrolled under it, whether the bar is one row or two, with or without a
+  pending Undo toast, at any text size.
 - `DESIGN_SYSTEM.md` wording for `layout.primary-action.sticky-bottom` (commit `a533b8d` from
   VLA-304, a clarification, not a new decision).
 
