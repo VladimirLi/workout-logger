@@ -1,7 +1,7 @@
 # Design: telemetry, alerting and synthetic checks (G-5)
 
-**Status:** Proposed. Nothing here is provisioned or run. It changes no product intent by itself;
-the decisions in section 9 need Vladimir before implementation starts. Pricing and limits were read
+**Status:** Accepted for D-1 to D-5 (Vladimir, 2026-10-01, VLA-256 confirmation); D-6 declined; D-7
+still open. Nothing here is provisioned or run. It changes no product intent by itself. Pricing and limits were read
 from Grafana's public pages on 2026-09-30 and are re-confirmed at account setup (G-5).
 **Inputs:** [OBSERVABILITY.md](../../OBSERVABILITY.md) (normative, not changed here),
 [external-gates.md](../external-gates.md) G-4, G-5, G-9, [ROADMAP.md](../../ROADMAP.md) O-3.
@@ -340,18 +340,18 @@ that has not been run; the first month's invoice replaces it.
 
 **Decisions**
 
-- **D-1** Approve Grafana Cloud as the provider (stays provisional until the drills pass).
-- **D-2** Production needs Pro (about 19 USD a month), or change the 30-day retention and window
+- **D-1** (approved 2026-10-01) Approve Grafana Cloud as the provider (stays provisional until the drills pass).
+- **D-2** (approved: Pro at go-live) Production needs Pro (about 19 USD a month), or change the 30-day retention and window
   in OBSERVABILITY.md. Recommendation: Pro at production go-live.
-- **D-3** API-level journeys every 15 minutes and the full set on deploy (recommended), or browser
+- **D-3** (approved: recommended option) API-level journeys every 15 minutes and the full set on deploy (recommended), or browser
   journeys every 15 minutes via k6 browser (more rewriting). The subset is a deviation from
   OBSERVABILITY.md; until Vladimir approves it, it does not satisfy the "every 15 minutes" SLO row
   and G-5 cannot close on it.
-- **D-4** Approve an OpenSpec change for the synthetic user: how it authenticates, how it is
+- **D-4** (approved) Approve an OpenSpec change for the synthetic user: how it authenticates, how it is
   excluded from views and recommendations, and how `synthetic=true` is set server-side.
-- **D-5** Approve the low-volume rule for the error budget (300-request floor, then probes).
-- **D-6** Optional: an external heartbeat monitor for the "Grafana is down" case.
-- **D-7** Confirm two points. (a) A failed runtime canary leaves telemetry off and the health
+- **D-5** (approved) Approve the low-volume rule for the error budget (300-request floor, then probes).
+- **D-6** (declined, no external heartbeat for now) Optional: an external heartbeat monitor for the "Grafana is down" case.
+- **D-7** (open, not covered by the 2026-10-01 approval) Confirm two points. (a) A failed runtime canary leaves telemetry off and the health
   route unhealthy but does not stop the process (recommended), or also exits. (b) G-5 stays open
   until T11 and T12 ship with drilled alerts (recommended), or Vladimir approves a written change
   that narrows D-049 and OBSERVABILITY.md.
