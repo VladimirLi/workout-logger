@@ -19,3 +19,14 @@ export const WithEdit: Story = {
     onEdit: () => {},
   },
 };
+
+/** A region narrower than 15 rem, as a phone is at large text: each row stacks. */
+const narrow: Story['decorators'] = [
+  (Story) => (
+    <div style={{ inlineSize: '12rem' }}>
+      <Story />
+    </div>
+  ),
+];
+export const NarrowWithEdit: Story = { ...WithEdit, decorators: narrow };
+export const NarrowReadOnly: Story = { args: { rows: DEADLIFT_SETS }, decorators: narrow };

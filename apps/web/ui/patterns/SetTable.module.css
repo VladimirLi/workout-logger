@@ -2,6 +2,7 @@
   /* Contains the absolutely positioned .visually-hidden text in the cells; without a positioned
      ancestor in here it escapes the scroller's clip and widens the page. */
   position: relative;
+  container-type: inline-size;
   max-inline-size: 100%;
   overflow-x: auto;
   border-radius: var(--radius-control);
@@ -46,4 +47,78 @@
 
 .unit {
   font-weight: var(--font-weight-body);
+}
+
+.label {
+  display: none;
+  color: var(--color-ink-muted);
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-label);
+}
+
+/* Narrower than 15 rem the columns no longer fit beside the Edit button, so each row stacks:
+   set number and Edit on the first line, then the labelled values, wrapping if they must. The
+   measure is in rem so it follows the text size, and 15 rem is the widest the unstacked table
+   needs (14.7 rem at 100% text with a 102.5 kg, 12-rep row). */
+@container (inline-size < 15rem) {
+  .table,
+  .table tbody {
+    display: block;
+  }
+
+  .table thead {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .table tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: var(--space-4);
+    padding-block: var(--space-2);
+    /* Room for the focus ring on Edit, which the scrolling region would otherwise clip. */
+    padding-inline: calc(var(--focus-width) + var(--focus-offset));
+    border-block-end: var(--border-width) solid var(--color-border);
+  }
+
+  .table th,
+  .table td {
+    min-block-size: 0;
+    padding: 0;
+    border-block-end: 0;
+    text-align: start;
+  }
+
+  .table tbody th {
+    flex: 1 1 0;
+    order: 1;
+  }
+
+  /* The fifth cell is Edit. */
+  .table td:nth-child(5) {
+    flex: none;
+    order: 2;
+  }
+
+  /* A full-width break between the first line and the values. */
+  .table tr::after {
+    content: "";
+    flex-basis: 100%;
+    order: 3;
+  }
+
+  .table td:nth-child(-n + 4) {
+    display: flex;
+    gap: var(--space-1);
+    order: 4;
+  }
+
+  .label {
+    display: inline;
+  }
 }
