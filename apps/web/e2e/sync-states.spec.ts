@@ -211,4 +211,29 @@ test.describe('product sync states (task 5.7)', () => {
     await page.reload();
     await expect(page.getByText('Needs attention')).toBeVisible();
   });
+
+  test('with no active session the workout route shows the outbox state, and nothing when it is empty', async ({
+    page,
+  }) => {
+    await page.goto('/workout');
+    await expect(page.getByRole('heading', { name: 'No workout in progress' })).toBeVisible();
+    await expect(page.locator('[data-state]')).toHaveCount(0);
+
+    await openWorkoutWithQueuedOutbox(page);
+    await finishWorkout(page);
+    await page.waitForURL('**/summary?session=**');
+
+    await page.goto('/workout');
+    await expect(page.getByRole('heading', { name: 'No workout in progress' })).toBeVisible();
+    await expect(page.getByText('On device')).toBeVisible();
+
+    await setOutboxDelivery(page, {
+      state: 'needs_attention',
+      attempts: 2,
+      lastFailure: 'http_422',
+    });
+    await page.reload();
+    await expect(page.getByRole('heading', { name: 'No workout in progress' })).toBeVisible();
+    await expect(page.getByText('Needs attention')).toBeVisible();
+  });
 });
