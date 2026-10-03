@@ -1,8 +1,9 @@
 # External setup gates
 
 **Status:** Normative checklist. One cloud resource exists: a Supabase **Free development**
-project, authorised on 2026-09-18 for development only (G-2, ADR-0011). No remote, no DNS
-record, no deployment, and nothing in production.
+project, authorised on 2026-09-18 for development only (G-2, ADR-0011). The GitHub repository
+exists and is public, but its ruleset is not applied (G-1). No DNS record, no deployment, and
+nothing in production.
 Owner decisions recorded here (for example ADR-0009) do not perform any gate.
 
 Every item below requires the **user's authorization** and credentials for an external
@@ -16,9 +17,11 @@ means.
 
 ## G-1 — GitHub remote and repository ruleset
 
-**Status:** not performed. No remote exists.
+**Status:** partly performed. The remote exists: `VladimirLi/workout-logger`, public, created
+2026-09-22, and `verify` and `security` run on it. The ruleset is **not applied**:
+`gh api repos/VladimirLi/workout-logger/rulesets` returned `[]` on 2026-10-03.
 
-**Decided 2026-09-17 (ADR-0009, D2).** The repository will be **public**, with the intent to
+**Decided 2026-09-17 (ADR-0009, D2).** The repository is **public**, with the intent to
 open-source the project. **Project licence chosen 2026-09-24:** MIT. The dependency exception
 review for public-source distribution completed on 2026-09-26 under LIC-2026-09-26.
 
@@ -49,9 +52,11 @@ project, no production data, no CI secrets.
 decision is deferred, and the Pro requirement below still applies to production.
 
 **Deferred 2026-10-03 (Vladimir, VLA-479).** The production Pro project is not created until
-there are real users besides him. Nothing in this gate is blocked on it today; it blocks only
-the first production deploy and CI runs of the provider suites that need a production-shaped
-project.
+there are real users besides him. G-2 stays open and **production deployment stays blocked**
+until he authorises a production database: the Free development project must not hold
+production data, so a sole-user production deploy cannot meet this gate under the current
+plan. Development work is not blocked. The same deferral keeps CI runs of the provider suites
+that need a production-shaped project from running.
 
 **Required (ADR-0005, R-011, R-013).** A Supabase **Pro** project — the free tier pauses
 and is unsuitable for production. RLS and explicit grants on every exposed table or view.
@@ -69,8 +74,8 @@ deny-by-default (`scripts/check-rls.mjs`), the wrong-user half with two signed-i
 (`node scripts/check-db-boundary.mjs`). Nothing here has run against production, which does not
 exist.
 
-**Done when.** A production Pro project exists (deferred, see above), migrations apply, and the adapter contract suite plus
-the deny-by-default suites pass against it in CI with repository secrets. The suites exist and
+**Done when.** A production Pro project exists (deferred, see above), migrations apply, and
+the adapter contract suite plus the deny-by-default suites pass against it in CI with repository secrets. The suites exist and
 pass locally; CI cannot run them until repository secrets exist, which is what remains.
 
 **Blocking check before relying on it.** Confirm no blocking requirement has emerged that
@@ -234,7 +239,8 @@ GHAS) so `codeql` and `dependency-review` function. Met on 2026-10-03 by the obs
 **Verified locally.** SBOM generation runs offline from the committed lockfile.
 
 **Unverified boundary.** `actions/attest` requires GitHub OIDC and the `id-token`,
-`attestations`, and `artifact-metadata` write permissions — it cannot run without a remote.
+`attestations`, and `artifact-metadata` write permissions. The remote now exists (G-1), but no
+release has produced an attestation, so this stays open.
 Attestation verification before deploy depends on G-4. A green `verify` result alone is not an
 attestation and does not satisfy this gate.
 
@@ -311,15 +317,16 @@ remains can only be done by a person or on a device, and an agent must not asser
    tests; Linux baselines are tracked by item 4.
 4. Linux visual baselines exist and CI runs the visual gate in the pinned Playwright
    container. Linux baselines are committed and `CI=1 pnpm verify` passes in that image locally;
-   the workflow runs in it by digest. A GitHub Actions run has not happened (no remote, G-1).
+   the workflow runs in it by digest. `verify` passed on `main` in GitHub Actions, including
+   `browser-visual` (run 36966526528, 2026-10-02).
 5. The owner approves the baselines in a visual-change PR.
    Evidence: 2026-09-18, Vladimir, having visually reviewed the baseline artifact, approved the
    56 product-route baselines committed through `edf4c1b`
    (`edf4c1b756769ceb0e0190e2a61df851904b9592`): today, workout, summary and
    diagnostics, across the seven visual projects, on darwin and Linux. Bound to that exact set
    and that candidate; it does not extend to a later change to any of them.
-   Still open: the other 564 tracked baselines are not covered by it, and no visual-change PR
-   exists to approve anything in (no remote, G-1).
+   Still open: the other 564 tracked baselines are not covered by it. Later baseline updates
+   are approved in their own visual-change PRs under the rule in `AGENTS.md`.
 6. Storybook (`governance.lab.storybook`) is reviewed as a dependency change under
    LIC-2026-09-16 and its build permission is decided in a guardrail change, or the owner
    changes that decision.
