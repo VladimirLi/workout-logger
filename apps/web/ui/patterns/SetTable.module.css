@@ -1,4 +1,7 @@
 .scroller {
+  /* Contains the absolutely positioned .visually-hidden text in the cells; without a positioned
+     ancestor in here it escapes the scroller's clip and widens the page. */
+  position: relative;
   max-inline-size: 100%;
   overflow-x: auto;
   border-radius: var(--radius-control);
