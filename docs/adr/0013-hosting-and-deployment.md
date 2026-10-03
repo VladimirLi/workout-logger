@@ -1,6 +1,6 @@
 # 0013 — Hosting, environments, deploy identity, and rollback
 
-**Status:** Accepted 2026-09-30 — direction approved by Vladimir on VLA-253 (decisions 2 and 3 below). Decisions 1 and 5 are deferred until there are real users, decision 7 is resolved (the repository is public), and decisions 4 and 6 remain open (see [Open decisions](#open-decisions-for-vladimir))
+**Status:** Accepted 2026-09-30 — direction approved by Vladimir on VLA-253 (decisions 2 and 3 below). Decisions 1 and 5 are deferred until there are real users, decision 7 is resolved (the repository is public), and decision 4 is deferred and decision 6 is still open, not yet done by Vladimir (see [Open decisions](#open-decisions-for-vladimir))
 **Date:** 2026-09-30
 **Discovery:** D-023, D-042, D-043, D-044, D-045, D-046, R-015, R-016, R-017, R-020
 **Relates to:** [0009](0009-platform-repository-and-relying-party-decisions.md), [0011](0011-supabase-development-project.md), [0012](0012-one-trusted-write-boundary.md), gates G-2, G-3, G-4, G-7, G-8 in [external-gates.md](../external-gates.md)
@@ -68,6 +68,7 @@ That is accepted for a single-user project; it is not acceptable once there is a
 | Build preview (per PR) and staged production build | Vercel's GitHub integration | No. Nothing stored in GitHub |
 | Reach a protected staged or preview URL from CI | GitHub Actions OIDC, Vercel Trusted Sources | No |
 | Confirm the merge commit passed `verify` | `GITHUB_TOKEN`, read-only `checks`/`statuses` | No |
+| Verify the build attestation for that commit before promotion (G-7) | `GITHUB_TOKEN`, read-only | No |
 | `vercel promote` / `vercel rollback` | **Vercel access token** | **Yes — one** |
 
 The token is stored as a secret of a GitHub environment named `production`, restricted to the
@@ -76,7 +77,9 @@ review, or QA agents (R-023). Its scope is the least Vercel offers; whether Verc
 token to one project rather than the whole team was not confirmed, and is part of the approval.
 
 **This deviates from the original "short-lived OIDC" wording in AGENTS.md and G-4. Vladimir accepted
-the deviation on 2026-09-30; AGENTS.md and G-4 are amended accordingly.** It was recommended
+the deviation on 2026-09-30; AGENTS.md and G-4 are amended accordingly. The amendment covers the
+deploy credential only. The requirement that release automation deploys an *attested* commit, with
+the attestation verified before promotion (R-026), is unchanged.** It was recommended
 because the alternatives are worse for what D-043 requires:
 
 - *Auto-assign on, no token.* Every green Vercel build goes live whether or not CI passed and
@@ -91,14 +94,17 @@ technical option.
 
 G-7 is unaffected by this decision. The repository is public (Vladimir, VLA-479, 2026-10-03),
 and artifact attestations are available in public repositories on all plans, so the plan
-limitation no longer applies. Until the attestation step is built and verified (G-7), the
-release job binds "attested" to the commit SHA (same SHA passed `verify`).
+limitation no longer applies. A green `verify` result for a SHA is
+a CI result, not an attestation: an attestation is signed provenance binding an artifact to the
+build that produced it, and it must be verified. Until the attestation step is built and its
+verification is proved (G-7), the release job does not promote, so G-4 cannot close first.
 
 **Release job** (`.github/workflows/`, a guardrail path, so its own PR, not written here):
 
 1. Trigger on `repository_dispatch` `vercel.deployment.success` for the production target.
-2. Confirm the `verify` check for that exact SHA is green. **Fail closed** if it is missing,
-   pending, or red.
+2. Confirm the `verify` check for that exact SHA is green, and verify the build attestation
+   for that commit (G-7, R-026). **Fail closed** if either is missing, pending, red, or does not
+   verify. A green `verify` alone does not permit promotion.
 3. If the commit carries migrations: run the pre-migration backup ([runbook](../runbooks/pre-migration-backup.md),
    G-8), then apply the expansion. Any failure stops the job before promotion.
 4. Run the pre-promotion checks against the staged URL: health and the D-045 synthetic suite
@@ -154,13 +160,14 @@ Rules:
 - The MCP host, if it is not Vercel, gets its own copy of the four MCP/Supabase variables it
   needs, under the same rules.
 
-### 6. MCP hosting: recommended, not decided
+### 6. MCP hosting: a second Vercel project
 
-The web decision does not depend on this. The [spike](../discovery/mcp-hosting-spike.md)
-recommends **a second Vercel project for `apps/mcp`** (Vercel Functions, same release job and
-rollback mechanism), with a small container on Fly.io as the fallback if a requirement emerges
-that Vercel's 800 s function limit or request model cannot meet. **Vladimir approves the final
-MCP host.** Until then `apps/mcp` remains a skeleton and nothing in this ADR provisions it.
+The web decision does not depend on this. Vladimir approved **a second Vercel project for
+`apps/mcp`** on 2026-09-30 (VLA-253), per the [spike](../discovery/mcp-hosting-spike.md): Vercel
+Functions, same release job and rollback mechanism. A small container on Fly.io is the fallback if
+a requirement emerges that Vercel's function limit or request model cannot meet, or Vercel cold
+starts prove unacceptable in a drill. Until the Vercel project exists `apps/mcp` remains a
+skeleton and nothing in this ADR provisions it.
 
 ## Consequences
 
@@ -174,7 +181,7 @@ MCP host.** Until then `apps/mcp` remains a skeleton and nothing in this ADR pro
 **Bad.**
 - A static token is a long-lived credential, which the original AGENTS.md wording ruled out.
   Vladimir accepted this on 2026-09-30 and AGENTS.md's release-automation row was amended in
-  the same PR.
+  the same PR, for the credential only; the attestation requirement stays.
 - Previews share one dev database and can interfere with each other.
 - There is no place to run migrations against production-shaped data before production.
 - Promotion depends on a `repository_dispatch` from the Vercel integration reaching GitHub.
@@ -193,8 +200,8 @@ agents may not edit.
 Resolved by Vladimir's approval of the direction on VLA-253 (2026-09-30): **2** (token accepted)
 and **3** (MCP host: second Vercel project, Fly.io as fallback). Answered by Vladimir on
 VLA-479 (2026-10-03): **1** and **5** are deferred until there are real users besides him, and
-**7** is resolved (the repository is public). Still open: **4, 6**. Nothing below is provisioned
-or paid for.
+**7** is resolved (the repository is public). **4** is deferred. **6** is still open: Vladimir has
+not done it yet (VLA-479, 2026-10-03). Nothing below is provisioned or paid for.
 
 1. **Deferred until real users: Vercel plan tier.** Vladimir, VLA-479, 2026-10-03: not yet; pay
    when there are real users besides him. Start on Hobby (free, non-commercial personal use,
@@ -203,13 +210,16 @@ or paid for.
    amend AGENTS.md's release-automation row and the G-4 "done when" accordingly.
 3. **Resolved: second Vercel project.** Fly.io stays the fallback if the MCP server needs
    long-lived streaming, or Vercel cold starts prove unacceptable in a drill.
-4. **MCP SDK line.** Stay on `@modelcontextprotocol/sdk` 1.x (current) or move to v2
+4. **Deferred: MCP SDK line.** Not yet decided; nothing needs it until the MCP transport is built
+   (`apps/mcp` is a skeleton). Evidence is on VLA-253 (2026-10-03): 1.x has no evidence of spec
+   2026-07-28 support and gets only bug and security fixes after v2; the recommendation there is v2
+   before building the transport. Stay on `@modelcontextprotocol/sdk` 1.x (current) or move to v2
    (`@modelcontextprotocol/server`, `mcp-handler` 2.x). Whether 1.x supports spec 2026-07-28 was
    not established; see the spike.
 5. **Deferred until real users: production Supabase Pro project** (about $25/month). Vladimir,
    VLA-479, 2026-10-03: not yet. Revoking the default privileges on `anon` and `authenticated`
    before it holds data (ADR-0011) still applies whenever it is created.
-6. **Domain and DNS** for `gym.vladimirli.com` (G-3), and creating the Vercel project, the
+6. **Open, not done: domain and DNS** for `gym.vladimirli.com` (G-3), and creating the Vercel project, the
    `production` GitHub environment, the token, and the Trusted Sources entry. All are yours to
    create; none was attempted.
 7. **Resolved: the repository is public** (Vladimir, VLA-479, 2026-10-03). Artifact attestation

@@ -149,13 +149,14 @@ the design needs one scoped Vercel token in a `main`-only GitHub environment. Vl
 accepted that on 2026-09-30, so "short-lived OIDC" no longer applies to promote and rollback.
 
 **Needs Vladimir (spend, account, DNS, credential).** Vercel project, token, and Trusted
-Sources entry; DNS (G-3); MCP SDK line. Deferred until real users (2026-10-03, VLA-479): the
-paid Vercel plan and the production Supabase Pro project (G-2).
+Sources entry; DNS (G-3). Deferred until real users (2026-10-03, VLA-479): the paid Vercel plan
+and the production Supabase Pro project (G-2). Deferred: the MCP SDK line.
 The full list is in ADR-0013.
 
 **Done when.** Targets for both the web app and the MCP server are recorded in an ADR, deploys
-are automatic from a merge commit whose `verify` result is confirmed, using OIDC wherever the
-platform accepts it and one scoped token otherwise, and a rollback has been drilled.
+are automatic from an attested merge commit whose attestation is verified before promotion (G-7),
+using OIDC wherever the platform accepts it and one scoped token otherwise, and a rollback has
+been drilled.
 
 ---
 
@@ -243,7 +244,8 @@ is formally accepted in writing and the local gates are acknowledged as the only
 
 **Unverified boundary.** `actions/attest` requires GitHub OIDC and the `id-token`,
 `attestations`, and `artifact-metadata` write permissions — it cannot run without a remote.
-Attestation verification before deploy depends on G-4.
+Attestation verification before deploy depends on G-4. A green `verify` result alone is not an
+attestation and does not satisfy this gate.
 
 **Plan limitation: resolved.** Artifact attestations are available in public repositories on
 all current plans; a private or internal repository would need GitHub Enterprise Cloud. The
