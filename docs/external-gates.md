@@ -52,12 +52,14 @@ project, no production data, no CI secrets.
 **Decided 2026-09-17 (ADR-0009, D1).** Supabase **Free** for development only. The production
 decision is deferred, and the Pro requirement below still applies to production.
 
-**Deferred 2026-10-03 (Vladimir, VLA-479).** The production Pro project is not created until
-there are real users besides him. G-2 stays open and **production deployment stays blocked**
-until he authorises a production database: the Free development project must not hold
-production data, so a sole-user production deploy cannot meet this gate under the current
-plan. Development work is not blocked. The same deferral keeps CI runs of the provider suites
-that need a production-shaped project from running.
+**Deferred 2026-10-03 (Vladimir, VLA-479).** He answered "not yet, we pay when we have actual
+users besides me": the production Pro project is not created until there are real users
+besides him. G-2 stays open. Development work is not blocked.
+
+**Consequence under ADR-0011 (not a decision by Vladimir).** The Free development project
+must not hold production data, so no production database exists until one is authorised.
+Whether his own use on Free is acceptable, or he wants Pro for himself, is an open question
+to him (raised on VLA-495).
 
 **Required (ADR-0005, R-011, R-013).** A Supabase **Pro** project — the free tier pauses
 and is unsuitable for production. RLS and explicit grants on every exposed table or view.
@@ -201,7 +203,7 @@ and the canary passes against the real exporter configuration.
 **Verified locally.** Secret scanning runs in `pnpm verify` against the working tree and
 full history. This gate is real today.
 
-**Visibility decides what runs.** The repository is **public** (Vladimir, VLA-479, 2026-10-03),
+**Visibility decides what runs.** The repository is **public** (ADR-0009 D2, 2026-09-17; verified public 2026-10-03 on VLA-479),
 so all three jobs are eligible:
 
 | Job | Public repo (now) | Personal private repo (not the case) |
@@ -247,7 +249,7 @@ attestation and does not satisfy this gate.
 
 **Plan limitation: resolved.** Artifact attestations are available in public repositories on
 all current plans; a private or internal repository would need GitHub Enterprise Cloud. The
-repository is public (Vladimir, VLA-479, 2026-10-03), so the limitation does not apply and no
+repository is public (ADR-0009 D2; verified 2026-10-03 on VLA-479), so the limitation does not apply and no
 visibility or plan change is needed.
 
 **Done when.** A release produces a verifiable attestation, deployment verifies it before
@@ -327,8 +329,10 @@ remains can only be done by a person or on a device, and an agent must not asser
    (`edf4c1b756769ceb0e0190e2a61df851904b9592`): today, workout, summary and
    diagnostics, across the seven visual projects, on darwin and Linux. Bound to that exact set
    and that candidate; it does not extend to a later change to any of them.
-   Still open: the other 564 tracked baselines are not covered by it. Later baseline updates
-   are approved in their own visual-change PRs under the rule in `AGENTS.md`.
+   Also approved: the 27 Linux baselines changed in the visual-change PR #49, by the team
+   under `AGENTS.md`. Still open: the remaining design-system baselines have had no approval.
+   Later baseline updates are approved in their own visual-change PRs under the rule in
+   `AGENTS.md`.
 6. Storybook (`governance.lab.storybook`) is reviewed as a dependency change under
    LIC-2026-09-16 and its build permission is decided in a guardrail change, or the owner
    changes that decision.

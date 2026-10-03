@@ -144,4 +144,4 @@ users besides him, and **7** is resolved (the repository is public). Still open:
    default `anon`/`authenticated` privileges before it holds data still applies whenever it is
    created.
 6. Domain, DNS, Vercel project, `production` GitHub environment, token, Trusted Sources entry.
-7. **Resolved: the repository is public** (VLA-479, 2026-10-03). Attestation (G-7) is available.
+7. **Resolved: the repository is public** (ADR-0009 D2; verified public 2026-10-03 on VLA-479). Attestation (G-7) is available.
