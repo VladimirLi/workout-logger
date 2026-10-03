@@ -435,11 +435,12 @@ approves under the baseline rule in AGENTS.md § Working on UI.
 **Darwin and Linux baselines both exist.** Linux baselines were generated in
 `mcr.microsoft.com/playwright:v1.63.0-noble` (linux/amd64) only after every target rendered
 identically twice in every project, and `CI=1 pnpm verify` passes every gate in that image. CI's
-verify job runs in the same image, pinned by digest. No GitHub Actions run exists yet (no remote,
-G-1).
+verify job runs in the same image, pinned by digest. `verify` runs on the public remote and passed
+on `main` (run 36966526528, 2026-10-02).
 
 **Current baselines are provisional.** They were committed before any PR flow exists, so they have
-not had the owner's visual-change PR approval.
+not had a visual-change PR approval. Under `AGENTS.md`, the team approves baselines (independent
+review agent plus QA agent), not the owner.
 
 ## Change control
 
@@ -515,7 +516,7 @@ test enforces that.
 | Colour-blind simulation check (colour-blind default) | **Simulated; not reviewed by a person.** `pnpm test` checks every contrast pair as seen with deuteranopia, protanopia, and achromatopsia (Machado 2009); `test:visual` keeps renders of the state matrix, set focus, and proposal review under Chromium's emulation of each, and under forced colours. Nothing depends on hue alone. | A person reviews those renders, recorded |
 | Proposal review UX and its baselines | **Minimum implemented.** The review content the agent-proposals specification requires is built from accepted components as `Reference screens/Proposal review` and `Stale proposal`, with baselines and behaviour tests. Any richer review UX is a first-slice decision. | Nothing further for the design system |
 | Linux baselines for CI | **Generated and verified locally; no GitHub run.** Linux baselines come from the pinned Playwright image after a byte-identical repeatability pass, `CI=1 pnpm verify` passes every gate in that image, and the verify workflow runs in it by digest. | A GitHub Actions verify run passes on the remote (G-1) |
-| Owner approval of baselines | **Partly approved, by direct review.** On 2026-09-18 Vladimir reviewed the baseline artifact and approved the 56 product-route baselines (today, workout, summary, diagnostics x 7 projects x darwin and Linux) as committed through `edf4c1b`. That is 56 of the 620 tracked baselines: the 564 design-system baselines are NOT covered, and the approval does not extend to any later change to those 56. No visual-change PR exists (no remote, G-1). | Vladimir approves the remaining baselines, and future baseline changes arrive in a visual-change PR |
+| Approval of baselines | **Partly approved, by direct review.** On 2026-09-18 Vladimir reviewed the baseline artifact and approved the 56 product-route baselines (today, workout, summary, diagnostics x 7 projects x darwin and Linux) as committed through `edf4c1b`. That is 56 of the 620 tracked baselines: the 564 design-system baselines are NOT covered, and the approval does not extend to any later change to those 56. No visual-change PR exists for the other 564. | The team approves the remaining baselines and future baseline changes in visual-change PRs, per `AGENTS.md` |
 | Storybook (`governance.lab.storybook`) | **Implemented, and the only lab (ADR-0010).** Implemented 2026-09-17 from the owner-approved change: storybook, @storybook/nextjs-vite, and @storybook/addon-a11y 10.6.0 with vite 8.3.0. esbuild@0.28.2 is the only lifecycle script allowed. The licence gate passes (541 components, no new exception) and the audit gate reports no advisories. `pnpm storybook:build` runs in `pnpm verify`; `pnpm test` pins one story per component in the agreed hierarchy; `test:e2e` renders every story and keyboard-tests the interactive ones; `test:a11y` runs every axe rule on every story at 375 and 1280 px in both themes. | Nothing further; kept here until G-10 closes |
 | Installation offered on a real phone | **Not verified.** | iOS and Android device check, recorded |
 | Vibration and rest tone on a device | **Not verified.** | Device check, recorded |
