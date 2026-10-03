@@ -7,8 +7,9 @@ nothing in production.
 Owner decisions recorded here (for example ADR-0009) do not perform any gate.
 
 Every item below requires the **user's authorization** and credentials for an external
-service. No agent provisions any of it. This repository deliberately contains no secrets,
-no cloud resources, no DNS records, no GitHub remote, and no deployment.
+service. No agent provisions any of it. This repository deliberately contains no secrets
+and no credentials. The only external resources are the two the header names: the public
+GitHub remote and the Free development Supabase project.
 
 Each gate states what is unverified, what the repository ships instead, and what "done"
 means.
@@ -319,7 +320,8 @@ remains can only be done by a person or on a device, and an agent must not asser
    container. Linux baselines are committed and `CI=1 pnpm verify` passes in that image locally;
    the workflow runs in it by digest. `verify` passed on `main` in GitHub Actions, including
    `browser-visual` (run 36966526528, 2026-10-02).
-5. The owner approves the baselines in a visual-change PR.
+5. The baselines are approved in a visual-change PR, by the team under the rule in `AGENTS.md`
+   (independent review agent and QA agent), not by the owner.
    Evidence: 2026-09-18, Vladimir, having visually reviewed the baseline artifact, approved the
    56 product-route baselines committed through `edf4c1b`
    (`edf4c1b756769ceb0e0190e2a61df851904b9592`): today, workout, summary and

@@ -1,6 +1,6 @@
 # Branch protection
 
-**Status:** Not applied. No GitHub remote exists. This is the target configuration, not a
+**Status:** Not applied. The public remote exists, but its ruleset is `[]`. This is the target configuration, not a
 description of reality — see [external-gates.md](external-gates.md), G-1.
 
 Until this ruleset is active, the workflows in `.github/workflows/` are advisory and "CI is
