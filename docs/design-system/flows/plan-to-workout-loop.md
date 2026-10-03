@@ -179,7 +179,7 @@ workout chrome by the same decision. `WorkoutBar` already exists and takes exact
 - `exercise` = 1-based index of the selected exercise in the prescription list.
 - `exercises` = prescription count.
 - `sync` = the session's `DisplaySyncState`, falling back to `on-device` when nothing is
-  queued (`feedback.sync-indicator.icon-label` requires it to be *always visible*; the
+  queued (`feedback.sync-indicator.icon-label` requires it on every screen that shows a workout read from the device; the
   as-built "Nothing waiting to sync" text is a second vocabulary for the same fact — **Delta
   D-5**, use `SyncIndicator` in the bar and drop the text).
 - Close returns to `/today`. It does not end the workout and asks nothing.
