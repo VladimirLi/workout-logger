@@ -1,6 +1,6 @@
 # 0013 — Hosting, environments, deploy identity, and rollback
 
-**Status:** Accepted 2026-09-30 — direction approved by Vladimir on VLA-253 (decisions 2 and 3 below). Decisions 1 and 4–7 are not answered and remain open (see [Open decisions](#open-decisions-for-vladimir))
+**Status:** Accepted 2026-09-30 — direction approved by Vladimir on VLA-253 (decisions 2 and 3 below). Decisions 1 and 5 are deferred until there are real users, decision 7 is resolved (the repository is public), and decisions 4 and 6 remain open (see [Open decisions](#open-decisions-for-vladimir))
 **Date:** 2026-09-30
 **Discovery:** D-023, D-042, D-043, D-044, D-045, D-046, R-015, R-016, R-017, R-020
 **Relates to:** [0009](0009-platform-repository-and-relying-party-decisions.md), [0011](0011-supabase-development-project.md), [0012](0012-one-trusted-write-boundary.md), gates G-2, G-3, G-4, G-7, G-8 in [external-gates.md](../external-gates.md)
@@ -57,8 +57,9 @@ That is accepted for a single-user project; it is not acceptable once there is a
 - Preview deployments are protected by Vercel Authentication. The release job reaches protected
   staged URLs with a GitHub OIDC token via Trusted Sources (`repository`, `ref: refs/heads/main`,
   and a `production` GitHub environment), with no shared secret.
-- The plan tier is an open decision. The design works on either tier; Pro is recommended
-  (800 s functions, spend limit, one day of logs) but is Vladimir's spend.
+- The plan tier is deferred until there are real users besides Vladimir (his answer on VLA-479,
+  2026-10-03), so the first deployment uses Vercel Hobby. The design works on either tier; Pro
+  adds 800 s functions, a spend limit, and one day of logs, and is Vladimir's spend when needed.
 
 ### 3. Deploy identity: GitHub OIDC where Vercel accepts it, one scoped token where it does not
 
@@ -88,9 +89,10 @@ If Vladimir does not accept a static token, the fallback is the first alternativ
 rollback done manually, which fails D-043. That would be a decision to relax D-043, not a
 technical option.
 
-G-7 is unaffected by this decision and still limited by the plan: artifact attestations are
-unavailable on a private personal repository. The release job binds "attested" to the commit
-SHA (same SHA passed `verify`) until G-7 is resolved.
+G-7 is unaffected by this decision. The repository is public (Vladimir, VLA-479, 2026-10-03),
+and artifact attestations are available in public repositories on all plans, so the plan
+limitation no longer applies. Until the attestation step is built and verified (G-7), the
+release job binds "attested" to the commit SHA (same SHA passed `verify`).
 
 **Release job** (`.github/workflows/`, a guardrail path, so its own PR, not written here):
 
@@ -189,12 +191,14 @@ Each needs your action because it is spend, an account, DNS, a credential, or a 
 agents may not edit.
 
 Resolved by Vladimir's approval of the direction on VLA-253 (2026-09-30): **2** (token accepted)
-and **3** (MCP host: second Vercel project, Fly.io as fallback). Still open, with no answer
-recorded: **1, 4, 5, 6, 7**. Nothing below is provisioned or paid for.
+and **3** (MCP host: second Vercel project, Fly.io as fallback). Answered by Vladimir on
+VLA-479 (2026-10-03): **1** and **5** are deferred until there are real users besides him, and
+**7** is resolved (the repository is public). Still open: **4, 6**. Nothing below is provisioned
+or paid for.
 
-1. **Vercel plan tier.** Hobby (free, non-commercial personal use, 300 s functions) or Pro
-   ($20/month, 800 s functions, spend management). Recommended: Pro. Confirm what the
-   "existing subscription" is.
+1. **Deferred until real users: Vercel plan tier.** Vladimir, VLA-479, 2026-10-03: not yet; pay
+   when there are real users besides him. Start on Hobby (free, non-commercial personal use,
+   300 s functions); Pro ($20/month, 800 s functions, spend management) later.
 2. **Resolved: accepted.** One scoped Vercel token in place of OIDC for promote and rollback (section 3), and
    amend AGENTS.md's release-automation row and the G-4 "done when" accordingly.
 3. **Resolved: second Vercel project.** Fly.io stays the fallback if the MCP server needs
@@ -202,10 +206,11 @@ recorded: **1, 4, 5, 6, 7**. Nothing below is provisioned or paid for.
 4. **MCP SDK line.** Stay on `@modelcontextprotocol/sdk` 1.x (current) or move to v2
    (`@modelcontextprotocol/server`, `mcp-handler` 2.x). Whether 1.x supports spec 2026-07-28 was
    not established; see the spike.
-5. **Production Supabase Pro project** (about $25/month), and revoking the default privileges on
-   `anon` and `authenticated` before it holds data (ADR-0011).
+5. **Deferred until real users: production Supabase Pro project** (about $25/month). Vladimir,
+   VLA-479, 2026-10-03: not yet. Revoking the default privileges on `anon` and `authenticated`
+   before it holds data (ADR-0011) still applies whenever it is created.
 6. **Domain and DNS** for `gym.vladimirli.com` (G-3), and creating the Vercel project, the
    `production` GitHub environment, the token, and the Trusted Sources entry. All are yours to
    create; none was attempted.
-7. **Repository visibility** (G-7): attestation stays unavailable while the repo is private on a
-   personal plan.
+7. **Resolved: the repository is public** (Vladimir, VLA-479, 2026-10-03). Artifact attestation
+   (G-7) is available; no visibility change is needed.

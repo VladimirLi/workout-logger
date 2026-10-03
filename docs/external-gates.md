@@ -128,7 +128,8 @@ subscription. **Accepted 2026-09-30 (ADR-0013):** `preview` per pull request on 
 Supabase dev project and `production` at gym.vladimirli.com, no staging; staged production
 deployments promoted by a CI release job that checks `verify` for the same SHA, runs synthetic
 checks before and after promotion, and rolls the app back automatically on failure (D-043); the
-schema keeps its expansion and only the app rolls back. The plan tier is not decided.
+schema keeps its expansion and only the app rolls back. The plan tier is deferred until there are
+real users (Vladimir, VLA-479, 2026-10-03); the first deployment uses Vercel Hobby.
 
 **MCP hosting.** [Spike](discovery/mcp-hosting-spike.md) recommends a second Vercel project
 (fallback: a small Fly.io container). Vladimir approved the second Vercel project on 2026-09-30. The choice does not
@@ -147,8 +148,9 @@ proxy, and rollback itself. **Vercel does not accept GitHub OIDC for promote or 
 the design needs one scoped Vercel token in a `main`-only GitHub environment. Vladimir
 accepted that on 2026-09-30, so "short-lived OIDC" no longer applies to promote and rollback.
 
-**Needs Vladimir (spend, account, DNS, credential).** Plan tier; Vercel project, token, and
-Trusted Sources entry; DNS (G-3); production Supabase Pro project (G-2); MCP SDK line.
+**Needs Vladimir (spend, account, DNS, credential).** Vercel project, token, and Trusted
+Sources entry; DNS (G-3); MCP SDK line. Deferred until real users (2026-10-03, VLA-479): the
+paid Vercel plan and the production Supabase Pro project (G-2).
 The full list is in ADR-0013.
 
 **Done when.** Targets for both the web app and the MCP server are recorded in an ADR, deploys
@@ -227,10 +229,10 @@ is formally accepted in writing and the local gates are acknowledged as the only
 `attestations`, and `artifact-metadata` write permissions — it cannot run without a remote.
 Attestation verification before deploy depends on G-4.
 
-**Plan limitation.** Artifact attestations are available in public repositories on all
-current plans. Using them in a **private or internal** repository requires GitHub Enterprise
-Cloud. A personal private repository cannot produce them, which means SLSA Build Level 2 is
-unreachable there and the SBOM ships unattested. That is a plan decision, not a code change.
+**Plan limitation: resolved.** Artifact attestations are available in public repositories on
+all current plans; a private or internal repository would need GitHub Enterprise Cloud. The
+repository is public (Vladimir, VLA-479, 2026-10-03), so the limitation does not apply and no
+visibility or plan change is needed.
 
 **Done when.** A release produces a verifiable attestation, deployment verifies it before
 promoting, and the release meets SLSA Build Level 2.
