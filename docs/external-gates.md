@@ -1,13 +1,15 @@
 # External setup gates
 
 **Status:** Normative checklist. One cloud resource exists: a Supabase **Free development**
-project, authorised on 2026-09-18 for development only (G-2, ADR-0011). No remote, no DNS
-record, no deployment, and nothing in production.
+project, authorised on 2026-09-18 for development only (G-2, ADR-0011). The GitHub repository
+exists and is public, but its ruleset is not applied (G-1). No DNS record, no deployment, and
+nothing in production.
 Owner decisions recorded here (for example ADR-0009) do not perform any gate.
 
 Every item below requires the **user's authorization** and credentials for an external
-service. No agent provisions any of it. This repository deliberately contains no secrets,
-no cloud resources, no DNS records, no GitHub remote, and no deployment.
+service. No agent provisions any of it. This repository deliberately contains no secrets
+and no credentials. The only external resources are the two the header names: the public
+GitHub remote and the Free development Supabase project.
 
 Each gate states what is unverified, what the repository ships instead, and what "done"
 means.
@@ -16,9 +18,11 @@ means.
 
 ## G-1 — GitHub remote and repository ruleset
 
-**Status:** not performed. No remote exists.
+**Status:** partly performed. The remote exists: `VladimirLi/workout-logger`, public, created
+2026-09-22, and `verify` and `security` run on it. The ruleset is **not applied**:
+`gh api repos/VladimirLi/workout-logger/rulesets` returned `[]` on 2026-10-03.
 
-**Decided 2026-09-17 (ADR-0009, D2).** The repository will be **public**, with the intent to
+**Decided 2026-09-17 (ADR-0009, D2).** The repository is **public**, with the intent to
 open-source the project. **Project licence chosen 2026-09-24:** MIT. The dependency exception
 review for public-source distribution completed on 2026-09-26 under LIC-2026-09-26.
 
@@ -48,6 +52,15 @@ project, no production data, no CI secrets.
 **Decided 2026-09-17 (ADR-0009, D1).** Supabase **Free** for development only. The production
 decision is deferred, and the Pro requirement below still applies to production.
 
+**Deferred 2026-10-03 (Vladimir, VLA-479).** He answered "not yet, we pay when we have actual
+users besides me": the production Pro project is not created until there are real users
+besides him. G-2 stays open. Development work is not blocked.
+
+**Consequence under ADR-0011 (not a decision by Vladimir).** The Free development project
+must not hold production data, so no production database exists until one is authorised.
+Whether his own use on Free is acceptable, or he wants Pro for himself, is an open question
+to him (raised on VLA-495).
+
 **Required (ADR-0005, R-011, R-013).** A Supabase **Pro** project — the free tier pauses
 and is unsuitable for production. RLS and explicit grants on every exposed table or view.
 Service-role credentials server-side only.
@@ -64,8 +77,8 @@ deny-by-default (`scripts/check-rls.mjs`), the wrong-user half with two signed-i
 (`node scripts/check-db-boundary.mjs`). Nothing here has run against production, which does not
 exist.
 
-**Done when.** A Pro project exists, migrations apply, and the adapter contract suite plus
-the deny-by-default suites pass against it in CI with repository secrets. The suites exist and
+**Done when.** A production Pro project exists (deferred, see above), migrations apply, and
+the adapter contract suite plus the deny-by-default suites pass against it in CI with repository secrets. The suites exist and
 pass locally; CI cannot run them until repository secrets exist, which is what remains.
 
 **Blocking check before relying on it.** Confirm no blocking requirement has emerged that
@@ -92,7 +105,7 @@ applied and verified by read-back. Credentials live in a gitignored `.env.local`
 been printed. Not authorised, and not done: production resources, any paid upgrade, production
 data, DNS, passkey enrollment, and any deployment.
 
-**Still open for this gate.** The Pro project, CI secrets, and therefore the provider suites
+**Still open for this gate.** The Pro project (deferred until real users), CI secrets, and therefore the provider suites
 running in CI. Both halves of deny-by-default are proved locally against the development
 project: the anonymous half by `scripts/check-rls.mjs`, and the wrong-user half by
 `wrong-user.provider.ts`, which signs two development identities in through the same
@@ -185,38 +198,40 @@ and the canary passes against the real exporter configuration.
 
 ## G-6 — Secret scanning and code scanning services
 
-**Status:** partially verifiable.
+**Status:** met on 2026-10-03 (public repository; see below). Local gates remain.
 
 **Verified locally.** Secret scanning runs in `pnpm verify` against the working tree and
 full history. This gate is real today.
 
-**Unverified boundary — and it is wider than "needs a remote".** Repository *visibility
-and plan* decide whether two of these three jobs can run at all:
+**Visibility decides what runs.** The repository is **public** (ADR-0009 D2, 2026-09-17; verified public 2026-10-03 on VLA-479),
+so all three jobs are eligible:
 
-| Job | Public repo | Personal **private** repo |
+| Job | Public repo (now) | Personal private repo (not the case) |
 |---|---|---|
-| `gitleaks` | works | **works** — free for personal accounts; only organizations need a `GITLEAKS_LICENSE` |
-| `codeql` | works | **not licensed.** The CodeQL terms cover open-source repositories on GitHub and private repositories owned by an **organization** with GitHub Advanced Security. A user-owned private repository qualifies for neither |
-| `dependency-review` | works | **unavailable.** It needs the dependency graph and is offered for public repositories, or organization-owned private repositories with GHAS |
+| `gitleaks` | works | works; free for personal accounts |
+| `codeql` | works | not licensed for a user-owned private repository |
+| `dependency-review` | works | needs the dependency graph, and GHAS on a private repository |
 
-So if this repository is created private under a personal account, **only the gitleaks job
-functions**, and `pnpm test:deps`, `pnpm test:licenses`, and `pnpm test:secrets` are the
-operative controls. Both jobs are kept in the workflow, with the limitation recorded in the
-job, rather than deleted — deleting them would erase the fact that this coverage is missing.
+**Observed.** On PR #41 (2026-10-03), `codeql`, `dependency review`, and `secret scan (full
+history)` all ran and passed in the `security` workflow (run 37101450784). Push protection and
+secret scanning are enabled on the repository.
 
-**Owner direction 2026-09-22 (Vladimir).** Until the repository is public (or org-owned with
-GHAS), `codeql` and `dependency-review` are skipped via `if: !github.event.repository.private`
-so they do not fail CI while ineligible. Absence of those two jobs is formally accepted for
-this private personal repository; the local gates above remain the operative coverage. When
-visibility becomes public, the same jobs run without a further workflow change.
+**Workflow conditions.** `codeql` and `dependency-review` keep `if: !github.event.repository.private`
+in `.github/workflows/security.yml`, which is a guardrail file. Because the repository is public the
+condition is true, so the jobs run. The condition only matters if the repository is made private
+again, in which case the jobs would skip silently and `pnpm test:deps`, `pnpm test:licenses`, and
+`pnpm test:secrets` would be the only coverage. Making the repository private again therefore needs
+this gate to be reopened. Removing the condition would be a separate guardrail PR (D-035).
+
+**Superseded.** The 2026-09-22 owner direction that accepted the absence of `codeql` and
+`dependency-review` applied to a private personal repository. It no longer applies.
 
 GitHub also recommends CodeQL **default setup** (a repository setting) over an
-advanced-setup workflow for JavaScript/TypeScript. If the repository ends up eligible,
-prefer default setup and delete the `codeql` job rather than maintaining YAML.
+advanced-setup workflow for JavaScript/TypeScript. Default setup is not configured today; the
+`codeql` job is what runs. Switching is optional and would be its own guardrail PR.
 
-**Done when.** Push protection is on; and either the repository is public or
-organization-owned with GHAS so `codeql` and `dependency-review` function, or their absence
-is formally accepted in writing and the local gates are acknowledged as the only coverage.
+**Done when.** Push protection is on, and the repository is public (or organization-owned with
+GHAS) so `codeql` and `dependency-review` function. Met on 2026-10-03 by the observation above.
 
 ---
 
@@ -227,13 +242,14 @@ is formally accepted in writing and the local gates are acknowledged as the only
 **Verified locally.** SBOM generation runs offline from the committed lockfile.
 
 **Unverified boundary.** `actions/attest` requires GitHub OIDC and the `id-token`,
-`attestations`, and `artifact-metadata` write permissions — it cannot run without a remote.
+`attestations`, and `artifact-metadata` write permissions. The remote now exists (G-1), but no
+release has produced an attestation, so this stays open.
 Attestation verification before deploy depends on G-4. A green `verify` result alone is not an
 attestation and does not satisfy this gate.
 
 **Plan limitation: resolved.** Artifact attestations are available in public repositories on
 all current plans; a private or internal repository would need GitHub Enterprise Cloud. The
-repository is public (Vladimir, VLA-479, 2026-10-03), so the limitation does not apply and no
+repository is public (ADR-0009 D2; verified 2026-10-03 on VLA-479), so the limitation does not apply and no
 visibility or plan change is needed.
 
 **Done when.** A release produces a verifiable attestation, deployment verifies it before
@@ -304,15 +320,24 @@ remains can only be done by a person or on a device, and an agent must not asser
    tests; Linux baselines are tracked by item 4.
 4. Linux visual baselines exist and CI runs the visual gate in the pinned Playwright
    container. Linux baselines are committed and `CI=1 pnpm verify` passes in that image locally;
-   the workflow runs in it by digest. A GitHub Actions run has not happened (no remote, G-1).
-5. The owner approves the baselines in a visual-change PR.
+   the workflow runs in it by digest. `verify` passed on `main` in GitHub Actions, including
+   `browser-visual` (run 36966526528, 2026-10-02).
+5. The baselines are approved in a visual-change PR, by the team under the rule in `AGENTS.md`
+   (independent review agent and QA agent), not by the owner.
    Evidence: 2026-09-18, Vladimir, having visually reviewed the baseline artifact, approved the
    56 product-route baselines committed through `edf4c1b`
    (`edf4c1b756769ceb0e0190e2a61df851904b9592`): today, workout, summary and
    diagnostics, across the seven visual projects, on darwin and Linux. Bound to that exact set
    and that candidate; it does not extend to a later change to any of them.
-   Still open: the other 564 tracked baselines are not covered by it, and no visual-change PR
-   exists to approve anything in (no remote, G-1).
+   Not counted as approved: the 27 Linux baselines changed in the visual-change PR #49. It merged
+   on 2026-10-02 with an independent review comment (VLA-331) and a QA confirmation (VLA-353) on
+   head `4c28d3b`, but the review comment says it is not a distinct-principal approval and that
+   the merge gate was still open. A GitHub review from `cursor[bot]` is recorded as APPROVED on
+   that same head (2026-10-01); this repository does not record whether that account is the
+   designated review principal. Still open: that question, and the remaining design-system
+   baselines, which have had no approval.
+   Later baseline updates are approved in their own visual-change PRs under the rule in
+   `AGENTS.md`.
 6. Storybook (`governance.lab.storybook`) is reviewed as a dependency change under
    LIC-2026-09-16 and its build permission is decided in a guardrail change, or the owner
    changes that decision.

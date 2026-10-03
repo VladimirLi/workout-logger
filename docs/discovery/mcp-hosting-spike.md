@@ -1,6 +1,6 @@
 # MCP hosting spike: Vercel Functions vs a small container host
 
-**Status:** Recommendation for Vladimir's approval. Not a decision. Time-boxed to one session.
+**Status:** Recommendation, approved on VLA-253 (2026-09-30) for the second Vercel project; plan tier deferred on VLA-479 (2026-10-03). Time-boxed to one session.
 **Date:** 2026-09-30
 **Serves:** VLA-253, [ADR-0013](../adr/0013-hosting-and-deployment.md), gate G-4
 **Question:** where should `apps/mcp` run, without blocking the web deploy on the answer?
@@ -131,12 +131,17 @@ prices and allowances change and should be confirmed when the account is created
 Same list as [ADR-0013](../adr/0013-hosting-and-deployment.md#open-decisions-for-vladimir), with
 the MCP items highlighted.
 
-1. Vercel plan tier: Hobby or Pro. Recommended: Pro.
+Answered by Vladimir on VLA-479 (2026-10-03): **1** and **5** are deferred until there are real
+users besides him, and **7** is resolved (the repository is public). Still open: **4, 6**.
+
+1. **Deferred until real users: Vercel plan tier.** Start on Hobby (free, non-commercial personal
+   use, 300 s functions); Pro later. This supersedes the earlier recommendation of Pro.
 2. **Resolved 2026-09-30: accepted.** One scoped Vercel token in place of OIDC for promote and rollback; AGENTS.md
    and G-4 "done when".
 3. **Resolved 2026-09-30: second Vercel project.** Fallback: Fly.io.
 4. **MCP SDK line:** stay on 1.x or move to v2.
-5. Production Supabase Pro project (about $25/month) and revoking default `anon`/`authenticated`
-   privileges before it holds data.
+5. **Deferred until real users: production Supabase Pro project** (about $25/month). Revoking
+   default `anon`/`authenticated` privileges before it holds data still applies whenever it is
+   created.
 6. Domain, DNS, Vercel project, `production` GitHub environment, token, Trusted Sources entry.
-7. Repository visibility for attestation (G-7).
+7. **Resolved: the repository is public** (ADR-0009 D2; verified public 2026-10-03 on VLA-479). Attestation (G-7) is available.

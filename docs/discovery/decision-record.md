@@ -161,6 +161,8 @@ The PWA will use managed passkey or passwordless authentication rather than appl
 
 Use Supabase Pro as the initial managed Postgres and authentication platform, subject to a short setup-time check that no blocking requirement has emerged. Keep Supabase-specific behavior behind provider adapters and contract tests as defined by D-026. Application hosting remains a separate deployment choice.
 
+**Update 2026-10-03 (timing only, VLA-479):** Vladimir deferred creating the production Supabase Pro project until there are real users besides him. The platform choice is unchanged.
+
 ### D-026 — Provider portability
 **Status:** Accepted
 
@@ -396,6 +398,8 @@ Expose three stable states: `saved on device`, `syncing`, and `needs attention`.
 **Status:** Proposed default
 
 Use Supabase Pro as the initial managed Postgres/auth platform unless a pre-build comparison finds a blocking requirement. Free-tier pausing is unsuitable for the production instance. Keep domain and application contracts provider-owned; place Supabase queries, Auth, RLS, and deployment behavior behind adapters with contract tests.
+
+**Update 2026-10-03 (timing only, VLA-479):** creating the production Supabase Pro project is deferred until there are real users besides Vladimir; the baseline is unchanged.
 
 #### R-012 — Authentication
 **Status:** Proposed default
