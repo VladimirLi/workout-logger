@@ -48,6 +48,11 @@ project, no production data, no CI secrets.
 **Decided 2026-09-17 (ADR-0009, D1).** Supabase **Free** for development only. The production
 decision is deferred, and the Pro requirement below still applies to production.
 
+**Deferred 2026-10-03 (Vladimir, VLA-479).** The production Pro project is not created until
+there are real users besides him. Nothing in this gate is blocked on it today; it blocks only
+the first production deploy and CI runs of the provider suites that need a production-shaped
+project.
+
 **Required (ADR-0005, R-011, R-013).** A Supabase **Pro** project — the free tier pauses
 and is unsuitable for production. RLS and explicit grants on every exposed table or view.
 Service-role credentials server-side only.
@@ -64,7 +69,7 @@ deny-by-default (`scripts/check-rls.mjs`), the wrong-user half with two signed-i
 (`node scripts/check-db-boundary.mjs`). Nothing here has run against production, which does not
 exist.
 
-**Done when.** A Pro project exists, migrations apply, and the adapter contract suite plus
+**Done when.** A production Pro project exists (deferred, see above), migrations apply, and the adapter contract suite plus
 the deny-by-default suites pass against it in CI with repository secrets. The suites exist and
 pass locally; CI cannot run them until repository secrets exist, which is what remains.
 
@@ -92,7 +97,7 @@ applied and verified by read-back. Credentials live in a gitignored `.env.local`
 been printed. Not authorised, and not done: production resources, any paid upgrade, production
 data, DNS, passkey enrollment, and any deployment.
 
-**Still open for this gate.** The Pro project, CI secrets, and therefore the provider suites
+**Still open for this gate.** The Pro project (deferred until real users), CI secrets, and therefore the provider suites
 running in CI. Both halves of deny-by-default are proved locally against the development
 project: the anonymous half by `scripts/check-rls.mjs`, and the wrong-user half by
 `wrong-user.provider.ts`, which signs two development identities in through the same
@@ -201,38 +206,40 @@ G-5 must not be marked done while the known gap above is open.
 
 ## G-6 — Secret scanning and code scanning services
 
-**Status:** partially verifiable.
+**Status:** met on 2026-10-03 (public repository; see below). Local gates remain.
 
 **Verified locally.** Secret scanning runs in `pnpm verify` against the working tree and
 full history. This gate is real today.
 
-**Unverified boundary — and it is wider than "needs a remote".** Repository *visibility
-and plan* decide whether two of these three jobs can run at all:
+**Visibility decides what runs.** The repository is **public** (Vladimir, VLA-479, 2026-10-03),
+so all three jobs are eligible:
 
-| Job | Public repo | Personal **private** repo |
+| Job | Public repo (now) | Personal private repo (not the case) |
 |---|---|---|
-| `gitleaks` | works | **works** — free for personal accounts; only organizations need a `GITLEAKS_LICENSE` |
-| `codeql` | works | **not licensed.** The CodeQL terms cover open-source repositories on GitHub and private repositories owned by an **organization** with GitHub Advanced Security. A user-owned private repository qualifies for neither |
-| `dependency-review` | works | **unavailable.** It needs the dependency graph and is offered for public repositories, or organization-owned private repositories with GHAS |
+| `gitleaks` | works | works; free for personal accounts |
+| `codeql` | works | not licensed for a user-owned private repository |
+| `dependency-review` | works | needs the dependency graph, and GHAS on a private repository |
 
-So if this repository is created private under a personal account, **only the gitleaks job
-functions**, and `pnpm test:deps`, `pnpm test:licenses`, and `pnpm test:secrets` are the
-operative controls. Both jobs are kept in the workflow, with the limitation recorded in the
-job, rather than deleted — deleting them would erase the fact that this coverage is missing.
+**Observed.** On PR #41 (2026-10-03), `codeql`, `dependency review`, and `secret scan (full
+history)` all ran and passed in the `security` workflow (run 37101450784). Push protection and
+secret scanning are enabled on the repository.
 
-**Owner direction 2026-09-22 (Vladimir).** Until the repository is public (or org-owned with
-GHAS), `codeql` and `dependency-review` are skipped via `if: !github.event.repository.private`
-so they do not fail CI while ineligible. Absence of those two jobs is formally accepted for
-this private personal repository; the local gates above remain the operative coverage. When
-visibility becomes public, the same jobs run without a further workflow change.
+**Workflow conditions.** `codeql` and `dependency-review` keep `if: !github.event.repository.private`
+in `.github/workflows/security.yml`, which is a guardrail file. Because the repository is public the
+condition is true, so the jobs run. The condition only matters if the repository is made private
+again, in which case the jobs would skip silently and `pnpm test:deps`, `pnpm test:licenses`, and
+`pnpm test:secrets` would be the only coverage. Making the repository private again therefore needs
+this gate to be reopened. Removing the condition would be a separate guardrail PR (D-035).
+
+**Superseded.** The 2026-09-22 owner direction that accepted the absence of `codeql` and
+`dependency-review` applied to a private personal repository. It no longer applies.
 
 GitHub also recommends CodeQL **default setup** (a repository setting) over an
-advanced-setup workflow for JavaScript/TypeScript. If the repository ends up eligible,
-prefer default setup and delete the `codeql` job rather than maintaining YAML.
+advanced-setup workflow for JavaScript/TypeScript. Default setup is not configured today; the
+`codeql` job is what runs. Switching is optional and would be its own guardrail PR.
 
-**Done when.** Push protection is on; and either the repository is public or
-organization-owned with GHAS so `codeql` and `dependency-review` function, or their absence
-is formally accepted in writing and the local gates are acknowledged as the only coverage.
+**Done when.** Push protection is on, and the repository is public (or organization-owned with
+GHAS) so `codeql` and `dependency-review` function. Met on 2026-10-03 by the observation above.
 
 ---
 
