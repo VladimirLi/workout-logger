@@ -439,9 +439,12 @@ verify job runs in the same image, pinned by digest. `verify` runs on the public
 on `main` (run 36966526528, 2026-10-02).
 
 **Most baselines are still provisional.** They were committed before any PR flow existed. Only
-two sets have been approved: the 56 product-route baselines (Vladimir, direct review, 2026-09-18),
-and the 27 Linux baselines changed in the visual-change PR #49 (team approval). Under `AGENTS.md`,
-the team approves baselines (independent review agent plus QA agent), not the owner.
+one set has a recorded approval: the 56 product-route baselines (Vladimir, direct review,
+2026-09-18). The 27 Linux baselines changed in the visual-change PR #49 were merged on 2026-10-02
+after an independent review comment and a QA confirmation on the exact head, but that review
+comment states it is not a distinct-principal approval, and this document does not count them as
+approved (see G-10 item 5 in `docs/external-gates.md`). Under `AGENTS.md`, the team approves
+baselines (independent review agent plus QA agent), not the owner.
 
 ## Change control
 
@@ -517,7 +520,7 @@ test enforces that.
 | Colour-blind simulation check (colour-blind default) | **Simulated; not reviewed by a person.** `pnpm test` checks every contrast pair as seen with deuteranopia, protanopia, and achromatopsia (Machado 2009); `test:visual` keeps renders of the state matrix, set focus, and proposal review under Chromium's emulation of each, and under forced colours. Nothing depends on hue alone. | A person reviews those renders, recorded |
 | Proposal review UX and its baselines | **Minimum implemented.** The review content the agent-proposals specification requires is built from accepted components as `Reference screens/Proposal review` and `Stale proposal`, with baselines and behaviour tests. Any richer review UX is a first-slice decision. | Nothing further for the design system |
 | Linux baselines for CI | **Verified in CI.** Linux baselines come from the pinned Playwright image after a byte-identical repeatability pass, `CI=1 pnpm verify` passes every gate in that image, and the verify workflow runs in it by digest. `verify`, including `browser-visual`, passed on `main` in GitHub Actions (run 36966526528, 2026-10-02). | Nothing further for this row; kept here until G-10 closes |
-| Approval of baselines | **Partly approved.** (1) On 2026-09-18 Vladimir reviewed the baseline artifact and approved the 56 product-route baselines (today, workout, summary, diagnostics x 7 projects x darwin and Linux) as committed through `edf4c1b`; that approval does not extend to any later change to those 56. (2) The 27 Linux baselines changed in the visual-change PR #49 were approved by the team under `AGENTS.md`. The remaining design-system baselines have had no approval. | The team approves the remaining baselines and future baseline changes in visual-change PRs, per `AGENTS.md` |
+| Approval of baselines | **Partly approved.** (1) On 2026-09-18 Vladimir reviewed the baseline artifact and approved the 56 product-route baselines (today, workout, summary, diagnostics x 7 projects x darwin and Linux) as committed through `edf4c1b`; that approval does not extend to any later change to those 56. (2) The 27 Linux baselines changed in the visual-change PR #49 were merged on 2026-10-02 with an independent review comment and a QA confirmation, but that review comment says it is not a distinct-principal approval, so they are not counted as approved here. The remaining design-system baselines have had no approval. | The team approves the remaining baselines and future baseline changes in visual-change PRs, per `AGENTS.md` |
 | Storybook (`governance.lab.storybook`) | **Implemented, and the only lab (ADR-0010).** Implemented 2026-09-17 from the owner-approved change: storybook, @storybook/nextjs-vite, and @storybook/addon-a11y 10.6.0 with vite 8.3.0. esbuild@0.28.2 is the only lifecycle script allowed. The licence gate passes (541 components, no new exception) and the audit gate reports no advisories. `pnpm storybook:build` runs in `pnpm verify`; `pnpm test` pins one story per component in the agreed hierarchy; `test:e2e` renders every story and keyboard-tests the interactive ones; `test:a11y` runs every axe rule on every story at 375 and 1280 px in both themes. | Nothing further; kept here until G-10 closes |
 | Installation offered on a real phone | **Not verified.** | iOS and Android device check, recorded |
 | Vibration and rest tone on a device | **Not verified.** | Device check, recorded |

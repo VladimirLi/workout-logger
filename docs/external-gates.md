@@ -360,8 +360,13 @@ remains can only be done by a person or on a device, and an agent must not asser
    (`edf4c1b756769ceb0e0190e2a61df851904b9592`): today, workout, summary and
    diagnostics, across the seven visual projects, on darwin and Linux. Bound to that exact set
    and that candidate; it does not extend to a later change to any of them.
-   Also approved: the 27 Linux baselines changed in the visual-change PR #49, by the team
-   under `AGENTS.md`. Still open: the remaining design-system baselines have had no approval.
+   Not counted as approved: the 27 Linux baselines changed in the visual-change PR #49. It merged
+   on 2026-10-02 with an independent review comment (VLA-331) and a QA confirmation (VLA-353) on
+   head `4c28d3b`, but the review comment says it is not a distinct-principal approval and that
+   the merge gate was still open. A GitHub review from `cursor[bot]` is recorded as APPROVED on
+   that same head (2026-10-01); this repository does not record whether that account is the
+   designated review principal. Still open: that question, and the remaining design-system
+   baselines, which have had no approval.
    Later baseline updates are approved in their own visual-change PRs under the rule in
    `AGENTS.md`.
 6. Storybook (`governance.lab.storybook`) is reviewed as a dependency change under
