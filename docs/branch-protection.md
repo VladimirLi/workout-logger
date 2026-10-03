@@ -1,7 +1,8 @@
 # Branch protection
 
-**Status:** Not applied. The public remote exists, but its ruleset is `[]`. This is the target configuration, not a
-description of reality — see [external-gates.md](external-gates.md), G-1.
+**Status:** Not applied. The public remote exists but has no ruleset (checked 2026-10-03).
+This is the target configuration, not a description of reality — see
+[external-gates.md](external-gates.md), G-1.
 
 Until this ruleset is active, the workflows in `.github/workflows/` are advisory and "CI is
 authoritative" ([ADR-0006](adr/0006-ci-is-the-authoritative-gate.md)) is documented intent
