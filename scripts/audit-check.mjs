@@ -97,8 +97,9 @@ if (unwaived.length === 0) {
   process.exit(0);
 }
 
+const unwaivedLabel = waived.length > 0 ? 'unwaived ' : '';
 console.error(
-  `audit-check: FAILED — ${unwaived.length} unwaived high/critical advisories. (${summary})`,
+  `audit-check: FAILED — ${unwaived.length} ${unwaivedLabel}high/critical advisories. (${summary})`,
 );
 for (const advisory of unwaived.slice(0, 30)) {
   const paths = (advisory.findings ?? []).flatMap((finding) => finding.paths ?? []).slice(0, 2);

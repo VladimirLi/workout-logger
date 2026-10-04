@@ -105,6 +105,7 @@ SECURITY.md
 OBSERVABILITY.md
 ENGINEERING.md
 docs/license-policy.md
+docs/advisory-waivers.json
 packages/observability/
 ```
 
