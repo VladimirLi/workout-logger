@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { spawnSync } from 'node:child_process';
 /**
  * Dependency vulnerability gate (D-039).
  *
@@ -10,9 +11,17 @@
  * completed report does not explain. `pnpm audit` needs the advisory registry, so an
  * offline machine fails this gate - a vulnerability check that silently checked nothing
  * is worse than no check at all. The rules live in audit-report.mjs.
+ *
+ * Approved advisory waivers are read from docs/advisory-waivers.json (a guardrail file).
+ * See ADR-0013 and other waiver records for the rationale and conditions of each waiver.
  */
-import { spawnSync } from 'node:child_process';
-import { AUDIT_ARGS, auditConfigProblem, interpretAudit } from './audit-report.mjs';
+import { readFileSync } from 'node:fs';
+import {
+  AUDIT_ARGS,
+  auditConfigProblem,
+  filterByWaivers,
+  interpretAudit,
+} from './audit-report.mjs';
 
 const config = spawnSync('pnpm', ['config', 'get', '--json', 'auditConfig'], { encoding: 'utf8' });
 const configText = (config.stdout ?? '').trim();
@@ -65,22 +74,47 @@ const summary = Object.entries(result.counts)
   .map(([level, count]) => `${level}=${count}`)
   .join(' ');
 
-if (result.blocking.length === 0) {
+let waivers = [];
+try {
+  const waiverPath = new URL('../docs/advisory-waivers.json', import.meta.url).pathname;
+  const waiverText = readFileSync(waiverPath, 'utf8');
+  waivers = JSON.parse(waiverText);
+} catch (error) {
+  // No waivers file or parse error; treat as empty waiver list
+  if (error.code !== 'ENOENT' && !(error instanceof SyntaxError)) {
+    console.error(`audit-check: warning — could not load waivers: ${error.message}`);
+  }
+}
+
+const { unwaived, waived } = filterByWaivers(result.blocking, waivers);
+
+if (unwaived.length === 0) {
+  const waivedNote = waived.length > 0 ? ` (${waived.length} approved waiver(s) applied)` : '';
   console.log(
     `audit-check: OK — completed audit of ${result.totalDependencies} dependencies, ` +
-      `no high or critical advisories. (${summary})`,
+      `no unwaived high or critical advisories. (${summary})${waivedNote}`,
   );
   process.exit(0);
 }
 
 console.error(
-  `audit-check: FAILED — ${result.blocking.length} high/critical advisories. (${summary})`,
+  `audit-check: FAILED — ${unwaived.length} unwaived high/critical advisories. (${summary})`,
 );
-for (const advisory of result.blocking.slice(0, 30)) {
+for (const advisory of unwaived.slice(0, 30)) {
   const paths = (advisory.findings ?? []).flatMap((finding) => finding.paths ?? []).slice(0, 2);
   console.error(`  [${advisory.severity}] ${advisory.module_name} — ${advisory.title}`);
   console.error(`      ${advisory.url ?? ''}`);
   for (const path of paths) console.error(`      via ${path}`);
 }
+
+if (waived.length > 0) {
+  console.error(`\n${waived.length} approved advisory waiver(s):`);
+  for (const advisory of waived) {
+    console.error(
+      `  • [${advisory.severity}] ${advisory.module_name} (${advisory.url?.split('/').pop()})`,
+    );
+  }
+}
+
 console.error('\nFix by upgrading. Do not lower the severity threshold to go green (SECURITY.md).');
 process.exit(1);

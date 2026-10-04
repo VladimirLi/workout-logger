@@ -1,0 +1,15 @@
+[
+  {
+    "ghsa": "GHSA-vfj7-8cjw-p6xm",
+    "module_name": "braces",
+    "version_constraint": "3.0.3",
+    "scope": "dev-only",
+    "dependency_path": "→@fission-ai/openspec→fast-glob→micromatch→braces",
+    "reason": "No patched version available on npm; upstream fix (micromatch/braces#72) approved but unmerged. Vulnerability is build-time only (via devDependency), not production-reachable.",
+    "approved_by": "Vladimir",
+    "approved_date": "2026-10-04",
+    "review_trigger": "2027-01-04",
+    "removal_owner": "Release & Supply-Chain Engineer",
+    "adr": "ADR-0013"
+  }
+]

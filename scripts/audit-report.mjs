@@ -159,6 +159,40 @@ function reportFailure(report, status) {
 }
 
 /**
+ * Filter blocking advisories against approved waivers.
+ *
+ * An approved waiver is a guardrail decision in docs/advisory-waivers.json. Each waiver
+ * specifies a GHSA ID and module name. If an advisory matches, it is removed from the
+ * blocking list and recorded as waived.
+ *
+ * @param {object[]} blocking - blocking advisories from the audit
+ * @param {unknown[]} waivers - loaded waivers from docs/advisory-waivers.json
+ * @returns {{unwaived: object[], waived: object[]}}
+ */
+export function filterByWaivers(blocking, waivers) {
+  const validWaivers = Array.isArray(waivers) ? waivers : [];
+  const unwaived = [];
+  const waived = [];
+
+  for (const advisory of blocking) {
+    const match = validWaivers.find(
+      (w) =>
+        isPlainObject(w) &&
+        w.ghsa === advisory.url?.split('/').pop() &&
+        w.module_name === advisory.module_name,
+    );
+
+    if (match) {
+      waived.push(advisory);
+    } else {
+      unwaived.push(advisory);
+    }
+  }
+
+  return { unwaived, waived };
+}
+
+/**
  * @param {{status: number | null, signal: string | null, stdout: string, stderr: string}} run
  * @returns {{ok: true, blocking: object[], counts: Record<string, number>, advisoryCount: number,
  *            totalDependencies: number} | {ok: false, reason: string, detail: string}}
