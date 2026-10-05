@@ -78,8 +78,8 @@ importers:
         specifier: 21.2.3
         version: 21.2.3
       '@fission-ai/openspec':
-        specifier: 1.13.2
-        version: 1.13.2(@types/node@26.6.2)
+        specifier: 1.14.0
+        version: 1.14.0(@types/node@26.6.2)
       '@playwright/test':
         specifier: 'catalog:'
         version: 1.63.0
@@ -736,8 +736,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@fission-ai/openspec@1.13.2':
-    resolution: {integrity: sha512-HzBaN9C1/ET+tgm/pxbWQYY4Kf+X9/1MSVEGQ8ZT3g4ZpdHn6v82CHkN+zmt9qv98Ghw0MDpmURasjJD2f90bg==}
+  '@fission-ai/openspec@1.14.0':
+    resolution: {integrity: sha512-V+zitRK918I6B3EIcYL3gVYoPoPgzknSxE1zL0zUQdbd4NsO5kbrxU5jVceuNNEznD94pbRPCvpCDIa6BeEaPA==}
     engines: {node: '>=20.19.0'}
     hasBin: true
 
@@ -3987,7 +3987,7 @@ snapshots:
   '@esbuild/win32-x64@0.28.2':
     optional: true
 
-  '@fission-ai/openspec@1.13.2(@types/node@26.6.2)':
+  '@fission-ai/openspec@1.14.0(@types/node@26.6.2)':
     dependencies:
       '@inquirer/core': 12.0.3(@types/node@26.6.2)
       '@inquirer/prompts': 8.7.2(@types/node@26.6.2)
