@@ -159,11 +159,97 @@ function reportFailure(report, status) {
 }
 
 /**
+ * Parse a version constraint string (e.g., "3.0.3", ">=1.0.0") and check if a version matches.
+ * For now, only exact version matches are supported; other constraint formats would require
+ * a semver parser.
+ *
+ * @param {string} version - the installed version
+ * @param {string} constraint - the version constraint from the waiver
+ * @returns {boolean}
+ */
+function versionMatches(version, constraint) {
+  if (!constraint) return true; // No constraint = matches any version
+  // Exact match for now; other operators (^, ~, >=, etc.) would need semver parsing
+  return version === constraint;
+}
+
+/**
+ * Check if a finding is consistent with the waiver's scope.
+ * For "dev-only" scope, the finding must have dev=true.
+ *
+ * @param {object} finding - a single finding from the advisory
+ * @param {string} waiverScope - the scope from the waiver (e.g., "dev-only")
+ * @returns {boolean}
+ */
+function findingMatchesScope(finding, waiverScope) {
+  if (waiverScope === 'dev-only') {
+    return finding.dev === true;
+  }
+  return true;
+}
+
+/**
+ * Check if the waiver has expired based on the current date.
+ *
+ * @param {string | undefined} reviewTrigger - the ISO date string when the waiver should be re-reviewed
+ * @returns {boolean} true if the waiver is still valid, false if expired
+ */
+function isWaiverValid(reviewTrigger) {
+  if (!reviewTrigger) return true; // No expiry = always valid
+  const expiryDate = new Date(reviewTrigger);
+  const now = new Date();
+  return now < expiryDate;
+}
+
+/**
+ * Check if all findings in an advisory are valid under a waiver.
+ * Each finding must match the version constraint and scope.
+ *
+ * @param {object} advisory - the advisory from the audit
+ * @param {object} waiver - the waiver to check against
+ * @returns {boolean}
+ */
+function allFindingsValid(advisory, waiver) {
+  const findings = Array.isArray(advisory.findings) ? advisory.findings : [];
+  if (findings.length === 0) return false;
+
+  for (const finding of findings) {
+    if (!isPlainObject(finding)) return false;
+    if (!versionMatches(finding.version, waiver.version_constraint)) return false;
+    if (!findingMatchesScope(finding, waiver.scope)) return false;
+  }
+  return true;
+}
+
+/**
+ * Check if an advisory matches a waiver.
+ * Validates GHSA, module name, expiry, and all findings.
+ *
+ * @param {object} advisory - the advisory from the audit
+ * @param {string} ghsa - the GHSA ID from the advisory URL
+ * @param {object} waiver - the waiver to check
+ * @returns {boolean}
+ */
+function advisoryMatchesWaiver(advisory, ghsa, waiver) {
+  if (waiver.ghsa !== ghsa || waiver.module_name !== advisory.module_name) return false;
+  if (!isWaiverValid(waiver.review_trigger)) return false;
+  return allFindingsValid(advisory, waiver);
+}
+
+/**
  * Filter blocking advisories against approved waivers.
  *
  * An approved waiver is a guardrail decision in docs/advisory-waivers.json. Each waiver
- * specifies a GHSA ID and module name. If an advisory matches, it is removed from the
- * blocking list and recorded as waived.
+ * specifies a GHSA ID, module name, version constraint, scope, and dependency path.
+ * An advisory matches only if ALL of the following hold:
+ *
+ * - GHSA ID and module name match exactly
+ * - Installed version matches the version_constraint
+ * - All findings are consistent with the waiver's scope
+ * - The waiver has not expired (review_trigger date has not passed)
+ *
+ * If any constraint is unmet, the advisory is unwaived. This ensures waivers fail closed
+ * and do not silently waive unintended findings (e.g., production paths or newer versions).
  *
  * @param {object[]} blocking - blocking advisories from the audit
  * @param {unknown[]} waivers - loaded waivers from docs/advisory-waivers.json
@@ -175,14 +261,12 @@ export function filterByWaivers(blocking, waivers) {
   const waived = [];
 
   for (const advisory of blocking) {
-    const match = validWaivers.find(
-      (w) =>
-        isPlainObject(w) &&
-        w.ghsa === advisory.url?.split('/').pop() &&
-        w.module_name === advisory.module_name,
+    const ghsa = advisory.url?.split('/').pop();
+    const foundMatch = validWaivers.some(
+      (w) => isPlainObject(w) && advisoryMatchesWaiver(advisory, ghsa, w),
     );
 
-    if (match) {
+    if (foundMatch) {
       waived.push(advisory);
     } else {
       unwaived.push(advisory);

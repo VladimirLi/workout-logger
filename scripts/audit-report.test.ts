@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { describe, expect, it } from 'vitest';
-import { interpretAudit } from './audit-report.mjs';
+import { filterByWaivers, interpretAudit } from './audit-report.mjs';
 
 /**
  * The vulnerability gate treated any JSON on stdout from a non-zero `pnpm audit` as a
@@ -218,6 +218,130 @@ describe('exit status must be explained by a completed audit', () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.reason).toBe('did_not_complete');
+  });
+});
+
+describe('filterByWaivers validates version, scope, and expiry', () => {
+  function bracesFinding(version: string, dev: boolean, paths: string[]) {
+    return {
+      id: 1240091,
+      module_name: 'braces',
+      severity: 'high',
+      title: 'braces stack exhaustion',
+      url: 'https://github.com/advisories/GHSA-vfj7-8cjw-p6xm',
+      findings: [{ version, dev, optional: false, bundled: false, paths }],
+    };
+  }
+
+  function bracesWaiver(overrides: Record<string, unknown> = {}) {
+    return {
+      ghsa: 'GHSA-vfj7-8cjw-p6xm',
+      module_name: 'braces',
+      version_constraint: '3.0.3',
+      scope: 'dev-only',
+      dependency_path: '→@fission-ai/openspec→fast-glob→micromatch→braces',
+      reason: 'No patched version available; upstream fix pending',
+      approved_by: 'Vladimir',
+      approved_date: '2026-10-04',
+      review_trigger: '2027-01-04',
+      removal_owner: 'Release & Supply-Chain Engineer',
+      adr: 'ADR-0013',
+      ...overrides,
+    };
+  }
+
+  it('waives a braces finding when all constraints match', () => {
+    const blocking = [bracesFinding('3.0.3', true, ['.>@fission-ai/openspec>...>braces'])];
+    const waivers = [bracesWaiver()];
+    const { waived, unwaived } = filterByWaivers(blocking, waivers);
+    expect(unwaived).toHaveLength(0);
+    expect(waived).toHaveLength(1);
+  });
+
+  it('does not waive a braces finding with a different version', () => {
+    const blocking = [bracesFinding('3.0.4', true, ['.>@fission-ai/openspec>...>braces'])];
+    const waivers = [bracesWaiver()];
+    const { waived, unwaived } = filterByWaivers(blocking, waivers);
+    expect(unwaived).toHaveLength(1);
+    expect(waived).toHaveLength(0);
+  });
+
+  it('does not waive a braces finding on a production path (dev=false)', () => {
+    const blocking = [bracesFinding('3.0.3', false, ['.>app-runtime>...>braces'])];
+    const waivers = [bracesWaiver()];
+    const { waived, unwaived } = filterByWaivers(blocking, waivers);
+    expect(unwaived).toHaveLength(1);
+    expect(waived).toHaveLength(0);
+  });
+
+  it('does not waive an advisory when the waiver has expired (review_trigger passed)', () => {
+    const blocking = [bracesFinding('3.0.3', true, ['.>@fission-ai/openspec>...>braces'])];
+    const expiredWaiver = bracesWaiver({ review_trigger: '2024-01-01' }); // Past date
+    const { waived, unwaived } = filterByWaivers(blocking, [expiredWaiver]);
+    expect(unwaived).toHaveLength(1);
+    expect(waived).toHaveLength(0);
+  });
+
+  it('waives an advisory when the review_trigger date has not yet passed', () => {
+    const blocking = [bracesFinding('3.0.3', true, ['.>@fission-ai/openspec>...>braces'])];
+    const futureWaiver = bracesWaiver({ review_trigger: '2099-12-31' }); // Future date
+    const { waived, unwaived } = filterByWaivers(blocking, [futureWaiver]);
+    expect(unwaived).toHaveLength(0);
+    expect(waived).toHaveLength(1);
+  });
+
+  it('waives an advisory when review_trigger is undefined (no expiry)', () => {
+    const blocking = [bracesFinding('3.0.3', true, ['.>@fission-ai/openspec>...>braces'])];
+    const noExpiryWaiver = bracesWaiver({ review_trigger: undefined });
+    const { waived, unwaived } = filterByWaivers(blocking, [noExpiryWaiver]);
+    expect(unwaived).toHaveLength(0);
+    expect(waived).toHaveLength(1);
+  });
+
+  it('ignores waivers that do not match the GHSA ID', () => {
+    const blocking = [bracesFinding('3.0.3', true, ['.>@fission-ai/openspec>...>braces'])];
+    const wrongGhsa = bracesWaiver({ ghsa: 'GHSA-xxxx-xxxx-xxxx' });
+    const { waived, unwaived } = filterByWaivers(blocking, [wrongGhsa]);
+    expect(unwaived).toHaveLength(1);
+    expect(waived).toHaveLength(0);
+  });
+
+  it('ignores waivers that do not match the module name', () => {
+    const blocking = [bracesFinding('3.0.3', true, ['.>@fission-ai/openspec>...>braces'])];
+    const wrongModule = bracesWaiver({ module_name: 'other-package' });
+    const { waived, unwaived } = filterByWaivers(blocking, [wrongModule]);
+    expect(unwaived).toHaveLength(1);
+    expect(waived).toHaveLength(0);
+  });
+
+  it('returns empty arrays when passed empty blocking and waivers', () => {
+    const { waived, unwaived } = filterByWaivers([], []);
+    expect(unwaived).toEqual([]);
+    expect(waived).toEqual([]);
+  });
+
+  it('handles invalid waiver objects gracefully', () => {
+    const blocking = [bracesFinding('3.0.3', true, ['.>@fission-ai/openspec>...>braces'])];
+    // Pass an array with invalid entries mixed in
+    const waivers: unknown[] = [null, undefined, 'invalid', { ghsa: 'GHSA-xxxx-xxxx-xxxx' }];
+    const { waived, unwaived } = filterByWaivers(blocking, waivers);
+    expect(unwaived).toHaveLength(1);
+    expect(waived).toHaveLength(0);
+  });
+
+  it('does not waive when an advisory has no findings', () => {
+    const advisory = {
+      id: 1240091,
+      module_name: 'braces',
+      severity: 'high' as const,
+      title: 'braces stack exhaustion',
+      url: 'https://github.com/advisories/GHSA-vfj7-8cjw-p6xm',
+      findings: [],
+    };
+    const waivers = [bracesWaiver()];
+    const { waived, unwaived } = filterByWaivers([advisory], waivers);
+    expect(unwaived).toHaveLength(1);
+    expect(waived).toHaveLength(0);
   });
 });
 
