@@ -1,0 +1,13 @@
+[
+  {
+    "ghsa": "GHSA-vfj7-8cjw-p6xm",
+    "module_name": "braces",
+    "version": "3.0.3",
+    "dependency_path": ".>@fission-ai/openspec>fast-glob>micromatch>braces",
+    "reason": "No patched braces exists on npm (fix is unmerged in micromatch/braces#72). Reached only through the OpenSpec CLI, a devDependency; no production path.",
+    "approved_by": "Vladimir (VLA-549, 2026-10-04)",
+    "review_trigger": "2027-01-04",
+    "removal_owner": "Release & Supply-Chain Engineer",
+    "adr": "ADR-0014"
+  }
+]
