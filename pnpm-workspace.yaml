@@ -7,7 +7,7 @@ packages:
 # cannot drift between packages. See ENGINEERING.md.
 catalog:
   '@axe-core/playwright': 4.13.0
-  '@modelcontextprotocol/sdk': 1.30.1
+  '@modelcontextprotocol/sdk': 1.31.0
   '@playwright/test': 1.63.0
   '@storybook/addon-a11y': 10.6.0
   '@storybook/nextjs-vite': 10.6.0
@@ -69,3 +69,11 @@ ignoredOptionalDependencies:
 strictDepBuilds: true
 allowBuilds:
   esbuild: true
+
+# Override shell-quote to fix critical GHSA-pqg4-j6r4-53mv advisory (command injection via quote()).
+# The advisory was disclosed after launch-editor was released with shell-quote@1.10.0.
+# Version 1.12.0 fixes the vulnerability. This override is valid because shell-quote is
+# a transitive dep of @changesets/cli (launch-editor > shell-quote) and should never be
+# pinned lower at the app level. Remove when launch-editor or @changesets/cli bump shell-quote.
+overrides:
+  shell-quote: 1.12.0
