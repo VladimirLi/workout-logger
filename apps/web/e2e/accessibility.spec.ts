@@ -169,6 +169,31 @@ test('@a11y at 200% text and 320 px nothing scrolls sideways (reflow)', async ({
   expect(overflowing).toEqual([]);
 });
 
+test('@a11y a stacked sets table is still a table with column headers and row headers', async ({
+  page,
+}) => {
+  // The row is a flex box here, which can make a browser drop the table roles (spec design-system,
+  // "Sets table at narrow widths and large text"). Read the browser's own accessibility tree.
+  await page.setViewportSize({ width: 320, height: 640 });
+  await openStory(page, 'patterns-data-settable--narrow-with-edit');
+  const stacked = await page
+    .locator('section tbody tr')
+    .first()
+    .evaluate((row) => getComputedStyle(row).display);
+  expect(stacked, 'the narrow story does not stack').toBe('flex');
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Accessibility.enable');
+  const { nodes } = await cdp.send('Accessibility.getFullAXTree');
+  const named = (role: string) =>
+    nodes
+      .filter((node) => node.role?.value === role && !node.ignored)
+      .map((node) => String(node.name?.value ?? ''));
+  expect(named('table')).toEqual(['Back squat']);
+  expect(named('columnheader')).toEqual(['Set', 'Load kg', 'Reps', 'RIR', 'Actions']);
+  expect(named('rowheader')).toEqual(['1', '2', '3', '4']);
+  expect(named('row')).toHaveLength(5);
+});
+
 test('@a11y the skip link is the first focusable element', async ({ page }) => {
   await page.goto('/');
   await page.keyboard.press('Tab');
