@@ -1206,6 +1206,35 @@ test('@a11y the live set view fits a 375 by 667 phone with no sideways scrolling
   await expect(page.getByRole('spinbutton', { name: 'Load' })).toBeVisible();
 });
 
+test('@a11y at 320 px and 200% text a recorded set reflows: the page does not scroll sideways and Edit is reachable', async ({
+  page,
+}) => {
+  // WCAG 1.4.10. The reflow check in accessibility.spec.ts opens no recorded set, and the sets
+  // table only appears once there is one.
+  await page.setViewportSize({ width: 320, height: 640 });
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Page.enable');
+  await cdp.send('Page.setFontSizes', { fontSizes: { standard: 32, fixed: 26 } });
+  await openTodayWithPlan(page);
+  await page.getByRole('button', { name: 'Start workout' }).click();
+  await page.waitForURL('**/workout');
+  await page.getByRole('button', { name: 'Log set' }).click();
+  await page.getByRole('button', { name: 'Next set' }).click();
+
+  // The table may be wider than the screen at this size; it scrolls inside its own region (spec
+  // data.set-table.aligned-table), and nothing in it may widen the page.
+  const sideways = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(sideways, 'the page scrolls sideways').toBeLessThanOrEqual(0);
+
+  // Edit is reachable: a trial click scrolls its region and fails if anything else covers it.
+  const edit = page.getByRole('button', { name: /^Edit set 1/ });
+  await edit.click({ trial: true });
+  const box = await edit.boundingBox();
+  expect(box && box.x >= 0 && box.x + box.width <= 320, 'Edit is on screen').toBe(true);
+});
+
 test.describe('the offline journey', () => {
   test('logs a whole session with the network off, and keeps every set', async ({
     page,
