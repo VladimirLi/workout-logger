@@ -119,24 +119,44 @@ any passkey is enrolled. (The RP ID decision is recorded in ADR-0009.)
 
 ## G-4 — Hosting and deployment
 
-**Status:** not performed. The web target is chosen; nothing is configured or deployed.
+**Status:** designed, not performed. [ADR-0013](adr/0013-hosting-and-deployment.md)
+(Accepted 2026-09-30) specifies the web deploy path; nothing is configured, deployed,
+or paid for. MCP host: second Vercel project, approved 2026-09-30; Fly.io is the fallback.
 
 **Decided 2026-09-17 (ADR-0009, D3).** The web PWA uses Vercel under the existing
-subscription; the plan tier and project settings are not decided. MCP hosting is decided after
-a compatibility spike.
+subscription. **Accepted 2026-09-30 (ADR-0013):** `preview` per pull request on the
+Supabase dev project and `production` at gym.vladimirli.com, no staging; staged production
+deployments promoted by a CI release job that checks `verify` for the same SHA, runs synthetic
+checks before and after promotion, and rolls the app back automatically on failure (D-043); the
+schema keeps its expansion and only the app rolls back. The plan tier is deferred until there are
+real users (Vladimir, VLA-479, 2026-10-03); the first deployment uses Vercel Hobby.
+
+**MCP hosting.** [Spike](discovery/mcp-hosting-spike.md) recommends a second Vercel project
+(fallback: a small Fly.io container). Vladimir approved the second Vercel project on 2026-09-30. The choice does not
+block the web deploy.
 
 **Required (D-023, D-042, D-043).** Private, authenticated, single-user HTTPS hosting
 reachable from a phone. Automatic deploy on merge. Automatic rollback on failed
 post-deployment health or synthetic verification.
 
-**What ships now.** Nothing deploys. `apps/web` and `apps/mcp` build locally.
+**What ships now.** Nothing deploys. `apps/web` and `apps/mcp` build locally. No release
+workflow exists; it is a guardrail-path change and needs its own PR after the account exists.
 
-**Unverified boundary.** Rollback automation cannot be written meaningfully before the
-platform is chosen.
+**Unverified boundary.** Everything on a real platform: the Vercel project, staged promotion,
+the `repository_dispatch` trigger, Trusted Sources, MCP cold start and streaming through a
+proxy, and rollback itself. **Vercel does not accept GitHub OIDC for promote or rollback**, so
+the design needs one scoped Vercel token in a `main`-only GitHub environment. Vladimir
+accepted that on 2026-09-30, so "short-lived OIDC" no longer applies to promote and rollback.
+
+**Needs Vladimir (spend, account, DNS, credential).** Vercel project, token, and Trusted
+Sources entry; DNS (G-3). Deferred until real users (2026-10-03, VLA-479): the paid Vercel plan
+and the production Supabase Pro project (G-2). Deferred: the MCP SDK line.
+The full list is in ADR-0013.
 
 **Done when.** Targets for both the web app and the MCP server are recorded in an ADR, deploys
-are automatic from an attested merge commit via short-lived OIDC, and a rollback has been
-drilled.
+are automatic from an attested merge commit whose attestation is verified before promotion (G-7),
+using OIDC wherever the platform accepts it and one scoped token otherwise, and a rollback has
+been drilled.
 
 ---
 
@@ -224,12 +244,13 @@ is formally accepted in writing and the local gates are acknowledged as the only
 
 **Unverified boundary.** `actions/attest` requires GitHub OIDC and the `id-token`,
 `attestations`, and `artifact-metadata` write permissions — it cannot run without a remote.
-Attestation verification before deploy depends on G-4.
+Attestation verification before deploy depends on G-4. A green `verify` result alone is not an
+attestation and does not satisfy this gate.
 
-**Plan limitation.** Artifact attestations are available in public repositories on all
-current plans. Using them in a **private or internal** repository requires GitHub Enterprise
-Cloud. A personal private repository cannot produce them, which means SLSA Build Level 2 is
-unreachable there and the SBOM ships unattested. That is a plan decision, not a code change.
+**Plan limitation: resolved.** Artifact attestations are available in public repositories on
+all current plans; a private or internal repository would need GitHub Enterprise Cloud. The
+repository is public (Vladimir, VLA-479, 2026-10-03), so the limitation does not apply and no
+visibility or plan change is needed.
 
 **Done when.** A release produces a verifiable attestation, deployment verifies it before
 promoting, and the release meets SLSA Build Level 2.
