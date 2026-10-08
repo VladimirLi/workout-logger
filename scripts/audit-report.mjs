@@ -159,6 +159,60 @@ function reportFailure(report, status) {
 }
 
 /**
+ * Does one approved waiver cover this advisory? Every condition must hold, so a waiver
+ * fails closed: a different GHSA, module or installed version, any finding that is not
+ * dev-only, any dependency path other than the recorded one, a missing or past
+ * `review_trigger` date, or a malformed record all leave the advisory blocking.
+ *
+ * @param {object} advisory
+ * @param {unknown} waiver
+ * @param {number} now - epoch milliseconds
+ * @returns {boolean}
+ */
+function waiverCovers(advisory, waiver, now) {
+  if (!isPlainObject(waiver)) return false;
+  if (waiver.ghsa !== advisory.url?.split('/').pop()) return false;
+  if (waiver.module_name !== advisory.module_name) return false;
+  if (typeof waiver.version !== 'string' || typeof waiver.dependency_path !== 'string')
+    return false;
+  if (!(now < Date.parse(String(waiver.review_trigger)))) return false;
+
+  const findings = Array.isArray(advisory.findings) ? advisory.findings : [];
+  return (
+    findings.length > 0 &&
+    findings.every(
+      (finding) =>
+        isPlainObject(finding) &&
+        finding.version === waiver.version &&
+        finding.dev === true &&
+        Array.isArray(finding.paths) &&
+        finding.paths.length > 0 &&
+        finding.paths.every((path) => path === waiver.dependency_path),
+    )
+  );
+}
+
+/**
+ * Split blocking advisories into those covered by an approved waiver (see
+ * docs/advisory-waivers.json and its ADR) and those that still block.
+ *
+ * @param {object[]} blocking
+ * @param {unknown} waivers
+ * @param {number} [now]
+ * @returns {{unwaived: object[], waived: object[]}}
+ */
+export function filterByWaivers(blocking, waivers, now = Date.now()) {
+  const approved = Array.isArray(waivers) ? waivers : [];
+  const unwaived = [];
+  const waived = [];
+  for (const advisory of blocking) {
+    const covered = approved.some((waiver) => waiverCovers(advisory, waiver, now));
+    (covered ? waived : unwaived).push(advisory);
+  }
+  return { unwaived, waived };
+}
+
+/**
  * @param {{status: number | null, signal: string | null, stdout: string, stderr: string}} run
  * @returns {{ok: true, blocking: object[], counts: Record<string, number>, advisoryCount: number,
  *            totalDependencies: number} | {ok: false, reason: string, detail: string}}
