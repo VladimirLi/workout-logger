@@ -65,8 +65,8 @@ deliberate violations.
 
 ## What this repository deliberately does not contain
 
-No secrets, no real environment values, no cloud resources, no DNS records, no GitHub remote,
-no deployment. Provider integrations are ports and adapters. Everything requiring the owner's
+No secrets, no real environment values, no production resources, no DNS records, no
+deployment. Provider integrations are ports and adapters. Everything requiring the owner's
 authorization is enumerated in [docs/external-gates.md](docs/external-gates.md).
 
 The web shell has no product screens yet. It is styled with the accepted design system, and
