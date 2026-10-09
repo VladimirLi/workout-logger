@@ -28,8 +28,9 @@ import {
  * not a new screen. The same controls open on what was recorded, never on the prescription;
  * the Target card stays for comparison where a prescription exists.
  *
- * "Save changes" is the one primary and sits in the sticky bar. "Cancel" and "Delete set" sit
- * in the content, with Delete last and quietest so it is never next to Save.
+ * "Save changes" is the one primary and sits in the sticky bar, with "Cancel" beside it so
+ * neither can end up under the bar. "Delete set" is the quiet one, on the heading row, far from
+ * Save.
  */
 
 const EDIT_HEADING_ID = 'edit-heading';
@@ -98,7 +99,9 @@ export function EditSet({
   const [repsMissing, setRepsMissing] = useState(false);
   const touched = useRef(new Set<string>());
 
+  // Opening from the sets table leaves the page where the table was; the edit view starts at the top.
   useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     document.getElementById(EDIT_HEADING_ID)?.focus();
   }, []);
 
@@ -155,11 +158,15 @@ export function EditSet({
     <SetFocusLayout
       notice={notice}
       formRef={form}
+      secondary={
+        <Button variant="secondary" size="lg" onClick={onCancel}>
+          {messages.actions.cancel}
+        </Button>
+      }
       action={
         <Button
           variant="primary"
           size="lg"
-          expand
           {...(busy === 'save' ? { busyLabel: messages.actions.saving } : {})}
           onClick={() => void save()}
         >
@@ -174,9 +181,14 @@ export function EditSet({
             <Heading level={1} id={EDIT_HEADING_ID} focusTarget>
               {exerciseName}
             </Heading>
-            <Text size="label" tone="muted">
-              {messages.set.editing(recorded.number)}
-            </Text>
+            <Stack direction="inline" justify="between" align="center" gap={2} wrap>
+              <Text size="label" tone="muted">
+                {messages.set.editing(recorded.number)}
+              </Text>
+              <Button variant="tertiary" onClick={() => void run('delete', onDelete)}>
+                {messages.actions.deleteSet}
+              </Button>
+            </Stack>
             {target && (
               <Surface tone="card" aria-label="Target">
                 <Stack gap={1}>
@@ -225,14 +237,6 @@ export function EditSet({
                     : messages.set.notDeleted}
               </StatusMessage>
             )}
-            <Stack gap={2}>
-              <Button variant="secondary" expand onClick={onCancel}>
-                {messages.actions.cancel}
-              </Button>
-              <Button variant="tertiary" expand onClick={() => void run('delete', onDelete)}>
-                {messages.actions.deleteSet}
-              </Button>
-            </Stack>
           </>
         }
       />

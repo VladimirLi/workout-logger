@@ -1,6 +1,6 @@
 import type { Route } from 'next';
 import Link from 'next/link';
-import type { ReactNode } from 'react';
+import type { ReactNode, Ref } from 'react';
 import { messages } from '../i18n/messages';
 import { Icon, type IconName } from '../icons/Icon';
 import { IconButton } from '../primitives/IconButton';
@@ -112,13 +112,16 @@ export function BottomTabs({ current, hrefs }: { current: Tab; hrefs: TabHrefs }
 export function StickyActionBar({
   children,
   notice,
+  ref,
 }: {
   children?: ReactNode;
+  /** Reaches the bar, for a screen that reserves exactly its height. */
+  ref?: Ref<HTMLElement>;
   /** A toast stacked directly above the action, never over it, so the action stays reachable. */
   notice?: ReactNode;
 }) {
   return (
-    <section className={styles.actionBar} aria-label={messages.actions.label}>
+    <section ref={ref} className={styles.actionBar} aria-label={messages.actions.label}>
       {notice}
       {children}
     </section>

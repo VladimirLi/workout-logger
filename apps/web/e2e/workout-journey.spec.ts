@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import AxeBuilder from '@axe-core/playwright';
 import { expect, type Locator, type Page, test } from '@playwright/test';
 import { finishWorkout } from './finish';
 
@@ -2091,5 +2092,229 @@ test.describe('plan-to-workout design conformance (VLA-14, P1 deltas)', () => {
     await page.getByRole('button', { name: 'Back squat' }).click();
     await expect(page.getByText('Set 2', { exact: true })).toBeVisible();
     await expect(page.getByRole('cell', { name: '80 kilograms' })).toHaveCount(1);
+  });
+});
+
+test.describe('the edit view keeps Cancel, Save changes and Delete set reachable (VLA-243)', () => {
+  /** Logs a set, starts the next one, then opens the first set from the table. */
+  const openEditView = async (page: Page, plan: SeedOptions, how: 'tap' | 'key' = 'tap') => {
+    await openTodayWithPlan(page, plan);
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForURL('**/workout');
+    await page.getByRole('button', { name: 'Log set' }).click();
+    await page.getByRole('button', { name: 'Next set' }).click();
+    const edit = page.getByRole('button', { name: /^Edit set 1/ });
+    if (how === 'key') {
+      await edit.focus();
+      await page.keyboard.press('Enter');
+    } else {
+      await edit.click();
+    }
+    await expect(page.getByRole('button', { name: 'Save changes' })).toBeVisible();
+  };
+
+  const cancel = (page: Page) => page.getByRole('button', { name: 'Cancel', exact: true });
+  const save = (page: Page) => page.getByRole('button', { name: 'Save changes' });
+  const remove = (page: Page) => page.getByRole('button', { name: 'Delete set' });
+
+  /** True when the centre and the four corners of the control hit the control, not something over it. */
+  const paintsEverywhere = (control: Locator): Promise<boolean> =>
+    control.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      // Inset past the rounded corners.
+      const inset = 10;
+      const points = [
+        [rect.x + rect.width / 2, rect.y + rect.height / 2],
+        [rect.x + inset, rect.y + inset],
+        [rect.right - inset, rect.y + inset],
+        [rect.x + inset, rect.bottom - inset],
+        [rect.right - inset, rect.bottom - inset],
+      ] as const;
+      return points.every(([x, y]) => {
+        const hit = document.elementFromPoint(x, y);
+        return hit !== null && (hit === element || element.contains(hit));
+      });
+    });
+
+  /**
+   * Tabs through every control: none outside the bar may end up under it. Measured in the page's
+   * own coordinates: the sets table is wider than 320 px at 200% text, so the browser fits the page.
+   */
+  const focusStaysClearOfTheBar = async (page: Page) => {
+    await page.keyboard.press('Tab');
+    for (let step = 0; step < 40; step += 1) {
+      const { inBar, covered } = await page.evaluate(() => {
+        const element = document.activeElement;
+        // The set view's own bar stays in the page, hidden, while a set is edited.
+        const bar = [...document.querySelectorAll('section[aria-label="Actions"]')].find(
+          (candidate) => candidate.getClientRects().length > 0,
+        );
+        if (element === document.body) return { inBar: true, covered: false };
+        // A radio is a hidden input inside the label that is the target.
+        const box = (element?.closest('label') ?? element)?.getBoundingClientRect();
+        const barBox = bar?.getBoundingClientRect();
+        return {
+          inBar: bar?.contains(element ?? null) ?? false,
+          covered:
+            box && barBox ? box.bottom > barBox.top + 1 && box.top < barBox.bottom - 1 : false,
+        };
+      });
+      if (!inBar) expect(covered, 'focus is under the bar').toBe(false);
+      await page.keyboard.press('Tab');
+    }
+  };
+
+  test('@a11y at 375x667 with one exercise nothing sits under the bar and target-size passes', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await openEditView(page, {});
+    expect(await page.evaluate(() => window.scrollY), 'the edit view opens at the top').toBe(0);
+
+    for (const control of [cancel(page), save(page), remove(page)]) {
+      await expect(control).toBeInViewport({ ratio: 1 });
+      expect(await paintsEverywhere(control), `${await control.innerText()} is covered`).toBe(true);
+      expect((await boxOf(control)).height).toBeGreaterThanOrEqual(44);
+    }
+    const [cancelBox, saveBox, deleteBox] = await Promise.all(
+      [cancel(page), save(page), remove(page)].map(boxOf),
+    );
+    expect(cancelBox.y, 'Cancel and Save changes share one row').toBe(saveBox.y);
+    expect(cancelBox.x, 'Cancel comes first').toBeLessThan(saveBox.x);
+    expect(overlaps(deleteBox, saveBox)).toBe(false);
+    expect(deleteBox.y, 'Delete set is on the first screen, above the bar').toBeLessThan(saveBox.y);
+
+    const results = await new AxeBuilder({ page }).withRules(['target-size']).analyze();
+    expect(results.violations.map(({ id, nodes }) => ({ id, nodes: nodes.length }))).toEqual([]);
+  });
+
+  test('keeps the tab order in reading order: Delete set, the controls, Cancel, Save changes', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await openEditView(page, {});
+    const reached: string[] = [];
+    for (let step = 0; step < 40 && !reached.includes('Save changes'); step += 1) {
+      await page.keyboard.press('Tab');
+      reached.push(await page.evaluate(() => document.activeElement?.textContent?.trim() ?? ''));
+    }
+    const names = reached.filter((name) => ['Delete set', 'Cancel', 'Save changes'].includes(name));
+    expect(names).toEqual(['Delete set', 'Cancel', 'Save changes']);
+    const heading = await boxOf(page.getByRole('heading', { level: 1, name: 'Back squat' }));
+    expect((await boxOf(remove(page))).y - heading.y).toBeLessThan(80);
+  });
+
+  test('at 320 px and 200% text the bar stacks Save changes over Cancel and focus stays clear of the bar', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 320, height: 640 });
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Page.enable');
+    await cdp.send('Page.setFontSizes', { fontSizes: { standard: 32, fixed: 26 } });
+    await openEditView(page, {}, 'key');
+
+    const [cancelBox, saveBox] = await Promise.all([cancel(page), save(page)].map(boxOf));
+    expect(saveBox.y + saveBox.height, 'Save changes is above Cancel').toBeLessThanOrEqual(
+      cancelBox.y,
+    );
+    for (const control of [cancel(page), save(page)]) {
+      await expect(control).toBeInViewport({ ratio: 1 });
+      expect(await paintsEverywhere(control)).toBe(true);
+    }
+    // The sets table below the form is wider than 320 px at this size and scrolls inside its own
+    // wrapper; the edit view's own controls must still fit.
+    for (const control of [cancel(page), save(page), remove(page)]) {
+      const box = await boxOf(control);
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(320);
+    }
+
+    await focusStaysClearOfTheBar(page);
+  });
+
+  test('at 320 px and 200% text a pending Undo toast above the actions keeps focus clear of the bar', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 320, height: 640 });
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Page.enable');
+    await cdp.send('Page.setFontSizes', { fontSizes: { standard: 32, fixed: 26 } });
+    await openTodayWithPlan(page, {});
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForURL('**/workout');
+    for (let logged = 0; logged < 2; logged += 1) {
+      await page.getByRole('button', { name: 'Log set' }).click();
+      await page.getByRole('button', { name: 'Next set' }).click();
+    }
+    // The sets table is wider than 320 px here and its header can cover a tap, so open by keyboard.
+    const openFirstSet = async () => {
+      await page
+        .getByRole('button', { name: /^Edit set/ })
+        .first()
+        .focus();
+      await page.keyboard.press('Enter');
+    };
+    await openFirstSet();
+    await remove(page).click();
+    // Deleting returns to the set view with the delete still undoable; edit the other set now.
+    await expect(page.getByRole('button', { name: 'Undo' })).toBeVisible();
+    await openFirstSet();
+    await expect(save(page)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Undo' })).toBeVisible();
+
+    const barBox = await boxOf(page.getByRole('region', { name: 'Actions' }));
+    const [cancelBox, saveBox] = await Promise.all([cancel(page), save(page)].map(boxOf));
+    expect(saveBox.y, 'Save changes is clear of the toast').toBeGreaterThan(barBox.y);
+    expect(cancelBox.y + cancelBox.height).toBeLessThanOrEqual(barBox.y + barBox.height);
+    await focusStaysClearOfTheBar(page);
+  });
+
+  test('in landscape Cancel and Save changes share the action row', async ({ page }) => {
+    await page.setViewportSize({ width: 667, height: 375 });
+    await openEditView(page, { multiple: true });
+    const [cancelBox, saveBox] = await Promise.all([cancel(page), save(page)].map(boxOf));
+    expect(cancelBox.y).toBe(saveBox.y);
+    expect(cancelBox.x).toBeLessThan(saveBox.x);
+    for (const control of [cancel(page), save(page), remove(page)]) {
+      await expect(control).toBeInViewport({ ratio: 1 });
+      expect(await paintsEverywhere(control)).toBe(true);
+    }
+  });
+
+  for (const plan of [{ multiple: true }, { many: true }] satisfies SeedOptions[]) {
+    test(`in landscape with ${plan.many ? 'five' : 'two'} exercises, opening Edit from the sets table lands at the top`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: 667, height: 375 });
+      await openTodayWithPlan(page, plan);
+      await page.getByRole('button', { name: 'Start workout' }).click();
+      await page.waitForURL('**/workout');
+      await page.getByRole('button', { name: 'Log set' }).click();
+      await page.getByRole('button', { name: 'Next set' }).click();
+      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+      expect(await page.evaluate(() => window.scrollY), 'the sets table is below').toBeGreaterThan(
+        0,
+      );
+      await page.getByRole('button', { name: /^Edit set 1/ }).click();
+      await expect(save(page)).toBeVisible();
+
+      expect(await page.evaluate(() => window.scrollY)).toBe(0);
+      expect((await boxOf(page.getByRole('button', { name: 'Close' }))).y).toBeGreaterThanOrEqual(
+        0,
+      );
+    });
+  }
+
+  test('two exercises in portrait: Cancel, Save changes and Delete set are all reachable', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await openEditView(page, { multiple: true });
+    for (const control of [cancel(page), save(page)]) {
+      await expect(control).toBeInViewport({ ratio: 1 });
+      expect(await paintsEverywhere(control)).toBe(true);
+    }
+    await remove(page).scrollIntoViewIfNeeded();
+    expect(await paintsEverywhere(remove(page))).toBe(true);
   });
 });
