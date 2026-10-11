@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { describe, expect, it } from 'vitest';
-import { interpretAudit } from './audit-report.mjs';
+import { filterByWaivers, interpretAudit } from './audit-report.mjs';
 
 /**
  * The vulnerability gate treated any JSON on stdout from a non-zero `pnpm audit` as a
@@ -218,6 +218,107 @@ describe('exit status must be explained by a completed audit', () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.reason).toBe('did_not_complete');
+  });
+});
+
+describe('filterByWaivers fails closed outside the approved waiver', () => {
+  const OPENSPEC_PATH = '.>@fission-ai/openspec>fast-glob>micromatch>braces';
+  const BEFORE_EXPIRY = Date.parse('2026-12-01');
+  const AFTER_EXPIRY = Date.parse('2027-01-05');
+
+  function advisory(
+    finding: Record<string, unknown> = {},
+    overrides: Record<string, unknown> = {},
+  ) {
+    return {
+      module_name: 'braces',
+      severity: 'high',
+      title: 'braces stack exhaustion',
+      url: 'https://github.com/advisories/GHSA-vfj7-8cjw-p6xm',
+      findings: [{ version: '3.0.3', dev: true, paths: [OPENSPEC_PATH], ...finding }],
+      ...overrides,
+    };
+  }
+
+  const waiver = {
+    ghsa: 'GHSA-vfj7-8cjw-p6xm',
+    module_name: 'braces',
+    version: '3.0.3',
+    dependency_path: OPENSPEC_PATH,
+    review_trigger: '2027-01-04',
+  };
+
+  const waives = (blocking: object, w: unknown = waiver, now = BEFORE_EXPIRY) =>
+    filterByWaivers([blocking], [w], now).waived.length === 1;
+
+  it('waives exactly the approved advisory, version, path and scope', () => {
+    expect(waives(advisory())).toBe(true);
+  });
+
+  it('keeps blocking a production path to the same package', () => {
+    expect(waives(advisory({ dev: false, paths: ['apps__web>next>micromatch>braces'] }))).toBe(
+      false,
+    );
+  });
+
+  it('keeps blocking a dev-only path other than the approved one', () => {
+    expect(waives(advisory({ paths: ['.>other-tool>micromatch>braces'] }))).toBe(false);
+  });
+
+  it('keeps blocking when one of several paths is outside the approved one', () => {
+    expect(waives(advisory({ paths: [OPENSPEC_PATH, 'apps__web>next>micromatch>braces'] }))).toBe(
+      false,
+    );
+  });
+
+  it('keeps blocking a different installed version', () => {
+    expect(waives(advisory({ version: '3.0.2' }))).toBe(false);
+  });
+
+  it('keeps blocking a different advisory or module', () => {
+    expect(waives(advisory({}, { url: 'https://github.com/advisories/GHSA-xxxx-xxxx-xxxx' }))).toBe(
+      false,
+    );
+    expect(waives(advisory({}, { module_name: 'micromatch' }))).toBe(false);
+  });
+
+  it('keeps blocking once the review date has passed', () => {
+    expect(waives(advisory(), waiver, AFTER_EXPIRY)).toBe(false);
+  });
+
+  it('keeps blocking when the waiver has no usable review date', () => {
+    expect(waives(advisory(), { ...waiver, review_trigger: undefined })).toBe(false);
+    expect(waives(advisory(), { ...waiver, review_trigger: 'soon' })).toBe(false);
+  });
+
+  it('keeps blocking when the waiver omits the version or path', () => {
+    expect(waives(advisory(), { ...waiver, version: undefined })).toBe(false);
+    expect(waives(advisory(), { ...waiver, dependency_path: undefined })).toBe(false);
+  });
+
+  it('keeps blocking an advisory with no findings', () => {
+    expect(waives(advisory({}, { findings: [] }))).toBe(false);
+  });
+
+  it('ignores malformed waiver records', () => {
+    const { waived } = filterByWaivers([advisory()], [null, 'x', 7, {}], BEFORE_EXPIRY);
+    expect(waived).toEqual([]);
+    expect(filterByWaivers([advisory()], 'not an array', BEFORE_EXPIRY).waived).toEqual([]);
+  });
+
+  it('waives one advisory while another still blocks', () => {
+    const other = advisory(
+      {},
+      { module_name: 'other', url: 'https://github.com/advisories/GHSA-aaaa-bbbb-cccc' },
+    );
+    const { waived, unwaived } = filterByWaivers([advisory(), other], [waiver], BEFORE_EXPIRY);
+    expect(waived).toHaveLength(1);
+    expect(unwaived).toEqual([other]);
+  });
+
+  it('matches the committed waiver record to the live advisory shape', () => {
+    const committed = JSON.parse(readFileSync('docs/advisory-waivers.json', 'utf8'));
+    expect(filterByWaivers([advisory()], committed, BEFORE_EXPIRY).waived).toHaveLength(1);
   });
 });
 
