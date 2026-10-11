@@ -1207,6 +1207,83 @@ test('@a11y the live set view fits a 375 by 667 phone with no sideways scrolling
   await expect(page.getByRole('spinbutton', { name: 'Load' })).toBeVisible();
 });
 
+test('@a11y at 320 px and 200% text a recorded set reflows: the page does not scroll sideways and Edit is reachable', async ({
+  page,
+}) => {
+  // WCAG 1.4.10. The reflow check in accessibility.spec.ts opens no recorded set, and the sets
+  // table only appears once there is one.
+  await page.setViewportSize({ width: 320, height: 640 });
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Page.enable');
+  await cdp.send('Page.setFontSizes', { fontSizes: { standard: 32, fixed: 26 } });
+  await openTodayWithPlan(page);
+  await page.getByRole('button', { name: 'Start workout' }).click();
+  await page.waitForURL('**/workout');
+  await page.getByRole('button', { name: 'Log set' }).click();
+  await page.getByRole('button', { name: 'Next set' }).click();
+
+  const sideways = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(sideways, 'the page scrolls sideways').toBeLessThanOrEqual(0);
+
+  // Spec design-system "Sets table at narrow widths and large text": the row stacks, so Edit is
+  // fully on screen and inside its region without scrolling anything.
+  const region = page.getByRole('region', { name: /./ }).filter({ has: page.getByRole('table') });
+  const regionBox = await region.boundingBox();
+  expect(
+    await region.evaluate((el) => el.scrollWidth - el.clientWidth),
+    'the sets table region scrolls sideways',
+  ).toBeLessThanOrEqual(0);
+  const edit = page.getByRole('button', { name: /^Edit set 1/ });
+  const box = await edit.boundingBox();
+  expect(box && regionBox && box.x >= regionBox.x, 'Edit starts inside the region').toBe(true);
+  expect(
+    box && regionBox && box.x + box.width <= regionBox.x + regionBox.width,
+    'Edit ends inside the region',
+  ).toBe(true);
+  expect(box && box.x + box.width <= 320, 'Edit is on screen').toBe(true);
+
+  // Tabbing to Edit leaves the whole focus ring inside the region, which would clip it.
+  await region.focus();
+  await page.keyboard.press('Tab');
+  await expect(edit).toBeFocused();
+  const ring = await edit.evaluate((el) => {
+    const style = getComputedStyle(el);
+    const grow = Number.parseFloat(style.outlineWidth) + Number.parseFloat(style.outlineOffset);
+    const rect = el.getBoundingClientRect();
+    return { left: rect.left - grow, right: rect.right + grow };
+  });
+  expect(ring.left, 'the focus ring is clipped on the left').toBeGreaterThanOrEqual(
+    regionBox?.x ?? 0,
+  );
+  expect(ring.right, 'the focus ring is clipped on the right').toBeLessThanOrEqual(
+    (regionBox?.x ?? 0) + (regionBox?.width ?? 0),
+  );
+  await page.keyboard.press('Enter');
+  await expect(page.getByText('Editing set 1')).toBeVisible();
+});
+
+test('@a11y at 375 px and 100% text the sets table keeps its five columns in one row per set', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 375, height: 667 });
+  await openTodayWithPlan(page);
+  await page.getByRole('button', { name: 'Start workout' }).click();
+  await page.waitForURL('**/workout');
+  await page.getByRole('button', { name: 'Log set' }).click();
+  await page.getByRole('button', { name: 'Next set' }).click();
+
+  const headings = page.getByRole('columnheader');
+  await expect(headings).toHaveCount(5);
+  const tops = await headings.evaluateAll((all) =>
+    all.map((el) => Math.round(el.getBoundingClientRect().top)),
+  );
+  expect(new Set(tops).size, 'the column headings share a row').toBe(1);
+  await expect(page.getByRole('columnheader', { name: /^Load/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Edit set 1/ })).toBeVisible();
+});
+
 test.describe('the offline journey', () => {
   test('logs a whole session with the network off, and keeps every set', async ({
     page,
