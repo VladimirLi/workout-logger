@@ -23,6 +23,20 @@ html {
 }
 
 /*
+ * A bar that holds two actions can stack them, and can carry a notice above them, so its height
+ * depends on the width, the text size and what is pending. SetFocusLayout sets its measured
+ * height; focus keeps that clear, plus a little room for the focus ring.
+ */
+@media not ((orientation: landscape) and (max-height: 500px)) {
+  html:has([data-action-row]) {
+    scroll-padding-block-end: calc(
+      var(--action-bar-block-size, var(--target-workout)) +
+      var(--space-2)
+    );
+  }
+}
+
+/*
  * Sideways the action row is part of the set view, not sticky; only the tabs can cover focus.
  * A screen without tabs reserves nothing, so focusing Log set does not scroll the page.
  */
