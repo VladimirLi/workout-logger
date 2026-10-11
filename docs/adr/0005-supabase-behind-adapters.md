@@ -20,6 +20,12 @@ Use **Supabase Pro** as the initial managed Postgres and authentication platform
 to a setup-time check that no blocking requirement has emerged. The free tier is
 unsuitable for the production instance because projects pause.
 
+**Update (2026-10-03, timing only).** Vladimir answered on VLA-479 that the production
+Supabase Pro project is not to be created until there are real users besides him. The
+platform choice and the Pro requirement for a production instance are unchanged; creating
+that project is deferred. Until then the Free development project (ADR-0011) is the only
+Supabase project, and it holds no production data.
+
 **All Supabase-specific behavior lives in `packages/adapters-supabase`.** Queries, Auth,
 RLS assumptions, storage, and deployment behavior are adapter concerns. The domain and
 application layers own provider-neutral **ports** and know nothing about Supabase.

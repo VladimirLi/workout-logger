@@ -116,7 +116,7 @@ workbook's recommendation; the owner chose them deliberately.
 ### Data
 
 - `data.charts-v1.defer`: no charts in v1; summaries and tables only. Chart rules are kept for later.
-- `data.set-table.aligned-table`: columns Set, Load, Reps, RIR; tabular, right-aligned, real table markup.
+- `data.set-table.aligned-table`: columns Set, Load, Reps, RIR; tabular, right-aligned, real table markup. Where the table has a row action (Edit) it is the last column. When the table's region is narrower than 15 rem (so it follows text size: 320 px at 200 % text, not at 100 %), each row stacks: set number and Edit on the first line, labelled Load, Reps and RIR below, with the column headings kept for assistive technology. Edit is then never cut off and never needs scrolling to reach; the table still scrolls in its own region for unexpectedly wide content.
 - `data.comparison.delta-text`: "+2.5 kg vs last" with an up or down arrow in a neutral colour.
 
 ### Content
@@ -316,7 +316,7 @@ a follow-up to add a variant or remove the override.
 | SyncIndicator | Pattern | on device, syncing, needs attention, offline |
 | StatusMessage | Pattern | success, warning, error, offline, stale, conflict; optional retry |
 | SetProgress | Pattern | numbered pills, check when done, "Set n of m" |
-| SetTable | Pattern | complete and missing values; scrolls in its own region |
+| SetTable | Pattern | complete and missing values; wide (columns) and narrow (stacked rows); scrolls in its own region |
 | Delta, AgentTag | Pattern | up, down, same; tag with date line |
 | RestTimer | Pattern | stepped ring, milestone announcements, end signal |
 | RirPicker | Pattern | helper line and help sheet |
@@ -435,11 +435,16 @@ approves under the baseline rule in AGENTS.md § Working on UI.
 **Darwin and Linux baselines both exist.** Linux baselines were generated in
 `mcr.microsoft.com/playwright:v1.63.0-noble` (linux/amd64) only after every target rendered
 identically twice in every project, and `CI=1 pnpm verify` passes every gate in that image. CI's
-verify job runs in the same image, pinned by digest. No GitHub Actions run exists yet (no remote,
-G-1).
+verify job runs in the same image, pinned by digest. `verify` runs on the public remote and passed
+on `main` (run 36966526528, 2026-10-02).
 
-**Current baselines are provisional.** They were committed before any PR flow exists, so they have
-not had the owner's visual-change PR approval.
+**Most baselines are still provisional.** They were committed before any PR flow existed. Only
+one set has a recorded approval: the 56 product-route baselines (Vladimir, direct review,
+2026-09-18). The 27 Linux baselines changed in the visual-change PR #49 were merged on 2026-10-02
+after an independent review comment and a QA confirmation on the exact head, but that review
+comment states it is not a distinct-principal approval, and this document does not count them as
+approved (see G-10 item 5 in `docs/external-gates.md`). Under `AGENTS.md`, the team approves
+baselines (independent review agent plus QA agent), not the owner.
 
 ## Change control
 
@@ -514,8 +519,8 @@ test enforces that.
 | Manual accessibility matrix (R-007) | **Browser evidence recorded; people and devices not.** `test:a11y` keeps accessibility-tree snapshots of every reference screen, keyboard-only walks through logging, retry, undo, and proposal decisions, forced-colours and 200 % text / 320 px checks, and every axe rule on every story. VoiceOver, TalkBack, Windows forced colours, and a keyboard user on macOS Safari have not been run. | Each row of the matrix above run by a person with that technology, recorded |
 | Colour-blind simulation check (colour-blind default) | **Simulated; not reviewed by a person.** `pnpm test` checks every contrast pair as seen with deuteranopia, protanopia, and achromatopsia (Machado 2009); `test:visual` keeps renders of the state matrix, set focus, and proposal review under Chromium's emulation of each, and under forced colours. Nothing depends on hue alone. | A person reviews those renders, recorded |
 | Proposal review UX and its baselines | **Minimum implemented.** The review content the agent-proposals specification requires is built from accepted components as `Reference screens/Proposal review` and `Stale proposal`, with baselines and behaviour tests. Any richer review UX is a first-slice decision. | Nothing further for the design system |
-| Linux baselines for CI | **Generated and verified locally; no GitHub run.** Linux baselines come from the pinned Playwright image after a byte-identical repeatability pass, `CI=1 pnpm verify` passes every gate in that image, and the verify workflow runs in it by digest. | A GitHub Actions verify run passes on the remote (G-1) |
-| Owner approval of baselines | **Partly approved, by direct review.** On 2026-09-18 Vladimir reviewed the baseline artifact and approved the 56 product-route baselines (today, workout, summary, diagnostics x 7 projects x darwin and Linux) as committed through `edf4c1b`. That is 56 of the 620 tracked baselines: the 564 design-system baselines are NOT covered, and the approval does not extend to any later change to those 56. No visual-change PR exists (no remote, G-1). | Vladimir approves the remaining baselines, and future baseline changes arrive in a visual-change PR |
+| Linux baselines for CI | **Verified in CI.** Linux baselines come from the pinned Playwright image after a byte-identical repeatability pass, `CI=1 pnpm verify` passes every gate in that image, and the verify workflow runs in it by digest. `verify`, including `browser-visual`, passed on `main` in GitHub Actions (run 36966526528, 2026-10-02). | Nothing further for this row; kept here until G-10 closes |
+| Approval of baselines | **Partly approved.** (1) On 2026-09-18 Vladimir reviewed the baseline artifact and approved the 56 product-route baselines (today, workout, summary, diagnostics x 7 projects x darwin and Linux) as committed through `edf4c1b`; that approval does not extend to any later change to those 56. (2) The 27 Linux baselines changed in the visual-change PR #49 were merged on 2026-10-02 with an independent review comment and a QA confirmation, but that review comment says it is not a distinct-principal approval, so they are not counted as approved here. The remaining design-system baselines have had no approval. | The team approves the remaining baselines and future baseline changes in visual-change PRs, per `AGENTS.md` |
 | Storybook (`governance.lab.storybook`) | **Implemented, and the only lab (ADR-0010).** Implemented 2026-09-17 from the owner-approved change: storybook, @storybook/nextjs-vite, and @storybook/addon-a11y 10.6.0 with vite 8.3.0. esbuild@0.28.2 is the only lifecycle script allowed. The licence gate passes (541 components, no new exception) and the audit gate reports no advisories. `pnpm storybook:build` runs in `pnpm verify`; `pnpm test` pins one story per component in the agreed hierarchy; `test:e2e` renders every story and keyboard-tests the interactive ones; `test:a11y` runs every axe rule on every story at 375 and 1280 px in both themes. | Nothing further; kept here until G-10 closes |
 | Installation offered on a real phone | **Not verified.** | iOS and Android device check, recorded |
 | Vibration and rest tone on a device | **Not verified.** | Device check, recorded |

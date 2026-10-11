@@ -10,9 +10,17 @@
  * completed report does not explain. `pnpm audit` needs the advisory registry, so an
  * offline machine fails this gate - a vulnerability check that silently checked nothing
  * is worse than no check at all. The rules live in audit-report.mjs.
+ *
+ * Narrow, time-boxed exceptions live in docs/advisory-waivers.json, a guardrail file.
  */
 import { spawnSync } from 'node:child_process';
-import { AUDIT_ARGS, auditConfigProblem, interpretAudit } from './audit-report.mjs';
+import { readFileSync } from 'node:fs';
+import {
+  AUDIT_ARGS,
+  auditConfigProblem,
+  filterByWaivers,
+  interpretAudit,
+} from './audit-report.mjs';
 
 const config = spawnSync('pnpm', ['config', 'get', '--json', 'auditConfig'], { encoding: 'utf8' });
 const configText = (config.stdout ?? '').trim();
@@ -65,22 +73,39 @@ const summary = Object.entries(result.counts)
   .map(([level, count]) => `${level}=${count}`)
   .join(' ');
 
-if (result.blocking.length === 0) {
+let waivers = [];
+try {
+  waivers = JSON.parse(
+    readFileSync(new URL('../docs/advisory-waivers.json', import.meta.url), 'utf8'),
+  );
+} catch (error) {
+  if (error.code !== 'ENOENT') {
+    console.error(
+      `audit-check: ignoring docs/advisory-waivers.json, no waiver applies: ${error.message}`,
+    );
+  }
+}
+
+const { unwaived, waived } = filterByWaivers(result.blocking, waivers);
+
+if (unwaived.length === 0) {
+  const note = waived.length > 0 ? ` (${waived.length} approved waiver(s) applied)` : '';
   console.log(
     `audit-check: OK — completed audit of ${result.totalDependencies} dependencies, ` +
-      `no high or critical advisories. (${summary})`,
+      `no unwaived high or critical advisories. (${summary})${note}`,
   );
   process.exit(0);
 }
 
-console.error(
-  `audit-check: FAILED — ${result.blocking.length} high/critical advisories. (${summary})`,
-);
-for (const advisory of result.blocking.slice(0, 30)) {
+console.error(`audit-check: FAILED — ${unwaived.length} high/critical advisories. (${summary})`);
+for (const advisory of unwaived.slice(0, 30)) {
   const paths = (advisory.findings ?? []).flatMap((finding) => finding.paths ?? []).slice(0, 2);
   console.error(`  [${advisory.severity}] ${advisory.module_name} — ${advisory.title}`);
   console.error(`      ${advisory.url ?? ''}`);
   for (const path of paths) console.error(`      via ${path}`);
+}
+if (waived.length > 0) {
+  console.error(`(${waived.length} further advisory(ies) covered by an approved waiver.)`);
 }
 console.error('\nFix by upgrading. Do not lower the severity threshold to go green (SECURITY.md).');
 process.exit(1);
