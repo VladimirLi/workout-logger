@@ -311,9 +311,14 @@ export async function readSessionExercises() {
 export async function readActiveSession() {
   const { ports, userId } = deviceOf();
   const user = await userId();
-  const session = await ports.store.activeSession(user);
-  if (!session) return { user, session: undefined, sync: undefined };
-  const outbox = await ports.store.outbox(user);
+  const [session, outbox] = await Promise.all([
+    ports.store.activeSession(user),
+    ports.store.outbox(user),
+  ]);
+  // With no session to read, ADR-0003 still requires queued or failed mutations to stay
+  // visible, so the state comes from everything the outbox holds rather than one session.
+  if (!session)
+    return { user, session: undefined, sync: displaySyncState(deriveSyncState(outbox)) };
   return {
     user,
     session,

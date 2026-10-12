@@ -68,7 +68,7 @@ interface SessionView {
 
 type State =
   | { readonly kind: 'loading' }
-  | { readonly kind: 'none' }
+  | { readonly kind: 'none'; readonly sync: DisplaySyncState | undefined }
   | { readonly kind: 'ready'; readonly session: SessionView }
   | { readonly kind: 'failed'; readonly message: string };
 
@@ -218,7 +218,7 @@ function useWorkoutSession() {
         readActivePrescriptions(),
       ]);
       if (!session) {
-        setState({ kind: 'none' });
+        setState({ kind: 'none', sync });
         return true;
       }
       const prescribed = prescriptions !== undefined && prescriptions.length > 0;
@@ -786,15 +786,18 @@ export default function WorkoutPage() {
     <Screen
       bar={
         <WorkoutBar
-          // No sync state and no position until a session is read back: nothing is claimed
-          // before that. Loading, no session and a failed read make no persistence claim.
+          // No sync state and no position until something is read back: nothing is claimed
+          // before that. Loading and a failed read make no persistence claim. With no active
+          // session, the state shown is the outbox's, and nothing at all when it is empty.
           {...(session
             ? {
                 exercise: selected ? session.exercises.indexOf(selected) + 1 : 1,
                 exercises: Math.max(1, session.exercises.length),
                 sync: session.sync ?? 'on-device',
               }
-            : {})}
+            : state.kind === 'none' && state.sync
+              ? { sync: state.sync }
+              : {})}
           onClose={() => router.push('/today')}
         />
       }
