@@ -139,7 +139,7 @@ or paid for. MCP host: second Vercel project, approved 2026-09-30; Fly.io is the
 **Decided 2026-09-17 (ADR-0009, D3).** The web PWA uses Vercel under the existing
 subscription. **Accepted 2026-09-30 (ADR-0013):** `preview` per pull request on the
 Supabase dev project and `production` at gym.vladimirli.com, no staging; staged production
-deployments promoted by a CI release job that checks `verify` for the same SHA, runs synthetic
+deployments promoted by a CI release job that checks `verify` for the same SHA and verifies its build attestation (G-7; `verify` alone is not an attestation), runs synthetic
 checks before and after promotion, and rolls the app back automatically on failure (D-043); the
 schema keeps its expansion and only the app rolls back. The plan tier is deferred until there are
 real users (Vladimir, VLA-479, 2026-10-03); the first deployment uses Vercel Hobby.

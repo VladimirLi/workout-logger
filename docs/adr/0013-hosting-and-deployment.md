@@ -1,6 +1,6 @@
 # 0013 — Hosting, environments, deploy identity, and rollback
 
-**Status:** Accepted 2026-09-30 — direction approved by Vladimir on VLA-253 (decisions 2 and 3 below). Decisions 1 and 5 are deferred until there are real users, decision 7 is resolved (the repository is public), and decision 4 is deferred and decision 6 is still open, not yet done by Vladimir (see [Open decisions](#open-decisions-for-vladimir))
+**Status:** Accepted 2026-09-30 — direction approved by Vladimir on VLA-253 (decisions 2 and 3 below). Decisions 1 and 5 are deferred until there are real users, decision 4 is deferred, decision 7 is resolved (the repository is public), and decision 6 is open: no completed setup is recorded (see [Open decisions](#open-decisions-for-vladimir))
 **Date:** 2026-09-30
 **Discovery:** D-023, D-042, D-043, D-044, D-045, D-046, R-015, R-016, R-017, R-020
 **Relates to:** [0009](0009-platform-repository-and-relying-party-decisions.md), [0011](0011-supabase-development-project.md), [0012](0012-one-trusted-write-boundary.md), gates G-2, G-3, G-4, G-7, G-8 in [external-gates.md](../external-gates.md)
@@ -142,7 +142,7 @@ Names are from `.env.example`. No values are committed.
 | `SUPABASE_SECRET_KEY` | dev secret key, Preview scope only | production secret key, Production scope only | **Server only**, marked Sensitive |
 | `NEXT_PUBLIC_APP_ORIGIN` | the deployment's own URL | `https://gym.vladimirli.com` | Browser |
 | `WEBAUTHN_RELYING_PARTY_ID` | unset: passkeys disabled | `gym.vladimirli.com` | Server |
-| `MCP_RESOURCE_IDENTIFIER` | unset | production MCP URL (host: open decision) | Server |
+| `MCP_RESOURCE_IDENTIFIER` | unset | production MCP URL (second Vercel project, section 6) | Server |
 | `MCP_AUTHORIZATION_SERVER` | unset | Supabase Auth issuer of the production project | Server |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | empty (no export) | backend endpoint (G-5) | Server |
 | `OTEL_SERVICE_NAME` | `workout-web` | `workout-web` | Server |
@@ -175,7 +175,7 @@ skeleton and nothing in this ADR provisions it.
 **Good.**
 - Web hosting is decided and its deploy path is fully specified; a follow-up can implement it
   once the Vercel project exists.
-- One deploy mechanism and one rollback mechanism for web and, if approved, MCP.
+- One deploy mechanism and one rollback mechanism for web and MCP (a second Vercel project).
 - The only long-lived deploy credential is one token, held only by the release job.
 - Schema and app roll back independently, which is what makes D-043 safe with D-044.
 
