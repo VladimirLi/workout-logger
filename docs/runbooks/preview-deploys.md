@@ -10,9 +10,10 @@ sections 1, 2, 3 and 5. Depends on gate G-4 in [external-gates.md](../external-g
 2. **Vercel's GitHub integration** builds a preview of `apps/web` and protects it with Vercel
    Authentication. Vercel holds the credentials; GitHub stores no Vercel token.
 3. Vercel sends a `repository_dispatch` event, `vercel.deployment.success`, with the preview URL.
-4. [`preview-smoke`](../../.github/workflows/preview-smoke.yml) first checks the URL is
-   `<project>-<id>-<scope>.vercel.app` for this project and Vercel scope, so the OIDC token is never
-   sent elsewhere. It then checks that an anonymous request is denied (401, 403, or a redirect to
+4. [`preview-smoke`](../../.github/workflows/preview-smoke.yml) runs only if the payload's
+   `project.name` equals `VERCEL_PROJECT_NAME` and the environment is `preview`. It then requires
+   the URL to be `<project>-<9 character hash>-<scope>.vercel.app`, so the OIDC token is not sent
+   to a host of another project in the same scope. Then it checks that an anonymous request is denied (401, 403, or a redirect to
    vercel.com) and that `/today` and `/manifest.webmanifest` return exactly 2xx with a GitHub
    Actions OIDC token through Vercel Trusted Sources. Redirects are never followed.
 
@@ -45,7 +46,7 @@ Hobby plan (ADR-0013 decision 1).
    `VERCEL_PROJECT_NAME`, the Vercel project's name, and `VERCEL_SCOPE_SLUG`, the slug of the
    Vercel account or team that owns it (the last part of a preview hostname, before
    `.vercel.app`). The workflow ignores events from any other project and refuses any host that
-   is not `<project>-<id>-<scope>.vercel.app`. Both are names, not secrets, and must be lower-case
+   is not `<project>-<9 character hash>-<scope>.vercel.app`. Both are names, not secrets, and must be lower-case
    letters, digits and hyphens.
 7. **Leave `deployment_status` events as they are.** The workflow uses `repository_dispatch`.
 
@@ -54,9 +55,10 @@ until the `preview-smoke` PR is merged.
 
 ## Verifying it once the project exists
 
-1. Run `preview-smoke` by hand with the `workflow_dispatch` input set to a preview URL.
-2. Open a PR and confirm a preview builds, the dispatch arrives, and `preview-smoke` is green.
-3. Break each check once and confirm it goes red: remove the Trusted Source (the OIDC check must
+1. After the `preview-smoke` PR is merged, open a PR and confirm a preview builds, the dispatch
+   arrives, and `preview-smoke` is green. There is no manual trigger: a hand-typed URL cannot be
+   tied to a Vercel project, and the job sends an OIDC token to it.
+2. Break each check once and confirm it goes red: remove the Trusted Source (the OIDC check must
    fail), and turn Vercel Authentication off (the anonymous check must fail).
 
 Record the run links on VLA-254.
@@ -70,9 +72,12 @@ Record the run links on VLA-254.
 - The anonymous check accepts 401, 403 or a redirect to `https://vercel.com/`, because the answer
   Vercel gives an unauthenticated `curl` has not been observed. If the first real run shows
   another answer, change the check to that one; do not loosen it to "not 2xx".
-- The hostname check proves the host is in Vladimir's Vercel scope and starts with the project
-  name, not that a deployment of this commit exists. The preview hostname format is from Vercel's
-  documentation, not from a run.
+- Ownership rests on the dispatch payload's `project.name`, which Vercel sends; the hostname
+  check is a second line, not proof. The token goes to whatever URL the payload carries, so anyone
+  who can send a `repository_dispatch` (repository write access) can name a host. A hostname of the
+  right shape does not prove a build of this commit exists. The hostname format and the
+  `project.name` field are from Vercel's documentation, not from a run; if the real payload URL is
+  not a commit URL, the check fails closed (red) and must be corrected from the observed value.
 - Previews share one dev database (ADR-0013 section 1). The smoke test only reads pages.
 - The check is not required. A red `preview-smoke` does not block merging; making it required is
   a ruleset change, which is Vladimir's.

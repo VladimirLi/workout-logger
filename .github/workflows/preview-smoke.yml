@@ -15,30 +15,24 @@ name: preview-smoke
 
 on:
   # Runs from the default branch's copy of this file, so a change to it takes effect
-  # only after it is merged. Use workflow_dispatch to try it first.
+  # only after it is merged. There is deliberately no manual trigger: a hostname typed by hand
+  # cannot be tied to a Vercel project, and this job sends a GitHub OIDC token to it.
   repository_dispatch:
     types: [vercel.deployment.success]
-  workflow_dispatch:
-    inputs:
-      url:
-        description: Preview deployment URL, https://<project>-<id>-<scope>.vercel.app
-        required: true
-        type: string
 
 permissions: {}
 
 concurrency:
-  group: preview-smoke-${{ github.event.client_payload.git.sha || inputs.url }}
+  group: preview-smoke-${{ github.event.client_payload.git.sha }}
   cancel-in-progress: true
 
 jobs:
   smoke:
     name: preview smoke
     if: >-
-      github.event_name == 'workflow_dispatch'
-      || (vars.VERCEL_PROJECT_NAME != ''
-          && github.event.client_payload.environment == 'preview'
-          && github.event.client_payload.project.name == vars.VERCEL_PROJECT_NAME)
+      vars.VERCEL_PROJECT_NAME != ''
+      && github.event.client_payload.environment == 'preview'
+      && github.event.client_payload.project.name == vars.VERCEL_PROJECT_NAME
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -47,18 +41,19 @@ jobs:
       - name: Check the preview URL belongs to this project
         env:
           PAYLOAD_URL: ${{ github.event.client_payload.url }}
-          INPUT_URL: ${{ inputs.url }}
           PROJECT: ${{ vars.VERCEL_PROJECT_NAME }}
           SCOPE: ${{ vars.VERCEL_SCOPE_SLUG }}
         run: |
           set -euo pipefail
-          url="${PAYLOAD_URL:-$INPUT_URL}"
+          url="$PAYLOAD_URL"
           name='^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
           [[ "$PROJECT" =~ $name && "$SCOPE" =~ $name ]] || { echo "set repository variables VERCEL_PROJECT_NAME and VERCEL_SCOPE_SLUG (lower-case letters, digits, hyphens)" >&2; exit 1; }
-          # The OIDC token is sent to this host. Vercel names a preview <project>-<id>-<scope>.vercel.app
-          # (or <project>-git-<branch>-<scope>.vercel.app), and a scope slug belongs to one account, so
-          # this pins the host to this project in Vladimir's scope. It does not prove a build exists.
-          [[ "$url" =~ ^https://${PROJECT}-[a-z0-9-]+-${SCOPE}\.vercel\.app$ ]] || { echo "refusing to send an OIDC token to '$url'" >&2; exit 1; }
+          # The OIDC token is sent to this host. Ownership comes from the payload's project.name,
+          # checked in the job condition. This host check is a second line: a commit URL is
+          # <project>-<9 character hash>-<scope>.vercel.app, and a fixed-width hash cannot match
+          # another project whose name merely starts with this one. Branch URLs
+          # (<project>-git-<branch>-<scope>) are refused for the same reason.
+          [[ "$url" =~ ^https://${PROJECT}-[a-z0-9]{9}-${SCOPE}\.vercel\.app$ ]] || { echo "refusing to send an OIDC token to '$url'" >&2; exit 1; }
           echo "PREVIEW_URL=$url" >>"$GITHUB_ENV"
 
       - name: Preview is closed to anonymous requests
