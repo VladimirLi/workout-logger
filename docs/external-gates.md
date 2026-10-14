@@ -154,6 +154,9 @@ post-deployment health or synthetic verification.
 
 **What ships now.** Nothing deploys. `apps/web` and `apps/mcp` build locally. No release
 workflow exists; it is a guardrail-path change and needs its own PR after the account exists.
+The `preview-smoke` workflow and its [runbook](runbooks/preview-deploys.md) are written for
+previews, which Vercel's GitHub integration builds; neither has run, and the runbook lists the
+steps only Vladimir can take.
 
 **Unverified boundary.** Everything on a real platform: the Vercel project, staged promotion,
 the `repository_dispatch` trigger, Trusted Sources, MCP cold start and streaming through a

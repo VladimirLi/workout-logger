@@ -1,0 +1,93 @@
+name: preview-smoke
+
+# Smoke-checks the Vercel preview deployment of a pull request (ADR-0013 sections 1-3).
+#
+# This workflow does not deploy. Vercel's GitHub integration builds each preview and holds
+# the Vercel credentials, so no deploy token is stored in GitHub. The workflow only runs
+# after Vercel reports a finished preview, and reaches the protected URL with a GitHub
+# Actions OIDC token through Vercel Trusted Sources. Nothing here is a required check.
+#
+# Needs, all created by Vladimir (docs/runbooks/preview-deploys.md): the Vercel project, its
+# Git integration, a Trusted Sources rule for this repository, and the repository variables
+# VERCEL_PROJECT_NAME and VERCEL_SCOPE_SLUG. Until then no event arrives and this workflow does not run.
+#
+# GUARDRAIL FILE.
+
+on:
+  # Runs from the default branch's copy of this file, so a change to it takes effect
+  # only after it is merged. There is deliberately no manual trigger: a hostname typed by hand
+  # cannot be tied to a Vercel project, and this job sends a GitHub OIDC token to it.
+  repository_dispatch:
+    types: [vercel.deployment.success]
+
+permissions: {}
+
+concurrency:
+  group: preview-smoke-${{ github.event.client_payload.git.sha }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: preview smoke
+    if: >-
+      vars.VERCEL_PROJECT_NAME != ''
+      && github.event.client_payload.environment == 'preview'
+      && github.event.client_payload.project.name == vars.VERCEL_PROJECT_NAME
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      id-token: write
+    steps:
+      - name: Check the preview URL belongs to this project
+        env:
+          PAYLOAD_URL: ${{ github.event.client_payload.url }}
+          PROJECT: ${{ vars.VERCEL_PROJECT_NAME }}
+          SCOPE: ${{ vars.VERCEL_SCOPE_SLUG }}
+        run: |
+          set -euo pipefail
+          url="$PAYLOAD_URL"
+          name='^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
+          [[ "$PROJECT" =~ $name && "$SCOPE" =~ $name ]] || { echo "set repository variables VERCEL_PROJECT_NAME and VERCEL_SCOPE_SLUG (lower-case letters, digits, hyphens)" >&2; exit 1; }
+          # The OIDC token is sent to this host. Ownership comes from the payload's project.name,
+          # checked in the job condition. This host check is a second line: a commit URL is
+          # <project>-<9 character hash>-<scope>.vercel.app, and a fixed-width hash cannot match
+          # another project whose name merely starts with this one. Branch URLs
+          # (<project>-git-<branch>-<scope>) are refused for the same reason.
+          [[ "$url" =~ ^https://${PROJECT}-[a-z0-9]{9}-${SCOPE}\.vercel\.app$ ]] || { echo "refusing to send an OIDC token to '$url'" >&2; exit 1; }
+          echo "PREVIEW_URL=$url" >>"$GITHUB_ENV"
+
+      - name: Preview is closed to anonymous requests
+        run: |
+          set -euo pipefail
+          # No redirect is followed. Vercel Authentication answers 401/403, or redirects to vercel.com to log in.
+          out=$(curl -sS -o /dev/null -w '%{http_code} %{redirect_url}' --max-time 30 "$PREVIEW_URL/today")
+          status=${out%% *}; location=${out#* }
+          echo "anonymous GET /today -> $status ${location:+-> $location}"
+          case "$status" in
+            401|403) ;;
+            301|302|303|307|308)
+              [[ "$location" =~ ^https://vercel\.com/ ]] || { echo "redirected somewhere other than the Vercel login" >&2; exit 1; } ;;
+            *) echo "expected Vercel Authentication to deny an anonymous request, got $status" >&2; exit 1 ;;
+          esac
+
+      - name: Preview serves with an OIDC token
+        run: |
+          set -euo pipefail
+          # Default audience for a Vercel Trusted Sources GitHub rule: https://github.com/<owner>
+          token=$(curl -sSf -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://github.com/$GITHUB_REPOSITORY_OWNER" | jq -er .value)
+          echo "::add-mask::$token"
+          printf 'x-vercel-trusted-oidc-idp-token: %s\n' "$token" >"$RUNNER_TEMP/oidc-header"
+          for path in /today /manifest.webmanifest; do
+            # Redirects are not followed and only 2xx passes. A fresh alias can lag the event, so retry.
+            status=000
+            for attempt in 1 2 3 4 5 6; do
+              status=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 \
+                -H "@$RUNNER_TEMP/oidc-header" "$PREVIEW_URL$path" || true)
+              [[ "$status" == 2* ]] && break
+              echo "attempt $attempt: $path -> $status"
+              sleep 5
+            done
+            [[ "$status" == 2* ]] || { echo "$path never returned 2xx (last: $status)" >&2; exit 1; }
+            echo "ok $path -> $status"
+          done
