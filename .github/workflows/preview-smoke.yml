@@ -8,8 +8,8 @@ name: preview-smoke
 # Actions OIDC token through Vercel Trusted Sources. Nothing here is a required check.
 #
 # Needs, all created by Vladimir (docs/runbooks/preview-deploys.md): the Vercel project, its
-# Git integration, a Trusted Sources rule for this repository, and the repository variable
-# VERCEL_PROJECT_NAME. Until then no event arrives and this workflow does not run.
+# Git integration, a Trusted Sources rule for this repository, and the repository variables
+# VERCEL_PROJECT_NAME and VERCEL_SCOPE_SLUG. Until then no event arrives and this workflow does not run.
 #
 # GUARDRAIL FILE.
 
@@ -21,7 +21,7 @@ on:
   workflow_dispatch:
     inputs:
       url:
-        description: Preview deployment URL, https://<name>.vercel.app
+        description: Preview deployment URL, https://<project>-<id>-<scope>.vercel.app
         required: true
         type: string
 
@@ -44,26 +44,36 @@ jobs:
     permissions:
       id-token: write
     steps:
-      - name: Check the preview URL
+      - name: Check the preview URL belongs to this project
         env:
           PAYLOAD_URL: ${{ github.event.client_payload.url }}
           INPUT_URL: ${{ inputs.url }}
+          PROJECT: ${{ vars.VERCEL_PROJECT_NAME }}
+          SCOPE: ${{ vars.VERCEL_SCOPE_SLUG }}
         run: |
           set -euo pipefail
           url="${PAYLOAD_URL:-$INPUT_URL}"
-          # The OIDC token is sent to this host, so refuse anything but a bare vercel.app origin.
-          [[ "$url" =~ ^https://[a-z0-9]([a-z0-9-]*[a-z0-9])?\.vercel\.app$ ]] || { echo "refusing to send an OIDC token to '$url'" >&2; exit 1; }
+          name='^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
+          [[ "$PROJECT" =~ $name && "$SCOPE" =~ $name ]] || { echo "set repository variables VERCEL_PROJECT_NAME and VERCEL_SCOPE_SLUG (lower-case letters, digits, hyphens)" >&2; exit 1; }
+          # The OIDC token is sent to this host. Vercel names a preview <project>-<id>-<scope>.vercel.app
+          # (or <project>-git-<branch>-<scope>.vercel.app), and a scope slug belongs to one account, so
+          # this pins the host to this project in Vladimir's scope. It does not prove a build exists.
+          [[ "$url" =~ ^https://${PROJECT}-[a-z0-9-]+-${SCOPE}\.vercel\.app$ ]] || { echo "refusing to send an OIDC token to '$url'" >&2; exit 1; }
           echo "PREVIEW_URL=$url" >>"$GITHUB_ENV"
 
       - name: Preview is closed to anonymous requests
         run: |
           set -euo pipefail
-          status=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 "$PREVIEW_URL/today")
-          echo "anonymous GET /today -> $status"
-          if [[ "$status" == 2* ]]; then
-            echo "preview served an anonymous request: Vercel Authentication is off" >&2
-            exit 1
-          fi
+          # No redirect is followed. Vercel Authentication answers 401/403, or redirects to vercel.com to log in.
+          out=$(curl -sS -o /dev/null -w '%{http_code} %{redirect_url}' --max-time 30 "$PREVIEW_URL/today")
+          status=${out%% *}; location=${out#* }
+          echo "anonymous GET /today -> $status ${location:+-> $location}"
+          case "$status" in
+            401|403) ;;
+            301|302|303|307|308)
+              [[ "$location" =~ ^https://vercel\.com/ ]] || { echo "redirected somewhere other than the Vercel login" >&2; exit 1; } ;;
+            *) echo "expected Vercel Authentication to deny an anonymous request, got $status" >&2; exit 1 ;;
+          esac
 
       - name: Preview serves with an OIDC token
         run: |
@@ -74,8 +84,15 @@ jobs:
           echo "::add-mask::$token"
           printf 'x-vercel-trusted-oidc-idp-token: %s\n' "$token" >"$RUNNER_TEMP/oidc-header"
           for path in /today /manifest.webmanifest; do
-            # A fresh alias can lag the event, so retry before failing.
-            curl -sS -o /dev/null --fail --max-time 30 --retry 5 --retry-delay 5 --retry-all-errors \
-              -H "@$RUNNER_TEMP/oidc-header" "$PREVIEW_URL$path"
-            echo "ok $path"
+            # Redirects are not followed and only 2xx passes. A fresh alias can lag the event, so retry.
+            status=000
+            for attempt in 1 2 3 4 5 6; do
+              status=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 \
+                -H "@$RUNNER_TEMP/oidc-header" "$PREVIEW_URL$path" || true)
+              [[ "$status" == 2* ]] && break
+              echo "attempt $attempt: $path -> $status"
+              sleep 5
+            done
+            [[ "$status" == 2* ]] || { echo "$path never returned 2xx (last: $status)" >&2; exit 1; }
+            echo "ok $path -> $status"
           done

@@ -10,9 +10,11 @@ sections 1, 2, 3 and 5. Depends on gate G-4 in [external-gates.md](../external-g
 2. **Vercel's GitHub integration** builds a preview of `apps/web` and protects it with Vercel
    Authentication. Vercel holds the credentials; GitHub stores no Vercel token.
 3. Vercel sends a `repository_dispatch` event, `vercel.deployment.success`, with the preview URL.
-4. [`preview-smoke`](../../.github/workflows/preview-smoke.yml) checks that the URL refuses an
-   anonymous request, then that `/today` and `/manifest.webmanifest` return 2xx when called with a
-   GitHub Actions OIDC token through Vercel Trusted Sources.
+4. [`preview-smoke`](../../.github/workflows/preview-smoke.yml) first checks the URL is
+   `<project>-<id>-<scope>.vercel.app` for this project and Vercel scope, so the OIDC token is never
+   sent elsewhere. It then checks that an anonymous request is denied (401, 403, or a redirect to
+   vercel.com) and that `/today` and `/manifest.webmanifest` return exactly 2xx with a GitHub
+   Actions OIDC token through Vercel Trusted Sources. Redirects are never followed.
 
 ADR-0013 says Vercel accepts GitHub OIDC for Trusted Sources only, not for deploying, so a
 workflow that deployed previews itself would need a stored `VERCEL_TOKEN`. That is why none does.
@@ -39,9 +41,12 @@ Hobby plan (ADR-0013 decision 1).
    GitHub Actions, account `VladimirLi`, repository `workout-logger`, applying to the **Preview**
    environment only. Leave the audience at its default, `https://github.com/VladimirLi`, which is
    what the workflow requests.
-6. **Add the GitHub repository variable** `VERCEL_PROJECT_NAME` (Settings, Secrets and variables,
-   Actions, Variables) with the Vercel project's name. The workflow ignores events from any other
-   project. It is a name, not a secret.
+6. **Add two GitHub repository variables** (Settings, Secrets and variables, Actions, Variables):
+   `VERCEL_PROJECT_NAME`, the Vercel project's name, and `VERCEL_SCOPE_SLUG`, the slug of the
+   Vercel account or team that owns it (the last part of a preview hostname, before
+   `.vercel.app`). The workflow ignores events from any other project and refuses any host that
+   is not `<project>-<id>-<scope>.vercel.app`. Both are names, not secrets, and must be lower-case
+   letters, digits and hyphens.
 7. **Leave `deployment_status` events as they are.** The workflow uses `repository_dispatch`.
 
 `repository_dispatch` runs only from the default branch's copy of the workflow, so nothing runs
@@ -62,9 +67,13 @@ Record the run links on VLA-254.
   audience, the `repository_dispatch` payload fields (`environment`, `project.name`, `url`) and the
   `success` event for a preview are taken from Vercel's documentation (read 2026-10-14), not from
   a run.
-- The anonymous check asserts "not 2xx", not a specific code, because the code Vercel returns to
-  an unauthenticated `curl` has not been observed.
+- The anonymous check accepts 401, 403 or a redirect to `https://vercel.com/`, because the answer
+  Vercel gives an unauthenticated `curl` has not been observed. If the first real run shows
+  another answer, change the check to that one; do not loosen it to "not 2xx".
+- The hostname check proves the host is in Vladimir's Vercel scope and starts with the project
+  name, not that a deployment of this commit exists. The preview hostname format is from Vercel's
+  documentation, not from a run.
 - Previews share one dev database (ADR-0013 section 1). The smoke test only reads pages.
 - The check is not required. A red `preview-smoke` does not block merging; making it required is
   a ruleset change, which is Vladimir's.
-- The workflow cannot tell a cold start from a broken deployment beyond its five retries.
+- The workflow cannot tell a cold start from a broken deployment beyond its six attempts.
