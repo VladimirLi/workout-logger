@@ -22,7 +22,9 @@ export function parseOtlpEndpoint(endpoint: string): URL | undefined {
   const secure =
     url !== undefined &&
     (url.protocol === 'https:' || (url.protocol === 'http:' && LOOPBACK_HOSTS.has(url.hostname)));
-  const bare = url !== undefined && url.username === '' && url.password === '' && url.search === '';
+  // Userinfo shows up in `href` between the scheme and the host, so a bare URL starts with both.
+  const bare =
+    url !== undefined && url.search === '' && url.href.startsWith(`${url.protocol}//${url.host}`);
   return secure && bare ? url : undefined;
 }
 
