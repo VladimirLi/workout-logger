@@ -34,7 +34,30 @@ describe('createTelemetryRuntime with an invalid configuration', () => {
       'a query string',
       { service: SERVICE, otlp: { ...OTLP, endpoint: 'https://otlp.example.invalid/?a=b' } },
     ],
+    [
+      'an empty query delimiter',
+      { service: SERVICE, otlp: { ...OTLP, endpoint: 'https://otlp.example.invalid/otlp?' } },
+    ],
+    [
+      'a fragment',
+      { service: SERVICE, otlp: { ...OTLP, endpoint: 'https://otlp.example.invalid/otlp#frag' } },
+    ],
+    [
+      'an empty fragment delimiter',
+      { service: SERVICE, otlp: { ...OTLP, endpoint: 'https://otlp.example.invalid/otlp#' } },
+    ],
     ['an unparsable URL', { service: SERVICE, otlp: { ...OTLP, endpoint: 'not a url' } }],
+    [
+      'an omitted authorization',
+      { service: SERVICE, otlp: { endpoint: OTLP.endpoint } as unknown as TelemetryConfig['otlp'] },
+    ],
+    [
+      'an undefined authorization',
+      {
+        service: SERVICE,
+        otlp: { ...OTLP, authorization: undefined } as unknown as TelemetryConfig['otlp'],
+      },
+    ],
     ['an empty authorization', { service: SERVICE, otlp: { ...OTLP, authorization: '' } }],
     [
       'a CRLF in the authorization',

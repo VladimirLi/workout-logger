@@ -18,13 +18,14 @@ const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 
 /** Returns the parsed base URL, or undefined when it is not safe to send a credential to. */
 export function parseOtlpEndpoint(endpoint: string): URL | undefined {
-  const url = URL.canParse(endpoint) ? new URL(endpoint) : undefined;
+  // `URL` drops an empty `?` or `#` from `search`/`hash`, but appending `v1/metrics` after one
+  // would land in the query or fragment, so the delimiters are refused on the raw string.
+  const url = URL.canParse(endpoint) && !/[?#]/.test(endpoint) ? new URL(endpoint) : undefined;
   const secure =
     url !== undefined &&
     (url.protocol === 'https:' || (url.protocol === 'http:' && LOOPBACK_HOSTS.has(url.hostname)));
   // Userinfo shows up in `href` between the scheme and the host, so a bare URL starts with both.
-  const bare =
-    url !== undefined && url.search === '' && url.href.startsWith(`${url.protocol}//${url.host}`);
+  const bare = url !== undefined && url.href.startsWith(`${url.protocol}//${url.host}`);
   return secure && bare ? url : undefined;
 }
 

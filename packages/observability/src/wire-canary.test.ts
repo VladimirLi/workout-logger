@@ -145,6 +145,19 @@ describe('wire canary: healthy configuration', () => {
     }
   });
 
+  it.each(['', '/'])('posts to /otlp/v1/* whether the base ends %j or not', async (suffix) => {
+    const runtime = await createTelemetryRuntime({
+      ...config(),
+      otlp: { endpoint: `${endpoint}${suffix}`, authorization: AUTHORIZATION },
+    });
+    runtime.telemetry.record('http.server.request', NORMAL_EVENTS[0]);
+    await finish(runtime);
+
+    expect(new Set(received.map((request) => request.url))).toEqual(
+      new Set(['/otlp/v1/metrics', '/otlp/v1/traces']),
+    );
+  });
+
   it('sends exactly the three allowlisted resource attributes, in metrics and in traces', async () => {
     const runtime = await createTelemetryRuntime(config());
     runtime.telemetry.record('http.server.request', NORMAL_EVENTS[0]);

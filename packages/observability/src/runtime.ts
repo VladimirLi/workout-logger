@@ -66,7 +66,12 @@ export async function createTelemetryRuntime(
 
   const base = parseOtlpEndpoint(config.otlp.endpoint);
   const credential = config.otlp.authorization;
-  if (base === undefined || credential === '' || /[\r\n]/.test(credential)) {
+  if (
+    base === undefined ||
+    typeof credential !== 'string' ||
+    credential === '' ||
+    /[\r\n]/.test(credential)
+  ) {
     return failed('invalid-config');
   }
 
