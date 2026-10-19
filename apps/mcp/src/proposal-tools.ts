@@ -2,12 +2,14 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { CreateProposalFailure, Ports } from '@workout/application';
 import { createProposal } from '@workout/application';
 import { err, type Proposal, type Result } from '@workout/domain';
+import type { Telemetry } from '@workout/observability';
 import {
   type AuthorizationContext,
   type AuthorizationFailure,
   authorizeInvocation,
 } from './authorization.js';
 import type { InvocationRateLimiter } from './rate-limit.js';
+import { observeToolInvocation } from './telemetry.js';
 import { PROPOSAL_TOOLS, type ProposalTool } from './tool-surface.js';
 
 export type ProposalToolFailure =
@@ -28,6 +30,8 @@ export interface ProposalToolRequest {
   readonly now: Date;
   readonly ports: Ports;
   readonly rateLimiter: InvocationRateLimiter;
+  /** Absent means the invocation is not measured. */
+  readonly telemetry?: Telemetry;
 }
 
 function isProposalTool(tool: string): tool is ProposalTool {
@@ -109,7 +113,13 @@ function proposalIdentity(parts: {
   return { id: `prop_${randomUUID()}`, inputHash: `sha256:${digest}` };
 }
 
-export async function invokeProposalTool(
+export function invokeProposalTool(
+  request: ProposalToolRequest,
+): Promise<Result<Proposal, ProposalToolFailure>> {
+  return observeToolInvocation(request.telemetry, request.tool, () => runProposalTool(request));
+}
+
+async function runProposalTool(
   request: ProposalToolRequest,
 ): Promise<Result<Proposal, ProposalToolFailure>> {
   const authorized = authorizeInvocation({

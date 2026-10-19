@@ -8,12 +8,14 @@ import {
   type Result,
   sameRevision,
 } from '@workout/domain';
+import type { Telemetry } from '@workout/observability';
 import {
   type AuthorizationContext,
   type AuthorizationFailure,
   authorizeInvocation,
 } from './authorization.js';
 import type { InvocationRateLimiter } from './rate-limit.js';
+import { observeToolInvocation } from './telemetry.js';
 import { EXPOSED_TOOLS, READ_TOOLS, type ReadTool, SCOPES } from './tool-surface.js';
 
 export interface ReadToolPorts {
@@ -85,6 +87,8 @@ export interface ReadToolRequest {
   readonly now: Date;
   readonly ports: ReadToolPorts;
   readonly rateLimiter: InvocationRateLimiter;
+  /** Absent means the invocation is not measured. */
+  readonly telemetry?: Telemetry;
 }
 
 function isReadTool(tool: string): tool is ReadTool {
@@ -110,7 +114,13 @@ function decodeCursor(cursor: string | undefined): number {
   return Number.isFinite(offset) && offset >= 0 ? offset : 0;
 }
 
-export async function invokeReadTool(
+export function invokeReadTool(
+  request: ReadToolRequest,
+): Promise<Result<ReadToolResult, ReadToolFailure>> {
+  return observeToolInvocation(request.telemetry, request.tool, () => runReadTool(request));
+}
+
+async function runReadTool(
   request: ReadToolRequest,
 ): Promise<Result<ReadToolResult, ReadToolFailure>> {
   const authorized = authorizeInvocation({
