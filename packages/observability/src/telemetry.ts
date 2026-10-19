@@ -11,10 +11,9 @@ import {
  * from importing an OpenTelemetry SDK directly, so this is the only path from
  * application code to an exporter (OBSERVABILITY.md).
  *
- * No OpenTelemetry SDK is wired up yet - that requires a backend, which is an
- * external gate (docs/external-gates.md, G-5). The allowlisting behaviour is
- * fully implemented and tested now, because it is the part that must be correct
- * before any exporter exists.
+ * Allowlisting happens here, before any exporter sees an event. The OTLP exporter lives in
+ * `runtime.ts` behind the start-up gate; with no endpoint configured the exporter is a no-op
+ * (docs/external-gates.md, G-5, still open until a backend exists).
  */
 
 export interface TelemetryEvent {
