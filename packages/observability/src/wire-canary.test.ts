@@ -158,6 +158,40 @@ describe('wire canary: healthy configuration', () => {
     );
   });
 
+  it('ignores every OTEL_EXPORTER_OTLP_* variable and restores them afterwards', async () => {
+    const leaked = {
+      OTEL_EXPORTER_OTLP_HEADERS: 'x-leak=1',
+      OTEL_EXPORTER_OTLP_METRICS_HEADERS: 'x-leak2=1',
+      OTEL_EXPORTER_OTLP_TRACES_HEADERS: 'x-leak3=1',
+      OTEL_EXPORTER_OTLP_ENDPOINT: 'http://127.0.0.1:1/elsewhere',
+      OTEL_EXPORTER_OTLP_CERTIFICATE: '/nonexistent/ca.pem',
+    };
+    vi.stubEnv('OTEL_EXPORTER_OTLP_HEADERS', leaked.OTEL_EXPORTER_OTLP_HEADERS);
+    vi.stubEnv('OTEL_EXPORTER_OTLP_METRICS_HEADERS', leaked.OTEL_EXPORTER_OTLP_METRICS_HEADERS);
+    vi.stubEnv('OTEL_EXPORTER_OTLP_TRACES_HEADERS', leaked.OTEL_EXPORTER_OTLP_TRACES_HEADERS);
+    vi.stubEnv('OTEL_EXPORTER_OTLP_ENDPOINT', leaked.OTEL_EXPORTER_OTLP_ENDPOINT);
+    vi.stubEnv('OTEL_EXPORTER_OTLP_CERTIFICATE', leaked.OTEL_EXPORTER_OTLP_CERTIFICATE);
+
+    try {
+      const runtime = await createTelemetryRuntime(config());
+      runtime.telemetry.record('http.server.request', NORMAL_EVENTS[0]);
+      await finish(runtime);
+
+      expect(new Set(received.map((request) => request.url))).toEqual(
+        new Set(['/otlp/v1/metrics', '/otlp/v1/traces']),
+      );
+      for (const request of received) {
+        expect(request.headers.authorization).toBe(AUTHORIZATION);
+        expect(Object.keys(request.headers).filter((name) => name.startsWith('x-'))).toEqual([]);
+      }
+      for (const [name, value] of Object.entries(leaked)) {
+        expect(process.env[name]).toBe(value);
+      }
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('sends exactly the three allowlisted resource attributes, in metrics and in traces', async () => {
     const runtime = await createTelemetryRuntime(config());
     runtime.telemetry.record('http.server.request', NORMAL_EVENTS[0]);
