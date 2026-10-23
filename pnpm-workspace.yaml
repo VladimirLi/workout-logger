@@ -7,7 +7,7 @@ packages:
 # cannot drift between packages. See ENGINEERING.md.
 catalog:
   '@axe-core/playwright': 4.13.0
-  '@modelcontextprotocol/sdk': 1.31.0
+  '@modelcontextprotocol/sdk': 1.32.0
   '@opentelemetry/api': 1.9.1
   '@opentelemetry/exporter-metrics-otlp-http': 0.223.0
   '@opentelemetry/exporter-trace-otlp-http': 0.223.0
